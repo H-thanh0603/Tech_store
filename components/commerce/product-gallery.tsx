@@ -18,9 +18,12 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   if (images.length === 0) {
     return (
       <div
-        className="flex aspect-square w-full items-center justify-center rounded-(--radius-lg) border border-border bg-surface-muted text-(length:--text-sm) text-fg-subtle"
+        className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-(--radius-xl) border border-border bg-surface-muted text-(length:--text-sm) text-fg-subtle shadow-(--shadow-sm)"
         aria-hidden="true"
       >
+        <span className="grid size-14 place-items-center rounded-(--radius-md) border border-dashed border-border-strong">
+          ▢
+        </span>
         Chưa có ảnh
       </div>
     )
@@ -30,7 +33,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="aspect-square overflow-hidden rounded-(--radius-lg) border border-border bg-surface-muted">
+      <div className="aspect-square overflow-hidden rounded-(--radius-xl) border border-border bg-surface-muted shadow-(--shadow-md)">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={active.url}

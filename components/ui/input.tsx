@@ -11,8 +11,9 @@ export function Input({ label, id, error, className, ...props }: InputProps) {
 
   const classes = [
     'min-h-(--size-touch) w-full rounded-(--radius-md) border px-3 text-(length:--text-sm)',
-    'bg-surface text-fg placeholder:text-fg-subtle',
-    'border-border focus-visible:border-accent',
+    'bg-surface-raised text-fg placeholder:text-fg-subtle shadow-(--shadow-sm)',
+    'border-border transition-colors duration-(--duration-fast)',
+    'focus-visible:border-accent focus-visible:shadow-(--shadow-glow)',
     error ? 'border-danger' : '',
     className ?? '',
   ]
