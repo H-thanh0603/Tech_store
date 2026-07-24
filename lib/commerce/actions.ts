@@ -5,9 +5,8 @@ import { revalidatePath } from 'next/cache'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
-import { getCartTokenHash } from '@/lib/commerce/cookies'
+import { CART_COOKIE, getCartTokenHash, ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
 import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
-import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
 import { isCommerceErrorCode, toUserMessage } from '@/lib/commerce/errors'
 import type { ActionState, CommerceErrorCode } from '@/lib/commerce/types'
 import { cartItemSchema, checkoutSchema, couponCodeSchema, trackingSchema } from '@/lib/commerce/validation'
@@ -149,6 +148,15 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   }
   const cookieStore = await cookies()
   cookieStore.set(ORDER_ACCESS_COOKIE, rawAccessToken, ORDER_COOKIE_OPTIONS)
+  // Converted cart keeps the old token hash; mint a fresh guest cart cookie so
+  // subsequent add-to-cart calls do not hit CART_NOT_FOUND on the converted row.
+  cookieStore.set(CART_COOKIE, createOpaqueToken(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30,
+  })
   revalidatePath('/', 'layout')
   revalidatePath('/cart')
   redirect(`/orders/${encodeURIComponent(result.orderCode)}/confirmation`)
