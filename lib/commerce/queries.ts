@@ -1,4 +1,4 @@
-import { getCartTokenHash } from '@/lib/commerce/cookies'
+import { getExistingCartTokenHash } from '@/lib/commerce/cookies'
 import type { CartData, CartItemData } from '@/lib/commerce/types'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -58,8 +58,13 @@ function emptyCart(): CartData {
 }
 
 export async function getCart(): Promise<CartData> {
+  const tokenHash = await getExistingCartTokenHash()
+  if (!tokenHash) {
+    return emptyCart()
+  }
+
   const { data, error } = await getSupabaseServerClient().rpc('cart_get', {
-    p_cart_token_hash: await getCartTokenHash(),
+    p_cart_token_hash: tokenHash,
   })
   if (error || !data || typeof data !== 'object') {
     throw new Error('Failed to load cart')

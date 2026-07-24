@@ -34,6 +34,7 @@ function rpcState(data: RpcResult | null, error: unknown): ActionState {
 }
 
 function revalidateCart() {
+  revalidatePath('/', 'layout')
   revalidatePath('/cart')
   revalidatePath('/products')
 }

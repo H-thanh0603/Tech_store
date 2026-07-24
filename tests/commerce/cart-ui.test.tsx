@@ -56,7 +56,7 @@ describe('cart storefront', () => {
     )
   })
 
-  it('shows price changed and disables checkout until corrected', () => {
+  it('keeps checkout disabled when price changed', () => {
     render(<CartPageContent cart={cartWithPriceChange} />)
 
     expect(screen.getByText(/giá đã thay đổi/i)).toBeInTheDocument()
@@ -64,6 +64,16 @@ describe('cart storefront', () => {
       'aria-disabled',
       'true',
     )
+  })
+
+  it('does not expose a dead checkout route while checkout is not implemented', () => {
+    render(<CartPageContent cart={{ ...cartWithPriceChange, canCheckout: true, items: cartWithPriceChange.items.map((item) => ({ ...item, priceChanged: false })) }} />)
+
+    expect(screen.getByRole('link', { name: /đến thanh toán/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(screen.getByRole('link', { name: /đến thanh toán/i })).not.toHaveAttribute('href')
   })
 
   it('renders coupon failure with a field-level message', () => {
