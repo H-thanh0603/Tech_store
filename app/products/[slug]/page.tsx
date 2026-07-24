@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { ProductCard } from '@/components/commerce/product-card'
 import { ProductGallery } from '@/components/commerce/product-gallery'
+import { ProductGrid } from '@/components/commerce/product-grid'
 import { VariantSelector } from '@/components/commerce/variant-selector'
 import { getProductBySlug, getRelatedProducts } from '@/lib/catalog/queries'
 import type { ProductDetail, ProductSpecData } from '@/lib/catalog/types'
@@ -51,46 +51,52 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const specGroups = groupSpecs(product.specs)
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-12 sm:gap-14">
       <nav aria-label="Breadcrumb" className="text-(length:--text-sm) text-fg-muted">
-        <ol className="flex flex-wrap items-center gap-1">
+        <ol className="flex flex-wrap items-center gap-1.5">
           <li>
-            <Link href="/products" className="hover:text-fg">
+            <Link href="/products" className="transition-colors hover:text-fg">
               Sản phẩm
             </Link>
           </li>
-          <li aria-hidden="true">/</li>
+          <li aria-hidden="true" className="text-fg-subtle">
+            /
+          </li>
           <li>
             <Link
               href={`/products?category=${product.categorySlug}`}
-              className="hover:text-fg"
+              className="transition-colors hover:text-fg"
             >
               {product.categoryName}
             </Link>
           </li>
-          <li aria-hidden="true">/</li>
-          <li className="text-fg" aria-current="page">
+          <li aria-hidden="true" className="text-fg-subtle">
+            /
+          </li>
+          <li className="line-clamp-1 font-medium text-fg" aria-current="page">
             {product.name}
           </li>
         </ol>
       </nav>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
         <ProductGallery images={product.images} productName={product.name} />
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:sticky lg:top-24 lg:self-start">
           <div className="flex flex-col gap-2">
             {product.brandName ? (
-              <p className="text-(length:--text-sm) font-medium uppercase tracking-wide text-fg-subtle">
+              <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.12em] text-fg-subtle">
                 {product.brandName}
               </p>
             ) : null}
-            <h1 className="text-(length:--text-3xl) font-semibold tracking-tight text-fg">
+            <h1 className="text-balance text-(length:--text-3xl) font-semibold tracking-tight text-fg">
               {product.name}
             </h1>
           </div>
 
-          <VariantSelector variants={product.variants} />
+          <div className="rounded-(--radius-lg) border border-border bg-surface-raised p-5 shadow-(--shadow-sm)">
+            <VariantSelector variants={product.variants} />
+          </div>
 
           {product.description ? (
             <p className="max-w-prose text-(length:--text-base) leading-relaxed text-fg-muted">
@@ -101,23 +107,29 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </div>
 
       {specGroups.length > 0 ? (
-        <section aria-labelledby="specs-heading" className="flex flex-col gap-4">
-          <h2 id="specs-heading" className="text-(length:--text-xl) font-semibold text-fg">
-            Thông số kỹ thuật
-          </h2>
-          <div className="flex flex-col gap-6">
+        <section aria-labelledby="specs-heading" className="flex flex-col gap-5">
+          <div>
+            <p className="eyebrow">Chi tiết</p>
+            <h2 id="specs-heading" className="mt-1 text-(length:--text-2xl) font-semibold tracking-tight text-fg">
+              Thông số kỹ thuật
+            </h2>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
             {specGroups.map((group) => (
               <div key={group.group} className="flex flex-col gap-2">
-                <h3 className="text-(length:--text-sm) font-semibold uppercase tracking-wide text-fg-subtle">
+                <h3 className="text-(length:--text-xs) font-semibold uppercase tracking-[0.1em] text-fg-subtle">
                   {group.group}
                 </h3>
-                <dl className="divide-y divide-border rounded-(--radius-md) border border-border">
+                <dl className="divide-y divide-border overflow-hidden rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm)">
                   {group.items.map((spec) => (
-                    <div key={`${spec.group}-${spec.label}`} className="flex gap-4 px-4 py-2.5">
-                      <dt className="w-40 shrink-0 text-(length:--text-sm) text-fg-muted">
+                    <div
+                      key={`${spec.group}-${spec.label}`}
+                      className="flex gap-4 px-4 py-3 sm:items-center"
+                    >
+                      <dt className="w-32 shrink-0 text-(length:--text-sm) text-fg-muted sm:w-40">
                         {spec.label}
                       </dt>
-                      <dd className="text-(length:--text-sm) text-fg">{spec.value}</dd>
+                      <dd className="text-(length:--text-sm) font-medium text-fg">{spec.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -128,19 +140,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
       ) : null}
 
       {related.length > 0 ? (
-        <section aria-labelledby="related-heading" className="flex flex-col gap-4">
-          <h2 id="related-heading" className="text-(length:--text-xl) font-semibold text-fg">
-            Sản phẩm liên quan
-          </h2>
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((item) => (
-              <li key={item.id} className="flex">
-                <div className="flex w-full">
-                  <ProductCard product={item} />
-                </div>
-              </li>
-            ))}
-          </ul>
+        <section aria-labelledby="related-heading" className="flex flex-col gap-5">
+          <div>
+            <p className="eyebrow">Gợi ý</p>
+            <h2 id="related-heading" className="mt-1 text-(length:--text-2xl) font-semibold tracking-tight text-fg">
+              Sản phẩm liên quan
+            </h2>
+          </div>
+          <ProductGrid products={related} />
         </section>
       ) : null}
     </div>

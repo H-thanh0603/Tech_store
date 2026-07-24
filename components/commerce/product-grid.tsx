@@ -5,17 +5,14 @@ interface ProductGridProps {
   products: ProductCardData[]
 }
 
-// Responsive product grid: 1 column on mobile up to 4 on wide desktop, matching
-// the 4/12-column layout guidance. Empty state is the caller's responsibility
-// (the list page renders a richer empty state with the active filters).
+// Responsive product grid: 1 column on mobile up to 4 on wide desktop.
+// Empty state is the caller's responsibility.
 export function ProductGrid({ products }: ProductGridProps) {
   return (
-    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
-        <li key={product.id} className="flex">
-          <div className="flex w-full">
-            <ProductCard product={product} />
-          </div>
+        <li key={product.id} className="flex min-w-0">
+          <ProductCard product={product} />
         </li>
       ))}
     </ul>

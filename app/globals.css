@@ -1,59 +1,69 @@
 @import 'tailwindcss';
 
-/* Design tokens for TechStore: neutral surfaces with a single controlled
-   electronic-blue accent. Exposed through Tailwind v4 @theme so utilities like
-   bg-accent / text-fg / rounded-md map onto these values. Restrained motion
-   (150-250ms), generous spacing, strong type hierarchy. */
+/* TechStore — Precision Atelier
+   Premium Vietnamese tech retail: warm paper surfaces, deep ink type,
+   electric cyan accent (not purple). Micro-grid texture + restrained motion.
+   Tokens flow through Tailwind v4 @theme. */
 
 @theme {
-  --color-surface: oklch(99% 0 0);
-  --color-surface-muted: oklch(97% 0.003 250);
-  --color-surface-raised: oklch(100% 0 0);
-  --color-border: oklch(90% 0.005 250);
-  --color-border-strong: oklch(82% 0.008 250);
+  --color-surface: oklch(98.5% 0.006 95);
+  --color-surface-muted: oklch(96% 0.01 95);
+  --color-surface-raised: oklch(100% 0.002 95);
+  --color-surface-inverse: oklch(18% 0.02 255);
+  --color-surface-glow: oklch(92% 0.04 210);
 
-  --color-fg: oklch(22% 0.01 260);
-  --color-fg-muted: oklch(48% 0.012 260);
-  --color-fg-subtle: oklch(62% 0.012 260);
+  --color-border: oklch(90% 0.012 95);
+  --color-border-strong: oklch(80% 0.02 95);
 
-  --color-accent: oklch(58% 0.19 255);
-  --color-accent-hover: oklch(52% 0.19 255);
-  --color-accent-active: oklch(46% 0.18 255);
+  --color-fg: oklch(18% 0.02 255);
+  --color-fg-muted: oklch(42% 0.02 255);
+  --color-fg-subtle: oklch(58% 0.015 255);
+  --color-fg-inverse: oklch(98% 0.005 95);
+
+  --color-accent: oklch(55% 0.14 215);
+  --color-accent-hover: oklch(48% 0.14 215);
+  --color-accent-active: oklch(42% 0.12 215);
   --color-accent-fg: oklch(99% 0 0);
-  --color-accent-subtle: oklch(95% 0.03 255);
+  --color-accent-subtle: oklch(94% 0.03 215);
 
-  --color-success: oklch(60% 0.15 150);
-  --color-danger: oklch(56% 0.2 25);
-  --color-danger-subtle: oklch(95% 0.03 25);
+  --color-warm: oklch(72% 0.12 65);
+  --color-warm-subtle: oklch(96% 0.03 85);
 
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --color-success: oklch(55% 0.14 155);
+  --color-success-subtle: oklch(95% 0.03 155);
+  --color-danger: oklch(55% 0.19 25);
+  --color-danger-subtle: oklch(96% 0.03 25);
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
-  --text-2xl: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
-  --text-3xl: clamp(2rem, 1.5rem + 2vw, 3rem);
-  --text-hero: clamp(2.5rem, 1.6rem + 3.6vw, 4rem);
+  --text-2xl: clamp(1.5rem, 1.25rem + 1vw, 1.875rem);
+  --text-3xl: clamp(1.875rem, 1.4rem + 1.8vw, 2.5rem);
+  --text-hero: clamp(2.25rem, 1.4rem + 3.2vw, 3.75rem);
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.5rem;
   --radius-full: 9999px;
 
-  --shadow-sm: 0 1px 2px oklch(20% 0.02 260 / 0.06);
-  --shadow-md: 0 4px 16px oklch(20% 0.02 260 / 0.08);
-  --shadow-lg: 0 12px 32px oklch(20% 0.02 260 / 0.12);
+  --shadow-sm: 0 1px 2px oklch(20% 0.03 255 / 0.05), 0 0 0 1px oklch(20% 0.02 255 / 0.03);
+  --shadow-md: 0 8px 24px oklch(20% 0.03 255 / 0.08), 0 0 0 1px oklch(20% 0.02 255 / 0.04);
+  --shadow-lg: 0 20px 48px oklch(20% 0.04 255 / 0.12), 0 0 0 1px oklch(20% 0.02 255 / 0.05);
+  --shadow-glow: 0 0 0 1px oklch(55% 0.14 215 / 0.15), 0 12px 40px oklch(55% 0.14 215 / 0.12);
 
   --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-slow: 250ms;
+  --duration-normal: 220ms;
+  --duration-slow: 320ms;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Minimum interactive target size (WCAG 2.5.5). */
   --size-touch: 2.75rem;
+  --container: 72rem;
 }
 
 *,
@@ -64,6 +74,7 @@
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 html,
@@ -79,10 +90,24 @@ body {
   font-size: var(--text-base);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Visible keyboard focus everywhere, using the accent as a 2px outline offset
-   from the element so it reads on both light surfaces and filled controls. */
+/* Soft engineering grid under the whole storefront */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(oklch(20% 0.02 255 / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(20% 0.02 255 / 0.03) 1px, transparent 1px),
+    radial-gradient(ellipse 80% 50% at 50% -10%, oklch(70% 0.08 215 / 0.18), transparent 55%);
+  background-size: 48px 48px, 48px 48px, 100% 100%;
+  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 100%);
+}
+
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
@@ -93,14 +118,77 @@ body {
   outline: none;
 }
 
-/* Respect reduced-motion: collapse all transitions/animations to near-zero. */
+::selection {
+  background: oklch(55% 0.14 215 / 0.2);
+  color: var(--color-fg);
+}
+
+.container-store {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-store {
+    padding-inline: 1.5rem;
+  }
+}
+
+.surface-panel {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.surface-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(ellipse 70% 80% at 85% 20%, oklch(55% 0.14 215 / 0.35), transparent 50%),
+    radial-gradient(ellipse 50% 60% at 10% 90%, oklch(72% 0.12 65 / 0.2), transparent 45%),
+    linear-gradient(145deg, oklch(20% 0.03 255) 0%, oklch(24% 0.04 230) 55%, oklch(28% 0.05 210) 100%);
+  color: var(--color-fg-inverse);
+  box-shadow: var(--shadow-lg);
+}
+
+.surface-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(oklch(100% 0 0 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(100% 0 0 / 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 80% 80% at 70% 40%, black, transparent);
+  pointer-events: none;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }

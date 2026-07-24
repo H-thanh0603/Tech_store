@@ -25,20 +25,19 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const hasResults = result.products.length > 0
 
   return (
-    <section aria-labelledby="products-heading" className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h1 id="products-heading" className="text-(length:--text-3xl) font-semibold tracking-tight">
-          Sản phẩm
-        </h1>
-        <p className="text-(length:--text-sm) text-fg-muted" aria-live="polite">
-          {result.total > 0
-            ? `${result.total} sản phẩm`
-            : 'Không có sản phẩm phù hợp'}
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div />
+    <section aria-labelledby="products-heading" className="flex flex-col gap-7">
+      <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <p className="eyebrow">Catalog</p>
+          <h1 id="products-heading" className="text-(length:--text-3xl) font-semibold tracking-tight">
+            Sản phẩm
+          </h1>
+          <p className="text-(length:--text-sm) text-fg-muted" aria-live="polite">
+            {result.total > 0
+              ? `${result.total} thiết bị · trang ${result.page}/${result.pageCount}`
+              : 'Không có sản phẩm phù hợp'}
+          </p>
+        </div>
         <Suspense fallback={null}>
           <CatalogSort value={normalized.sort} />
         </Suspense>
@@ -47,8 +46,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
       {hasResults ? (
         <ProductGrid products={result.products} />
       ) : (
-        <div className="flex flex-col items-center gap-3 rounded-(--radius-lg) border border-dashed border-border bg-surface-muted px-6 py-16 text-center">
-          <p className="text-(length:--text-lg) font-medium text-fg">
+        <div className="flex flex-col items-center gap-3 rounded-(--radius-xl) border border-dashed border-border-strong bg-surface-muted/80 px-6 py-16 text-center">
+          <p className="text-(length:--text-lg) font-semibold text-fg">
             Chưa tìm thấy sản phẩm nào
           </p>
           <p className="max-w-prose text-(length:--text-sm) text-fg-muted">
