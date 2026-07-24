@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(59);
+select plan(61);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -209,7 +209,17 @@ select is(
   'anon still sees exactly the 4 published catalog products'
 );
 
+select ok(
+  (select bool_and(available_stock is not null) from catalog_products),
+  'anon can read reservation-aware available_stock on catalog_products'
+);
+
 reset role;
+
+select ok(
+  (select prosecdef from pg_proc where proname = 'available_variant_stock' limit 1),
+  'available_variant_stock is SECURITY DEFINER for catalog reads'
+);
 
 -- Guest-cart RPCs -------------------------------------------------------------
 
