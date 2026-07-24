@@ -66,14 +66,13 @@ describe('cart storefront', () => {
     )
   })
 
-  it('does not expose a dead checkout route while checkout is not implemented', () => {
+  it('links a valid cart to checkout', () => {
     render(<CartPageContent cart={{ ...cartWithPriceChange, canCheckout: true, items: cartWithPriceChange.items.map((item) => ({ ...item, priceChanged: false })) }} />)
 
     expect(screen.getByRole('link', { name: /đến thanh toán/i })).toHaveAttribute(
-      'aria-disabled',
-      'true',
+      'href',
+      '/checkout',
     )
-    expect(screen.getByRole('link', { name: /đến thanh toán/i })).not.toHaveAttribute('href')
   })
 
   it('renders coupon failure with a field-level message', () => {
