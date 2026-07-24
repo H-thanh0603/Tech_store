@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(55);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -399,6 +399,40 @@ select is(
   (select order_status from orders where idempotency_key = '33333333-3333-4333-8333-333333333333'),
   'awaiting_payment',
   'bank transfer order awaits payment'
+);
+
+-- Seeded coupon behavior ------------------------------------------------------
+
+select is(
+  cart_apply_coupon(repeat('4', 64), 'EXPIRED10')->>'code',
+  'CART_NOT_FOUND',
+  'converted cart stays inaccessible to coupon mutation'
+);
+
+select cart_add_item(repeat('9', 64), '40000000-0000-0000-0000-000000000006', 1)->>'code';
+
+select is(
+  cart_apply_coupon(repeat('9', 64), 'EXPIRED10')->>'code',
+  'COUPON_EXPIRED',
+  'expired seeded coupon returns COUPON_EXPIRED'
+);
+
+select is(
+  cart_apply_coupon(repeat('9', 64), 'UNKNOWN')->>'code',
+  'COUPON_INVALID',
+  'unknown coupon returns COUPON_INVALID'
+);
+
+select is(
+  cart_apply_coupon(repeat('9', 64), 'SAVE500K')->>'code',
+  'COUPON_MINIMUM',
+  'fixed coupon enforces minimum order'
+);
+
+select is(
+  cart_apply_coupon(repeat('9', 64), 'WELCOME10')->>'code',
+  'OK',
+  'valid percentage coupon applies to eligible cart'
 );
 
 select * from finish();
