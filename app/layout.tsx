@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+import { Footer } from '@/components/layout/footer'
+import { Header } from '@/components/layout/header'
 import { appMetadata } from '@/lib/app-metadata'
 
 import './globals.css'
@@ -13,7 +15,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body className="flex min-h-screen flex-col">
+        <a
+          href="#main-content"
+          className="sr-only rounded-(--radius-md) bg-accent px-4 py-2 text-accent-fg focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        >
+          Bỏ qua đến nội dung chính
+        </a>
+        <Header />
+        <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+          {children}
+        </main>
+        <Footer />
+      </body>
     </html>
   )
 }
