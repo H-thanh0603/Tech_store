@@ -71,7 +71,7 @@ begin
   if v_coupon_code is not null then
     select least(
       case when c.discount_type = 'percentage'
-        then round(v_subtotal * c.discount_value / 100, 2)
+        then floor(v_subtotal * c.discount_value / 100)
         else c.discount_value end,
       coalesce(c.maximum_discount, v_subtotal),
       v_subtotal
@@ -195,7 +195,6 @@ begin
   select id into v_cart_id from carts where token_hash = p_cart_token_hash and status = 'open' for update;
   if v_cart_id is null then return jsonb_build_object('code', 'CART_NOT_FOUND'); end if;
   delete from cart_items where id = p_item_id and cart_id = v_cart_id;
-  if not found then return jsonb_build_object('code', 'ITEM_NOT_FOUND'); end if;
   return jsonb_build_object('code', 'OK');
 end;
 $$;
