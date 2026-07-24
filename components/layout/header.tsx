@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-interface HeaderProps {
+type HeaderProps = {
   children?: ReactNode
+  cartCount?: number
 }
 
 const NAV_LINKS = [
@@ -11,7 +12,7 @@ const NAV_LINKS = [
   { href: '/compare', label: 'So sánh' },
 ]
 
-export function Header({ children }: HeaderProps) {
+export function Header({ children, cartCount = 0 }: HeaderProps) {
   return (
     <header className="border-b border-border bg-surface-raised">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
@@ -33,6 +34,12 @@ export function Header({ children }: HeaderProps) {
           ))}
         </nav>
         {children ? <div className="ml-auto min-w-0 flex-1 sm:max-w-xs">{children}</div> : null}
+        <Link
+          href="/cart"
+          className="ml-auto inline-flex min-h-(--size-touch) items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg transition-colors duration-(--duration-fast) hover:bg-surface-muted"
+        >
+          Giỏ hàng{cartCount > 0 ? ` (${cartCount})` : ''}
+        </Link>
       </div>
     </header>
   )

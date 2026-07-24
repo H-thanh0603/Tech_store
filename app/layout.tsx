@@ -3,16 +3,19 @@ import type { Metadata } from 'next'
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
 import { appMetadata } from '@/lib/app-metadata'
+import { getCartItemCount } from '@/lib/commerce/queries'
 
 import './globals.css'
 
 export const metadata: Metadata = appMetadata
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const cartCount = await getCartItemCount()
+
   return (
     <html lang="vi">
       <body className="flex min-h-screen flex-col">
@@ -22,7 +25,7 @@ export default function RootLayout({
         >
           Bỏ qua đến nội dung chính
         </a>
-        <Header />
+        <Header cartCount={cartCount} />
         <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
           {children}
         </main>
