@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(37);
+select plan(39);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -260,6 +260,34 @@ select is(
   )->>'code',
   'OK',
   'cart_remove_item deletes cart item'
+);
+
+select is(
+  cart_remove_item(repeat('f', 64), '00000000-0000-0000-0000-000000000000')->>'code',
+  'OK',
+  'cart_remove_item is idempotent when item is already absent'
+);
+
+update product_variants
+set sale_price = 15
+where id = '40000000-0000-0000-0000-000000000001';
+
+insert into coupons (code, discount_type, discount_value)
+values ('TENPERCENT', 'percentage', 10);
+insert into carts (token_hash, applied_coupon_id)
+values (repeat('1', 64), (select id from coupons where code = 'TENPERCENT'));
+insert into cart_items (cart_id, variant_id, quantity, price_at_add)
+values (
+  (select id from carts where token_hash = repeat('1', 64)),
+  '40000000-0000-0000-0000-000000000001',
+  1,
+  15
+);
+
+select is(
+  (cart_get(repeat('1', 64))->>'discountTotal')::numeric,
+  1::numeric,
+  'cart_get floors fractional percentage discount to whole VND'
 );
 
 set local role anon;
