@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { getCartTokenHash } from '@/lib/commerce/cookies'
@@ -10,7 +10,7 @@ import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
 import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
 import { isCommerceErrorCode, toUserMessage } from '@/lib/commerce/errors'
 import type { ActionState, CommerceErrorCode } from '@/lib/commerce/types'
-import { cartItemSchema, checkoutSchema, couponCodeSchema } from '@/lib/commerce/validation'
+import { cartItemSchema, checkoutSchema, couponCodeSchema, trackingSchema } from '@/lib/commerce/validation'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 interface RpcResult {
@@ -152,4 +152,37 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   revalidatePath('/', 'layout')
   revalidatePath('/cart')
   redirect(`/orders/${encodeURIComponent(result.orderCode)}/confirmation`)
+}
+
+export async function trackOrder(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = trackingSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    phone: formData.get('phone'),
+  })
+  if (!parsed.success) {
+    return validationError(parsed.error.flatten().fieldErrors)
+  }
+
+  const rawAccessToken = createOpaqueToken()
+  const requestHeaders = await headers()
+  const requestIdentity = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
+  const { data, error } = await getSupabaseServerClient().rpc('order_track', {
+    p_order_code: parsed.data.orderCode,
+    p_phone: parsed.data.phone,
+    p_identity_hash: await sha256Hex(requestIdentity),
+    p_new_access_token_hash: await sha256Hex(rawAccessToken),
+  })
+  const state = rpcState(data as RpcResult | null, error)
+  if (!state.ok) {
+    return state.code === 'ORDER_NOT_FOUND' || state.code === 'RATE_LIMITED'
+      ? { ok: false, code: 'ORDER_NOT_FOUND', message: toUserMessage('ORDER_NOT_FOUND') }
+      : state
+  }
+  const result = data as { orderCode?: string }
+  if (!result.orderCode) {
+    return { ok: false, code: 'INTERNAL_ERROR', message: toUserMessage('INTERNAL_ERROR') }
+  }
+  const cookieStore = await cookies()
+  cookieStore.set(ORDER_ACCESS_COOKIE, rawAccessToken, ORDER_COOKIE_OPTIONS)
+  redirect(`/orders/${encodeURIComponent(result.orderCode)}`)
 }

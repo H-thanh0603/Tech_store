@@ -1,5 +1,9 @@
 import { getExistingCartTokenHash } from '@/lib/commerce/cookies'
-import type { CartData, CartItemData } from '@/lib/commerce/types'
+import { cookies } from 'next/headers'
+
+import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
+import { sha256Hex } from '@/lib/commerce/tokens'
+import type { CartData, CartItemData, OrderConfirmationData } from '@/lib/commerce/types'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 interface CartRpcItem {
@@ -85,4 +89,15 @@ export async function getCart(): Promise<CartData> {
 
 export async function getCartItemCount(): Promise<number> {
   return (await getCart()).itemCount
+}
+
+export async function getOrderByAccess(orderCode: string): Promise<OrderConfirmationData | null> {
+  const token = (await cookies()).get(ORDER_ACCESS_COOKIE)?.value
+  if (!token) return null
+  const { data, error } = await getSupabaseServerClient().rpc('order_get_by_access', {
+    p_order_code: orderCode,
+    p_access_token_hash: await sha256Hex(token),
+  })
+  if (error || !data || data.code !== 'OK') return null
+  return data as OrderConfirmationData
 }

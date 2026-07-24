@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(55);
+select plan(59);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -433,6 +433,47 @@ select is(
   cart_apply_coupon(repeat('9', 64), 'WELCOME10')->>'code',
   'OK',
   'valid percentage coupon applies to eligible cart'
+);
+
+-- Guest tracking and rate limiting -------------------------------------------
+
+select is(
+  order_track('BAD-CODE', '0901234567', repeat('a', 64), repeat('b', 64))->>'code',
+  'ORDER_NOT_FOUND',
+  'wrong order code returns generic ORDER_NOT_FOUND'
+);
+
+select is(
+  order_track(
+    (select order_code from orders where idempotency_key = '22222222-2222-4222-8222-222222222222'),
+    '0919999999', repeat('c', 64), repeat('d', 64)
+  )->>'code',
+  'ORDER_NOT_FOUND',
+  'wrong phone returns same generic ORDER_NOT_FOUND'
+);
+
+select is(
+  order_track(
+    (select order_code from orders where idempotency_key = '22222222-2222-4222-8222-222222222222'),
+    '0901234567', repeat('e', 64), repeat('f', 64)
+  )->>'code',
+  'OK',
+  'matching code and phone returns redacted order DTO'
+);
+
+-- Fill one identity bucket to five attempts, then assert sixth is generic.
+select order_track('BAD-1', '0901234567', repeat('1', 64), repeat('2', 64));
+select order_track('BAD-2', '0901234567', repeat('1', 64), repeat('2', 64));
+select order_track('BAD-3', '0901234567', repeat('1', 64), repeat('2', 64));
+select order_track('BAD-4', '0901234567', repeat('1', 64), repeat('2', 64));
+select order_track('BAD-5', '0901234567', repeat('1', 64), repeat('2', 64));
+select is(
+  order_track(
+    (select order_code from orders where idempotency_key = '22222222-2222-4222-8222-222222222222'),
+    '0901234567', repeat('1', 64), repeat('2', 64)
+  )->>'code',
+  'ORDER_NOT_FOUND',
+  'sixth tracking attempt returns generic ORDER_NOT_FOUND'
 );
 
 select * from finish();
