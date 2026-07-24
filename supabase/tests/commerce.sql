@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(37);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -207,6 +207,66 @@ select is(
   (select count(*)::integer from catalog_products),
   4,
   'anon still sees exactly the 4 published catalog products'
+);
+
+reset role;
+
+-- Guest-cart RPCs -------------------------------------------------------------
+
+select has_function('public', 'cart_get', array['text'], 'cart_get RPC exists');
+select has_function('public', 'cart_add_item', array['text', 'uuid', 'integer'], 'cart_add_item RPC exists');
+select has_function('public', 'cart_update_item', array['text', 'uuid', 'integer'], 'cart_update_item RPC exists');
+select has_function('public', 'cart_remove_item', array['text', 'uuid'], 'cart_remove_item RPC exists');
+select has_function('public', 'cart_apply_coupon', array['text', 'text'], 'cart_apply_coupon RPC exists');
+
+select is(
+  cart_add_item(repeat('f', 64), '40000000-0000-0000-0000-000000000001', 2)->>'code',
+  'OK',
+  'cart_add_item creates an open cart and adds active published variant'
+);
+
+select is(
+  (cart_get(repeat('f', 64))->>'itemCount')::integer,
+  2,
+  'cart_get returns quantity count without token hash'
+);
+
+select is(
+  cart_update_item(
+    repeat('f', 64),
+    (select id from cart_items where cart_id = (select id from carts where token_hash = repeat('f', 64))),
+    3
+  )->>'code',
+  'OK',
+  'cart_update_item changes quantity'
+);
+
+select is(
+  cart_add_item(repeat('f', 64), '40000000-0000-0000-0000-000000000001', 99)->>'code',
+  'OUT_OF_STOCK',
+  'cart_add_item checks locked inventory availability'
+);
+
+select is(
+  cart_apply_coupon(repeat('f', 64), 'MISSING')->>'code',
+  'COUPON_INVALID',
+  'cart_apply_coupon rejects unknown coupon safely'
+);
+
+select is(
+  cart_remove_item(
+    repeat('f', 64),
+    (select id from cart_items where cart_id = (select id from carts where token_hash = repeat('f', 64)))
+  )->>'code',
+  'OK',
+  'cart_remove_item deletes cart item'
+);
+
+set local role anon;
+
+select lives_ok(
+  $$select cart_get(repeat('f', 64))$$,
+  'anon can call explicitly granted cart_get RPC'
 );
 
 reset role;
