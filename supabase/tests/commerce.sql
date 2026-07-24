@@ -7,7 +7,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(39);
+select plan(50);
 
 -- Schema existence -----------------------------------------------------------
 
@@ -298,6 +298,108 @@ select lives_ok(
 );
 
 reset role;
+
+-- Atomic order placement ------------------------------------------------------
+
+select is(
+  (place_order('missing', gen_random_uuid(), repeat('a', 64), '{}'::jsonb, 'cod', null)->>'code'),
+  'INTERNAL_ERROR',
+  'invalid token hash returns safe INTERNAL_ERROR'
+);
+
+select is(
+  place_order(
+    repeat('2', 64),
+    '11111111-1111-4111-8111-111111111111',
+    repeat('3', 64),
+    '{"customerName":"Nguyen Van A","customerPhone":"0901234567","province":"Ha Noi","district":"Cau Giay","ward":"Dich Vong","streetAddress":"123 Xuan Thuy"}'::jsonb,
+    'cod', null
+  )->>'code',
+  'CART_EMPTY',
+  'empty cart returns CART_EMPTY'
+);
+
+-- Build a deterministic cart with one in-stock MacBook variant.
+select cart_add_item(repeat('4', 64), '40000000-0000-0000-0000-000000000001', 2)->>'code';
+
+select is(
+  (place_order(
+    repeat('4', 64),
+    '22222222-2222-4222-8222-222222222222',
+    repeat('5', 64),
+    '{"customerName":"Nguyen Van B","customerPhone":"0901234567","province":"Ha Noi","district":"Cau Giay","ward":"Dich Vong","streetAddress":"123 Xuan Thuy"}'::jsonb,
+    'cod', null
+  )->>'code'),
+  'OK',
+  'COD checkout creates order'
+);
+
+select is(
+  (select count(*)::integer from orders where idempotency_key = '22222222-2222-4222-8222-222222222222'),
+  1,
+  'COD checkout inserts exactly one order'
+);
+
+select is(
+  (select count(*)::integer from order_items where order_id = (select id from orders where idempotency_key = '22222222-2222-4222-8222-222222222222')),
+  1,
+  'order stores item snapshot'
+);
+
+select is(
+  (select count(*)::integer from inventory_reservations where order_id = (select id from orders where idempotency_key = '22222222-2222-4222-8222-222222222222')),
+  1,
+  'COD checkout creates non-expiring reservation'
+);
+
+select is(
+  place_order(
+    repeat('4', 64),
+    '22222222-2222-4222-8222-222222222222',
+    repeat('6', 64), '{}'::jsonb, 'cod', null
+  )->>'code',
+  'IDEMPOTENT_REPLAY',
+  'same idempotency key returns replay marker'
+);
+
+select is(
+  (place_order(
+    repeat('4', 64),
+    '22222222-2222-4222-8222-222222222222',
+    repeat('6', 64), '{}'::jsonb, 'cod', null
+  )->>'orderCode'),
+  (select order_code from orders where idempotency_key = '22222222-2222-4222-8222-222222222222'),
+  'idempotent replay returns original order code'
+);
+
+-- New cart for bank transfer and 24-hour expiry.
+select cart_add_item(repeat('7', 64), '40000000-0000-0000-0000-000000000003', 1)->>'code';
+
+select is(
+  (place_order(
+    repeat('7', 64),
+    '33333333-3333-4333-8333-333333333333',
+    repeat('8', 64),
+    '{"customerName":"Nguyen Van C","customerPhone":"0901234567","province":"Ha Noi","district":"Cau Giay","ward":"Dich Vong","streetAddress":"123 Xuan Thuy"}'::jsonb,
+    'bank_transfer', null
+  )->>'code'),
+  'OK',
+  'bank transfer checkout creates order'
+);
+
+select ok(
+  abs(extract(epoch from (
+    (select transfer_expires_at from orders where idempotency_key = '33333333-3333-4333-8333-333333333333') -
+    (select created_at from orders where idempotency_key = '33333333-3333-4333-8333-333333333333') - interval '24 hours'
+  ))) <= 1,
+  'bank transfer reservation expires in 24 hours'
+);
+
+select is(
+  (select order_status from orders where idempotency_key = '33333333-3333-4333-8333-333333333333'),
+  'awaiting_payment',
+  'bank transfer order awaits payment'
+);
 
 select * from finish();
 
