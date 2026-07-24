@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 import { formatPrice } from '@/lib/format'
 import type { CartData } from '@/lib/commerce/types'
 
@@ -39,14 +41,23 @@ export function CartSummary({ cart }: CartSummaryProps) {
         </p>
       ) : null}
 
-      <a
-        role="link"
-        aria-disabled="true"
-        tabIndex={-1}
-        className="mt-5 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-md bg-surface-muted px-4 text-(length:--text-sm) font-medium text-fg-muted"
-      >
-        Đến thanh toán
-      </a>
+      {isCheckoutDisabled ? (
+        <a
+          role="link"
+          aria-disabled="true"
+          tabIndex={-1}
+          className="mt-5 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-md bg-surface-muted px-4 text-(length:--text-sm) font-medium text-fg-muted"
+        >
+          Đến thanh toán
+        </a>
+      ) : (
+        <Link
+          href="/checkout"
+          className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg hover:bg-accent-hover"
+        >
+          Đến thanh toán
+        </Link>
+      )}
     </aside>
   )
 }
