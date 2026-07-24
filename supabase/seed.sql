@@ -244,3 +244,22 @@ where id in (
   '30000000-0000-0000-0000-000000000005',
   '30000000-0000-0000-0000-000000000006'
 );
+
+-- Demo commerce coupons. Whole-VND values; fixed dates keep reset deterministic.
+insert into coupons (
+  id, code, discount_type, discount_value, minimum_order,
+  maximum_discount, starts_at, ends_at, usage_limit, is_active
+) values
+  ('90000000-0000-0000-0000-000000000010', 'WELCOME10', 'percentage', 10, 1000000, 5000000, '2026-01-01T00:00:00Z', '2030-01-01T00:00:00Z', null, true),
+  ('90000000-0000-0000-0000-000000000011', 'SAVE500K', 'fixed', 500000, 10000000, null, '2026-01-01T00:00:00Z', '2030-01-01T00:00:00Z', null, true),
+  ('90000000-0000-0000-0000-000000000012', 'EXPIRED10', 'percentage', 10, 0, null, '2025-01-01T00:00:00Z', '2025-12-31T23:59:59Z', null, false)
+on conflict (id) do update set
+  code = excluded.code,
+  discount_type = excluded.discount_type,
+  discount_value = excluded.discount_value,
+  minimum_order = excluded.minimum_order,
+  maximum_discount = excluded.maximum_discount,
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at,
+  usage_limit = excluded.usage_limit,
+  is_active = excluded.is_active;
