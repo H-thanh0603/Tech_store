@@ -4,6 +4,7 @@ import type {
   AdminOrderListItem,
   AdminProductDetail,
   AdminProductListItem,
+  AdminProductListResult,
   BrandOption,
   CategoryOption,
   DashboardStats,
@@ -89,56 +90,59 @@ export async function listBrands(): Promise<BrandOption[]> {
 
 export async function listAdminProducts(filter?: {
   status?: 'all' | 'published' | 'draft' | 'archived'
-}): Promise<AdminProductListItem[]> {
+  q?: string
+  categoryId?: string
+  brandId?: string
+  stock?: 'all' | 'in' | 'low' | 'out'
+  sort?: 'name' | 'updated_at' | 'stock' | 'price'
+  dir?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}): Promise<AdminProductListResult> {
   const db = getSupabaseAdminClient()
-  let query = db
-    .from('products')
-    .select(
-      `
-      id, name, slug, is_published, is_featured, is_archived, updated_at,
-      categories ( name ),
-      brands ( name ),
-      product_variants ( id, inventory ( quantity, reserved_quantity ) )
-    `,
-    )
-    .order('updated_at', { ascending: false })
-
-  if (filter?.status === 'published') {
-    query = query.eq('is_published', true).eq('is_archived', false)
-  } else if (filter?.status === 'draft') {
-    query = query.eq('is_published', false).eq('is_archived', false)
-  } else if (filter?.status === 'archived') {
-    query = query.eq('is_archived', true)
-  }
-
-  const { data, error } = await query
+  const { data, error } = await db.rpc('admin_list_products', {
+    p_search: filter?.q || null,
+    p_status: filter?.status ?? 'all',
+    p_category_id: filter?.categoryId || null,
+    p_brand_id: filter?.brandId || null,
+    p_stock: filter?.stock ?? 'all',
+    p_sort: filter?.sort ?? 'updated_at',
+    p_sort_dir: filter?.dir ?? 'desc',
+    p_page: filter?.page ?? 1,
+    p_page_size: filter?.pageSize ?? 20,
+  })
   if (error) throw error
 
-  return (data ?? []).map((row) => {
-    const variants = (row.product_variants as Array<Record<string, unknown>> | null) ?? []
-    let minAvailable: number | null = null
-    for (const v of variants) {
-      const inv = Array.isArray(v.inventory) ? v.inventory[0] : v.inventory
-      const invRec = asRecord(inv)
-      const available = num(invRec.quantity) - num(invRec.reserved_quantity)
-      minAvailable = minAvailable === null ? available : Math.min(minAvailable, available)
-    }
-    const category = asRecord(row.categories)
-    const brand = asRecord(row.brands)
+  const root = asRecord(data)
+  const rows = (Array.isArray(root.rows) ? root.rows : []).map((item) => {
+    const row = asRecord(item)
+    const totalAvailable = row.totalAvailable == null ? null : num(row.totalAvailable)
     return {
       id: String(row.id),
       name: String(row.name),
       slug: String(row.slug),
-      isPublished: Boolean(row.is_published),
-      isFeatured: Boolean(row.is_featured),
-      isArchived: Boolean(row.is_archived),
-      categoryName: category.name ? String(category.name) : null,
-      brandName: brand.name ? String(brand.name) : null,
-      variantCount: variants.length,
-      minAvailable,
-      updatedAt: String(row.updated_at),
-    }
+      isPublished: Boolean(row.isPublished),
+      isFeatured: Boolean(row.isFeatured),
+      isArchived: Boolean(row.isArchived),
+      categoryName: row.categoryName == null ? null : String(row.categoryName),
+      brandName: row.brandName == null ? null : String(row.brandName),
+      variantCount: num(row.variantCount),
+      minAvailable: totalAvailable,
+      totalAvailable,
+      imageUrl: row.imageUrl == null ? null : String(row.imageUrl),
+      minPrice: row.minPrice == null ? null : num(row.minPrice),
+      maxPrice: row.maxPrice == null ? null : num(row.maxPrice),
+      updatedAt: String(row.updatedAt),
+    } satisfies AdminProductListItem
   })
+
+  return {
+    total: num(root.total),
+    page: num(root.page) || 1,
+    pageSize: num(root.pageSize) || 20,
+    pageCount: Math.max(1, num(root.pageCount) || 1),
+    rows,
+  }
 }
 
 export async function getAdminProduct(id: string): Promise<AdminProductDetail | null> {
