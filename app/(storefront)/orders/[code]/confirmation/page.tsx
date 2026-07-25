@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 
+import { OrderSavedEffect } from '@/components/commerce/order-saved'
 import { OrderStatus } from '@/components/commerce/order-status'
 import { PaymentSummary } from '@/components/commerce/payment-summary'
 import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
@@ -26,6 +27,7 @@ export default async function OrderConfirmationPage({
 
   return (
     <div className="container-store grid max-w-3xl gap-8 py-10 sm:py-14">
+      <OrderSavedEffect orderCode={order.orderCode} total={order.total} />
       <header className="rounded-(--radius-xl) border border-border bg-brand-soft/40 p-6 sm:p-8">
         <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.12em] text-brand">
           Đặt hàng thành công
@@ -34,7 +36,7 @@ export default async function OrderConfirmationPage({
           Cảm ơn bạn — đơn {order.orderCode}
         </h1>
         <p className="mt-2 text-(length:--text-sm) text-fg-muted">
-          Lưu mã đơn và số điện thoại để tra cứu. Không cần tài khoản.
+          Mã đơn đã lưu trên thiết bị. Tra cứu bằng mã + SĐT, hoặc xem trong tài khoản.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
@@ -42,6 +44,12 @@ export default async function OrderConfirmationPage({
             className="inline-flex min-h-11 items-center rounded-(--radius-md) bg-brand px-4 text-(length:--text-sm) font-semibold text-accent-fg"
           >
             Xem chi tiết đơn
+          </Link>
+          <Link
+            href="/account"
+            className="inline-flex min-h-11 items-center rounded-(--radius-md) border border-border bg-bg-elevated px-4 text-(length:--text-sm) font-semibold text-fg"
+          >
+            Tài khoản
           </Link>
           <Link
             href="/track-order"

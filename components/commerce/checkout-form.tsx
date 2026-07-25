@@ -1,11 +1,26 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useOptionalToast } from '@/components/ui/toast'
 import { checkoutAction } from '@/lib/commerce/actions'
 import type { ActionState, CartData } from '@/lib/commerce/types'
+import { getProfile } from '@/lib/customer/profile'
 import { formatPrice } from '@/lib/format'
+
+function readCheckoutDefaults(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  const p = getProfile()
+  return {
+    customerName: p.fullName,
+    customerPhone: p.phone,
+    customerEmail: p.email,
+    province: p.city,
+    district: p.district,
+    streetAddress: p.addressLine,
+  }
+}
 
 type CheckoutFormProps = {
   cart: CartData
@@ -24,10 +39,18 @@ const FIELDS: Array<{ name: string; label: string; type?: string; required?: boo
 ]
 
 export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
+  const { toast } = useOptionalToast()
   const [state, formAction, isPending] = useActionState(checkoutAction, initialState)
   const [idempotencyKey] = useState(() => crypto.randomUUID())
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [defaults] = useState(readCheckoutDefaults)
   const fieldError = (name: string) => (!state.ok ? state.fieldErrors?.[name]?.[0] : undefined)
+
+  useEffect(() => {
+    if (!state.ok && state.message) {
+      toast({ title: 'Không đặt được hàng', description: state.message, tone: 'error' })
+    }
+  }, [state, toast])
 
   const summary = (
     <aside
@@ -125,6 +148,8 @@ export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
                   name={field.name}
                   type={field.type ?? 'text'}
                   required={field.required}
+                  defaultValue={defaults[field.name] ?? ''}
+                  key={`${field.name}-${defaults[field.name] ?? ''}`}
                   aria-invalid={error ? true : undefined}
                   aria-describedby={error ? `${field.name}-error` : undefined}
                   className="min-h-11 rounded-(--radius-md) border border-border bg-bg-primary px-3 text-(length:--text-sm) focus-visible:border-brand"

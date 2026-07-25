@@ -6,6 +6,7 @@ import { StickyPurchaseBar } from '@/components/commerce/sticky-purchase-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Price } from '@/components/ui/price'
+import { useOptionalToast } from '@/components/ui/toast'
 import { track } from '@/lib/analytics'
 import { canAddToCart, resolveSelectedVariant, variantLabel } from '@/lib/catalog/variant-selection'
 import type { ProductVariantData } from '@/lib/catalog/types'
@@ -26,11 +27,25 @@ export function VariantSelector({
   showStickyBar = true,
 }: VariantSelectorProps) {
   const formId = useId()
+  const { toast } = useOptionalToast()
   const [selectedId, setSelectedId] = useState<string | undefined>(variants[0]?.id)
   const [qty, setQty] = useState(1)
   const [state, formAction, isPending] = useActionState(async (prev: ActionState, formData: FormData) => {
     const result = await addToCart(prev, formData)
-    if (result.ok) track('add_to_cart', { variantId: String(formData.get('variantId') ?? '') })
+    if (result.ok) {
+      track('add_to_cart', { variantId: String(formData.get('variantId') ?? '') })
+      toast({
+        title: 'Đã thêm vào giỏ',
+        description: productName,
+        tone: 'success',
+      })
+    } else {
+      toast({
+        title: 'Không thêm được vào giỏ',
+        description: result.message ?? 'Thử lại sau',
+        tone: 'error',
+      })
+    }
     return result
   }, INITIAL_STATE)
   const selected = resolveSelectedVariant(variants, selectedId)

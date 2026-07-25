@@ -12,12 +12,15 @@ const SUPPORT = [
   { href: '/track-order', label: 'Theo dõi đơn hàng' },
   { href: '/cart', label: 'Giỏ hàng' },
   { href: '/checkout', label: 'Thanh toán' },
+  { href: '/account', label: 'Tài khoản khách hàng' },
   { href: '/#trust', label: 'Chính sách & cam kết' },
 ]
 
 const STORE = [
   { href: '/#need-selector', label: 'Tư vấn theo nhu cầu' },
   { href: '/#guides', label: 'Hướng dẫn chọn máy' },
+  { href: '/wishlist', label: 'Wishlist' },
+  { href: '/compare', label: 'So sánh sản phẩm' },
   { href: '/#newsletter', label: 'Nhận tin ưu đãi' },
 ]
 
@@ -39,10 +42,10 @@ export function Footer() {
           </div>
           <p className="max-w-sm text-(length:--text-sm) leading-relaxed text-fg-inverse/70">
             Thiết bị công nghệ chọn lọc — thông số rõ, giá minh bạch, mua nhanh với COD hoặc
-            chuyển khoản, không cần tài khoản.
+            chuyển khoản. Guest checkout hoặc đăng nhập để lưu hồ sơ.
           </p>
           <p className="text-(length:--text-xs) text-fg-inverse/50">
-            Demo store · Dữ liệu seed · Guest checkout
+            Demo store · Catalog seed · Guest + local account
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 
+import { useOptionalToast } from '@/components/ui/toast'
 import { track } from '@/lib/analytics'
 import {
   getCompareSnapshot,
@@ -36,13 +37,16 @@ export function ListToggles({
   const wish = wishlist.some((p) => p.id === product.id)
   const compare = compareList.some((p) => p.id === product.id)
   const [message, setMessage] = useState<string | null>(null)
+  const { toast } = useOptionalToast()
 
   function onWish(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     const active = toggleWishlist(ref)
     track('wishlist_toggle', { productId: product.id, active })
-    setMessage(active ? 'Đã thêm wishlist' : 'Đã bỏ wishlist')
+    const msg = active ? 'Đã thêm wishlist' : 'Đã bỏ wishlist'
+    setMessage(msg)
+    toast({ title: msg, description: product.name, tone: 'success' })
   }
 
   function onCompare(e: React.MouseEvent) {
@@ -50,8 +54,14 @@ export function ListToggles({
     e.stopPropagation()
     const result = toggleCompare(ref)
     track('compare_toggle', { productId: product.id, active: result.active })
-    if (result.full) setMessage('So sánh tối đa 4 sản phẩm')
-    else setMessage(result.active ? 'Đã thêm so sánh' : 'Đã bỏ so sánh')
+    if (result.full) {
+      setMessage('So sánh tối đa 4 sản phẩm')
+      toast({ title: 'So sánh tối đa 4 sản phẩm', tone: 'error' })
+    } else {
+      const msg = result.active ? 'Đã thêm so sánh' : 'Đã bỏ so sánh'
+      setMessage(msg)
+      toast({ title: msg, description: product.name, tone: 'success' })
+    }
   }
 
   const btn =

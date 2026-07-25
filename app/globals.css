@@ -217,6 +217,149 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.field-input {
+  min-height: 2.75rem;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  padding-inline: 0.75rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.field-input:focus-visible {
+  border-color: var(--color-brand);
+}
+
+/* Motion — subtle, respects reduced-motion */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity var(--duration-reveal) var(--ease-out-expo),
+    transform var(--duration-reveal) var(--ease-out-expo);
+}
+
+.scroll-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes promo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in var(--duration-slow) var(--ease-out-expo);
+}
+
+.animate-fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out-expo);
+}
+
+.animate-scale-in {
+  animation: scale-in var(--duration-slow) var(--ease-out-expo);
+}
+
+.animate-hero-in {
+  animation: hero-in 700ms var(--ease-out-expo);
+}
+
+.animate-hero-in-delay {
+  animation: hero-in 800ms var(--ease-out-expo) 80ms both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.2s ease-in-out infinite;
+}
+
+.promo-marquee {
+  animation: promo-marquee 32s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .scroll-reveal,
+  .reveal-soft,
+  .animate-toast-in,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-hero-in,
+  .animate-hero-in-delay,
+  .animate-pulse-soft,
+  .promo-marquee {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .reveal-soft:hover {
+    transform: none;
+  }
+}
+
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,

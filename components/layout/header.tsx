@@ -1,11 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, type ReactNode } from 'react'
+import { useSyncExternalStore, type ReactNode } from 'react'
+import { useState } from 'react'
 
 import { MiniCart } from '@/components/commerce/mini-cart'
 import { SearchSuggest } from '@/components/commerce/search-suggest'
 import { useListCounts } from '@/components/commerce/list-toggles'
+import { CategoryNavDesktop, CategoryNavMobile } from '@/components/layout/category-nav'
+import { PromoStrip } from '@/components/layout/promo-strip'
+import { getSession, subscribeCustomer } from '@/lib/customer/profile'
 import type { CartData } from '@/lib/commerce/types'
 
 type HeaderProps = {
@@ -15,25 +19,27 @@ type HeaderProps = {
 
 const UTILITY = [
   { href: '/track-order', label: 'Tra cứu đơn' },
-  { href: '/products', label: 'Hỗ trợ chọn máy' },
   { href: '/#trust', label: 'Bảo hành & giao hàng' },
+  { href: '/account', label: 'Tài khoản' },
 ]
 
-const CATEGORIES = [
-  { href: '/products?category=laptop', label: 'Laptop' },
-  { href: '/products?category=dien-thoai', label: 'Điện thoại' },
-  { href: '/products?useCase=gaming', label: 'Gaming' },
-  { href: '/products?category=phu-kien', label: 'Phụ kiện' },
-  { href: '/products', label: 'Khuyến mãi' },
-  { href: '/#need-selector', label: 'Tư vấn' },
-]
+function useCustomerSession() {
+  return useSyncExternalStore(
+    subscribeCustomer,
+    () => getSession(),
+    () => null,
+  )
+}
 
 export function Header({ children, cart }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { wishCount, compareCount } = useListCounts()
+  const session = useCustomerSession()
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg-elevated/95 backdrop-blur-md">
+      <PromoStrip />
+
       <div className="hidden border-b border-border bg-bg-secondary md:block">
         <div className="container-store flex items-center justify-between gap-4 py-2 text-(length:--text-xs) text-fg-muted">
           <p className="font-medium tracking-wide">
@@ -69,7 +75,7 @@ export function Header({ children, cart }: HeaderProps) {
         <Link href="/" className="group inline-flex min-h-11 items-center gap-2.5">
           <span
             aria-hidden
-            className="grid size-9 place-items-center rounded-(--radius-md) bg-surface-inverse text-(length:--text-sm) font-bold tracking-tight text-fg-inverse"
+            className="grid size-9 place-items-center rounded-(--radius-md) bg-surface-inverse text-(length:--text-sm) font-bold tracking-tight text-fg-inverse transition-transform duration-(--duration-fast) group-hover:scale-[1.03]"
           >
             TS
           </span>
@@ -82,6 +88,18 @@ export function Header({ children, cart }: HeaderProps) {
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           {children}
+          <Link
+            href={session ? '/account' : '/account/login'}
+            className="relative hidden min-h-11 items-center gap-1.5 rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
+            aria-label={session ? `Tài khoản ${session.displayName}` : 'Đăng nhập'}
+          >
+            <span aria-hidden className="text-base">
+              👤
+            </span>
+            <span className="hidden max-w-24 truncate lg:inline">
+              {session ? session.displayName : 'Đăng nhập'}
+            </span>
+          </Link>
           <Link
             href="/wishlist"
             className="relative hidden min-h-11 items-center rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
@@ -116,19 +134,7 @@ export function Header({ children, cart }: HeaderProps) {
         </div>
       </div>
 
-      <nav aria-label="Danh mục" className="hidden border-t border-border lg:block">
-        <div className="container-store flex items-center gap-1 overflow-x-auto py-1">
-          {CATEGORIES.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="inline-flex min-h-11 shrink-0 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
+      <CategoryNavDesktop />
 
       {menuOpen ? (
         <div className="border-t border-border bg-bg-elevated lg:hidden">
@@ -143,17 +149,15 @@ export function Header({ children, cart }: HeaderProps) {
             <p className="px-1 pb-1 text-(length:--text-xs) font-semibold uppercase tracking-wide text-fg-subtle">
               Danh mục
             </p>
-            {CATEGORIES.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMenuOpen(false)}
-                className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg hover:bg-surface-muted"
-              >
-                {item.label}
-              </Link>
-            ))}
+            <CategoryNavMobile onNavigate={() => setMenuOpen(false)} />
             <div className="my-2 border-t border-border" />
+            <Link
+              href={session ? '/account' : '/account/login'}
+              onClick={() => setMenuOpen(false)}
+              className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) text-fg-muted hover:bg-surface-muted hover:text-fg"
+            >
+              {session ? `Tài khoản · ${session.displayName}` : 'Đăng nhập / Đăng ký'}
+            </Link>
             <Link
               href="/wishlist"
               onClick={() => setMenuOpen(false)}
