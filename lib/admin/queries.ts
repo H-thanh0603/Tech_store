@@ -2,6 +2,7 @@ import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type {
   AdminOrderDetail,
   AdminOrderListItem,
+  AdminOrderListResult,
   AdminProductDetail,
   AdminProductListItem,
   AdminProductListResult,
@@ -235,32 +236,53 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
 
 export async function listAdminOrders(filter?: {
   status?: OrderStatus | 'all'
-}): Promise<AdminOrderListItem[]> {
-  let query = getSupabaseAdminClient()
-    .from('orders')
-    .select(
-      'order_code, customer_name, customer_phone, payment_method, payment_status, order_status, total, created_at',
-    )
-    .order('created_at', { ascending: false })
-    .limit(100)
-
-  if (filter?.status && filter.status !== 'all') {
-    query = query.eq('order_status', filter.status)
-  }
-
-  const { data, error } = await query
+  q?: string
+  paymentStatus?: PaymentStatus | 'all'
+  paymentMethod?: PaymentMethod | 'all'
+  dateFrom?: string
+  dateTo?: string
+  sort?: 'created_at' | 'total' | 'updated_at'
+  dir?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}): Promise<AdminOrderListResult> {
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_list_orders', {
+    p_search: filter?.q || null,
+    p_order_status: filter?.status ?? 'all',
+    p_payment_status: filter?.paymentStatus ?? 'all',
+    p_payment_method: filter?.paymentMethod ?? 'all',
+    p_date_from: filter?.dateFrom || null,
+    p_date_to: filter?.dateTo || null,
+    p_sort: filter?.sort ?? 'created_at',
+    p_sort_dir: filter?.dir ?? 'desc',
+    p_page: filter?.page ?? 1,
+    p_page_size: filter?.pageSize ?? 20,
+  })
   if (error) throw error
 
-  return (data ?? []).map((row) => ({
-    orderCode: String(row.order_code),
-    customerName: String(row.customer_name),
-    customerPhone: String(row.customer_phone),
-    paymentMethod: row.payment_method as PaymentMethod,
-    paymentStatus: row.payment_status as PaymentStatus,
-    orderStatus: row.order_status as OrderStatus,
-    total: num(row.total),
-    createdAt: String(row.created_at),
-  }))
+  const root = asRecord(data)
+  const rows = (Array.isArray(root.rows) ? root.rows : []).map((item) => {
+    const row = asRecord(item)
+    return {
+      orderCode: String(row.orderCode),
+      customerName: String(row.customerName),
+      customerPhone: String(row.customerPhone),
+      paymentMethod: row.paymentMethod as PaymentMethod,
+      paymentStatus: row.paymentStatus as PaymentStatus,
+      orderStatus: row.orderStatus as OrderStatus,
+      total: num(row.total),
+      createdAt: String(row.createdAt),
+      updatedAt: row.updatedAt == null ? undefined : String(row.updatedAt),
+    } satisfies AdminOrderListItem
+  })
+
+  return {
+    total: num(root.total),
+    page: num(root.page) || 1,
+    pageSize: num(root.pageSize) || 20,
+    pageCount: Math.max(1, num(root.pageCount) || 1),
+    rows,
+  }
 }
 
 export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail | null> {
@@ -269,10 +291,10 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     .from('orders')
     .select(
       `
-      order_code, customer_name, customer_phone, customer_email,
+      id, order_code, customer_name, customer_phone, customer_email,
       address_snapshot, note, payment_method, payment_status, order_status,
       subtotal, discount_total, shipping_total, total, transfer_expires_at,
-      coupon_snapshot, created_at,
+      coupon_snapshot, created_at, updated_at,
       order_items ( product_name, sku, attributes, unit_price, quantity, line_total )
     `,
     )
@@ -298,6 +320,40 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     }
   })
 
+  const orderId = String(data.id)
+  const [eventsRes, notesRes] = await Promise.all([
+    db
+      .from('order_status_events')
+      .select('id, from_status, to_status, event_type, reason, actor_label, created_at')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true }),
+    db
+      .from('order_internal_notes')
+      .select('id, body, actor_label, created_at')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false }),
+  ])
+
+  const statusEvents = (eventsRes.data ?? []).map((row) => ({
+    id: String(row.id),
+    fromStatus: row.from_status == null ? null : String(row.from_status),
+    toStatus: String(row.to_status),
+    eventType:
+      row.event_type === 'payment_status'
+        ? ('payment_status' as const)
+        : ('order_status' as const),
+    reason: row.reason == null ? null : String(row.reason),
+    actorLabel: String(row.actor_label),
+    createdAt: String(row.created_at),
+  }))
+
+  const internalNotes = (notesRes.data ?? []).map((row) => ({
+    id: String(row.id),
+    body: String(row.body),
+    actorLabel: String(row.actor_label),
+    createdAt: String(row.created_at),
+  }))
+
   return {
     orderCode: String(data.order_code),
     customerName: String(data.customer_name),
@@ -308,6 +364,7 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     orderStatus: data.order_status as OrderStatus,
     total: num(data.total),
     createdAt: String(data.created_at),
+    updatedAt: data.updated_at == null ? undefined : String(data.updated_at),
     address: {
       province: String(address.province ?? ''),
       district: String(address.district ?? ''),
@@ -322,5 +379,87 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
       data.transfer_expires_at == null ? null : String(data.transfer_expires_at),
     couponCode: coupon.code ? String(coupon.code) : null,
     items,
+    statusEvents,
+    internalNotes,
   }
+}
+
+export async function listAdminCustomers(filter?: {
+  q?: string
+  page?: number
+  pageSize?: number
+}): Promise<import('@/lib/admin/types').AdminCustomerListResult> {
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_list_customers', {
+    p_search: filter?.q || null,
+    p_page: filter?.page ?? 1,
+    p_page_size: filter?.pageSize ?? 20,
+  })
+  if (error) throw error
+  const root = asRecord(data)
+  const rows = (Array.isArray(root.rows) ? root.rows : []).map((item) => {
+    const row = asRecord(item)
+    return {
+      key: String(row.key),
+      name: String(row.name),
+      phone: String(row.phone),
+      email: row.email == null ? null : String(row.email),
+      orderCount: num(row.orderCount),
+      totalSpent: num(row.totalSpent),
+      lastOrderAt: String(row.lastOrderAt),
+      lastOrderCode: String(row.lastOrderCode),
+    }
+  })
+  return {
+    total: num(root.total),
+    page: num(root.page) || 1,
+    pageSize: num(root.pageSize) || 20,
+    pageCount: Math.max(1, num(root.pageCount) || 1),
+    rows,
+    source: String(root.source ?? 'orders_aggregate'),
+  }
+}
+
+export async function listAdminCoupons(): Promise<import('@/lib/admin/types').AdminCouponRow[]> {
+  const db = getSupabaseAdminClient()
+  const { data, error } = await db
+    .from('coupons')
+    .select(
+      'id, code, discount_type, discount_value, minimum_order, maximum_discount, starts_at, ends_at, usage_limit, is_active, created_at',
+    )
+    .order('created_at', { ascending: false })
+  if (error) throw error
+
+  const ids = (data ?? []).map((row) => String(row.id))
+  const usedMap = new Map<string, number>()
+  if (ids.length > 0) {
+    const { data: redemptions } = await db
+      .from('coupon_redemptions')
+      .select('coupon_id')
+      .in('coupon_id', ids)
+      .is('released_at', null)
+    for (const row of redemptions ?? []) {
+      const id = String(row.coupon_id)
+      usedMap.set(id, (usedMap.get(id) ?? 0) + 1)
+    }
+  }
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    code: String(row.code),
+    discountType: row.discount_type as 'percentage' | 'fixed',
+    discountValue: num(row.discount_value),
+    minimumOrder: num(row.minimum_order),
+    maximumDiscount: row.maximum_discount == null ? null : num(row.maximum_discount),
+    startsAt: row.starts_at == null ? null : String(row.starts_at),
+    endsAt: row.ends_at == null ? null : String(row.ends_at),
+    usageLimit: row.usage_limit == null ? null : num(row.usage_limit),
+    usedCount: usedMap.get(String(row.id)) ?? 0,
+    isActive: Boolean(row.is_active),
+    createdAt: String(row.created_at),
+  }))
+}
+
+export async function getAdminCoupon(id: string) {
+  const coupons = await listAdminCoupons()
+  return coupons.find((c) => c.id === id) ?? null
 }

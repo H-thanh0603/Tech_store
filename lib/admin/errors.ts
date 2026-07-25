@@ -10,6 +10,7 @@ const MESSAGES: Record<string, string> = {
   HAS_ORDERS: 'Mục này đã xuất hiện trong đơn hàng — chỉ được archive/tắt.',
   PUBLISH_NEEDS_VARIANT: 'Cần ít nhất một biến thể đang bán trước khi xuất bản.',
   CONFLICT: 'Dữ liệu đã thay đổi. Tải lại trang và thử lại.',
+  REASON_REQUIRED: 'Thao tác này bắt buộc nhập lý do.',
   CONFIGURATION_ERROR: 'Thiếu cấu hình server admin.',
   INTERNAL_ERROR: 'Có lỗi hệ thống. Thử lại sau.',
 }

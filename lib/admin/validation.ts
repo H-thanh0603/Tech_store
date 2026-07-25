@@ -97,25 +97,87 @@ export const useCasesSchema = z.object({
   useCases: z.string().trim().max(1000),
 })
 
-export const orderStatusSchema = z.object({
-  orderCode: z.string().trim().min(1).max(64),
-  orderStatus: z.enum([
-    'pending',
-    'awaiting_payment',
-    'confirmed',
-    'packing',
-    'shipping',
-    'completed',
-    'cancelled',
-    'expired',
-  ]),
-})
+export const orderStatusSchema = z
+  .object({
+    orderCode: z.string().trim().min(1).max(64),
+    orderStatus: z.enum([
+      'pending',
+      'awaiting_payment',
+      'confirmed',
+      'packing',
+      'shipping',
+      'completed',
+      'cancelled',
+      'expired',
+    ]),
+    reason: z.string().trim().max(500).optional().or(z.literal('')),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      (value.orderStatus === 'cancelled' || value.orderStatus === 'expired') &&
+      !value.reason?.trim()
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: 'Hủy đơn bắt buộc nhập lý do.',
+      })
+    }
+  })
 
 export const orderPaymentSchema = z.object({
   orderCode: z.string().trim().min(1).max(64),
   paymentStatus: z.enum(['paid']),
   alsoConfirmOrder: z.coerce.boolean().optional().default(false),
 })
+
+export const orderNoteSchema = z.object({
+  orderCode: z.string().trim().min(1).max(64),
+  body: z.string().trim().min(1).max(2000),
+})
+
+export const couponUpsertSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      .optional()
+      .or(z.literal('')),
+    code: z
+      .string()
+      .trim()
+      .min(2)
+      .max(40)
+      .transform((v) => v.toUpperCase().replace(/\s+/g, '')),
+    discountType: z.enum(['percentage', 'fixed']),
+    discountValue: z.coerce.number().finite().min(0).max(999_999_999),
+    minimumOrder: z.coerce.number().finite().min(0).max(999_999_999).default(0),
+    maximumDiscount: z.coerce.number().finite().min(0).max(999_999_999).optional().or(z.literal('')),
+    startsAt: z.string().optional().or(z.literal('')),
+    endsAt: z.string().optional().or(z.literal('')),
+    usageLimit: z.coerce.number().int().min(1).max(1_000_000).optional().or(z.literal('')),
+    isActive: z.coerce.boolean().optional().default(true),
+  })
+  .superRefine((value, ctx) => {
+    if (value.discountType === 'percentage' && value.discountValue > 100) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['discountValue'],
+        message: 'Phần trăm giảm tối đa 100.',
+      })
+    }
+    if (value.startsAt && value.endsAt) {
+      const start = Date.parse(value.startsAt)
+      const end = Date.parse(value.endsAt)
+      if (Number.isFinite(start) && Number.isFinite(end) && end <= start) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['endsAt'],
+          message: 'Ngày kết thúc phải sau ngày bắt đầu.',
+        })
+      }
+    }
+  })
 
 export function parseAttributesJson(raw: string | undefined | null): Record<string, string> {
   if (!raw || !raw.trim()) return {}

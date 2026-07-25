@@ -229,6 +229,32 @@ export interface AdminOrderListItem {
   orderStatus: OrderStatus
   total: number
   createdAt: string
+  updatedAt?: string
+}
+
+export interface AdminOrderListResult {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+  rows: AdminOrderListItem[]
+}
+
+export interface OrderStatusEvent {
+  id: string
+  fromStatus: string | null
+  toStatus: string
+  eventType: 'order_status' | 'payment_status'
+  reason: string | null
+  actorLabel: string
+  createdAt: string
+}
+
+export interface OrderInternalNote {
+  id: string
+  body: string
+  actorLabel: string
+  createdAt: string
 }
 
 export interface AdminOrderDetail extends AdminOrderListItem {
@@ -253,4 +279,41 @@ export interface AdminOrderDetail extends AdminOrderListItem {
     quantity: number
     lineTotal: number
   }>
+  statusEvents?: OrderStatusEvent[]
+  internalNotes?: OrderInternalNote[]
+}
+
+export interface AdminCustomerRow {
+  key: string
+  name: string
+  phone: string
+  email: string | null
+  orderCount: number
+  totalSpent: number
+  lastOrderAt: string
+  lastOrderCode: string
+}
+
+export interface AdminCustomerListResult {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+  rows: AdminCustomerRow[]
+  source: string
+}
+
+export interface AdminCouponRow {
+  id: string
+  code: string
+  discountType: 'percentage' | 'fixed'
+  discountValue: number
+  minimumOrder: number
+  maximumDiscount: number | null
+  startsAt: string | null
+  endsAt: string | null
+  usageLimit: number | null
+  usedCount: number
+  isActive: boolean
+  createdAt: string
 }
