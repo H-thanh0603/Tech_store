@@ -1,20 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useSyncExternalStore, type ReactNode } from 'react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import { MiniCart } from '@/components/commerce/mini-cart'
 import { SearchSuggest } from '@/components/commerce/search-suggest'
 import { useListCounts } from '@/components/commerce/list-toggles'
 import { CategoryNavDesktop, CategoryNavMobile } from '@/components/layout/category-nav'
 import { PromoStrip } from '@/components/layout/promo-strip'
-import { getSession, subscribeCustomer } from '@/lib/customer/profile'
 import type { CartData } from '@/lib/commerce/types'
 
 type HeaderProps = {
   children?: ReactNode
   cart: CartData
+  userEmail?: string | null
+  userName?: string | null
 }
 
 const UTILITY = [
@@ -23,18 +23,11 @@ const UTILITY = [
   { href: '/account', label: 'Tài khoản' },
 ]
 
-function useCustomerSession() {
-  return useSyncExternalStore(
-    subscribeCustomer,
-    () => getSession(),
-    () => null,
-  )
-}
-
-export function Header({ children, cart }: HeaderProps) {
+export function Header({ children, cart, userEmail, userName }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { wishCount, compareCount } = useListCounts()
-  const session = useCustomerSession()
+  const signedIn = Boolean(userEmail)
+  const accountLabel = userName || userEmail?.split('@')[0] || 'Đăng nhập'
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg-elevated/95 backdrop-blur-md">
@@ -89,16 +82,14 @@ export function Header({ children, cart }: HeaderProps) {
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           {children}
           <Link
-            href={session ? '/account' : '/account/login'}
+            href={signedIn ? '/account' : '/account/login'}
             className="relative hidden min-h-11 items-center gap-1.5 rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
-            aria-label={session ? `Tài khoản ${session.displayName}` : 'Đăng nhập'}
+            aria-label={signedIn ? `Tài khoản ${accountLabel}` : 'Đăng nhập'}
           >
             <span aria-hidden className="text-base">
               👤
             </span>
-            <span className="hidden max-w-24 truncate lg:inline">
-              {session ? session.displayName : 'Đăng nhập'}
-            </span>
+            <span className="hidden max-w-28 truncate lg:inline">{accountLabel}</span>
           </Link>
           <Link
             href="/wishlist"
@@ -152,11 +143,11 @@ export function Header({ children, cart }: HeaderProps) {
             <CategoryNavMobile onNavigate={() => setMenuOpen(false)} />
             <div className="my-2 border-t border-border" />
             <Link
-              href={session ? '/account' : '/account/login'}
+              href={signedIn ? '/account' : '/account/login'}
               onClick={() => setMenuOpen(false)}
               className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) text-fg-muted hover:bg-surface-muted hover:text-fg"
             >
-              {session ? `Tài khoản · ${session.displayName}` : 'Đăng nhập / Đăng ký'}
+              {signedIn ? `Tài khoản · ${accountLabel}` : 'Đăng nhập / Đăng ký'}
             </Link>
             <Link
               href="/wishlist"

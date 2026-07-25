@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { updateSession } from '@/lib/supabase/middleware'
+
 const ADMIN_COOKIE = 'techstore_admin'
 
 /**
@@ -32,7 +34,6 @@ async function verifyAdminToken(token: string | undefined, secret: string): Prom
 function base64Url(bytes: Uint8Array): string {
   let binary = ''
   for (const b of bytes) binary += String.fromCharCode(b)
-  // btoa is available in the Edge runtime.
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
@@ -48,11 +49,11 @@ function timingSafeEqual(a: string, b: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Refresh customer Supabase session for storefront + auth routes.
   if (!pathname.startsWith('/admin')) {
-    return NextResponse.next()
+    return updateSession(request)
   }
 
-  // Login is public.
   if (pathname === '/admin/login' || pathname.startsWith('/admin/login/')) {
     return NextResponse.next()
   }
@@ -76,5 +77,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: [
+    /*
+     * Refresh customer session + guard admin.
+     * Skip Next internals and static assets.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

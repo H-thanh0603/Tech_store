@@ -129,13 +129,20 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   }
 
   const rawAccessToken = createOpaqueToken()
-  const { data, error } = await getSupabaseServerClient().rpc('place_order', {
+  // Prefer cookie-session client so place_order can read auth.uid() and attach user_id.
+  const { createSupabaseAuthClient } = await import('@/lib/supabase/auth-server')
+  const authClient = await createSupabaseAuthClient()
+  const {
+    data: { user },
+  } = await authClient.auth.getUser()
+  const { data, error } = await authClient.rpc('place_order', {
     p_cart_token_hash: await getCartTokenHash(),
     p_idempotency_key: parsed.data.idempotencyKey,
     p_order_access_token_hash: await sha256Hex(rawAccessToken),
     p_customer: parsed.data,
     p_payment_method: parsed.data.paymentMethod,
     p_coupon_code: null,
+    p_user_id: user?.id ?? null,
   })
   const state = rpcState(data as RpcResult | null, error)
   if (!state.ok) {
