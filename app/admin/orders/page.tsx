@@ -1,9 +1,13 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
-import { StatusBadge } from '@/components/admin/status-badge'
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { DataTable, type DataTableColumn } from '@/components/admin/ui/data-table'
+import { FilterBar, FilterChip } from '@/components/admin/ui/filter-bar'
+import { PageHeader } from '@/components/admin/ui/page-header'
+import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-state'
+import { StatusBadge } from '@/components/admin/ui/status-badge'
+import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { listAdminOrders } from '@/lib/admin/queries'
+import type { AdminOrderListItem } from '@/lib/admin/types'
 import type { OrderStatus } from '@/lib/commerce/types'
 import { formatPrice } from '@/lib/format'
 
@@ -23,7 +27,10 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<{ status?: string }>
 }) {
-  if (!(await isAdminAuthenticated())) redirect('/admin/login')
+  const access = await requireAdminModule('orders')
+  if (isForbidden(access)) {
+    return <PermissionDeniedState />
+  }
 
   const params = await searchParams
   const status = (FILTERS.find((f) => f.value === params.status)?.value ?? 'all') as
@@ -32,77 +39,88 @@ export default async function AdminOrdersPage({
 
   const orders = await listAdminOrders({ status })
 
+  const columns: DataTableColumn<AdminOrderListItem>[] = [
+    {
+      id: 'code',
+      header: 'Mã',
+      cell: (o) => (
+        <Link
+          href={`/admin/orders/${o.orderCode}`}
+          className="font-medium text-accent hover:underline"
+        >
+          {o.orderCode}
+        </Link>
+      ),
+    },
+    {
+      id: 'customer',
+      header: 'Khách',
+      cell: (o) => (
+        <div>
+          <div>{o.customerName}</div>
+          <div className="text-(length:--text-xs) text-fg-subtle">{o.customerPhone}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Trạng thái',
+      cell: (o) => <StatusBadge status={o.orderStatus} />,
+    },
+    {
+      id: 'payment',
+      header: 'Thanh toán',
+      hideOnMobile: true,
+      cell: (o) => (
+        <div>
+          <StatusBadge status={o.paymentStatus} />
+          <div className="text-(length:--text-xs) text-fg-subtle">{o.paymentMethod}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'total',
+      header: 'Tổng',
+      className: 'tabular-nums',
+      cell: (o) => formatPrice(o.total),
+    },
+    {
+      id: 'date',
+      header: 'Ngày',
+      hideOnMobile: true,
+      className: 'text-fg-muted',
+      cell: (o) => new Date(o.createdAt).toLocaleString('vi-VN'),
+    },
+  ]
+
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-(length:--text-2xl) font-semibold">Đơn hàng</h1>
-        <p className="text-(length:--text-sm) text-fg-muted">{orders.length} đơn (tối đa 100)</p>
-      </div>
+    <section>
+      <PageHeader
+        title="Đơn hàng"
+        description={`${orders.length} đơn (tối đa 100)`}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <Link
-            key={f.value}
-            href={f.value === 'all' ? '/admin/orders' : `/admin/orders?status=${f.value}`}
-            className={`rounded-full px-3 py-1 text-(length:--text-sm) ${
-              status === f.value ? 'bg-accent text-accent-fg' : 'bg-surface-muted text-fg-muted'
-            }`}
-          >
-            {f.label}
-          </Link>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto rounded-(--radius-lg) border border-border">
-        <table className="min-w-full text-left text-(length:--text-sm)">
-          <thead className="bg-surface-muted text-fg-muted">
-            <tr>
-              <th className="px-4 py-3 font-medium">Mã</th>
-              <th className="px-4 py-3 font-medium">Khách</th>
-              <th className="px-4 py-3 font-medium">Trạng thái</th>
-              <th className="px-4 py-3 font-medium">Thanh toán</th>
-              <th className="px-4 py-3 font-medium">Tổng</th>
-              <th className="px-4 py-3 font-medium">Ngày</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o) => (
-              <tr key={o.orderCode} className="border-t border-border">
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/admin/orders/${o.orderCode}`}
-                    className="font-medium text-accent hover:underline"
-                  >
-                    {o.orderCode}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">
-                  <div>{o.customerName}</div>
-                  <div className="text-(length:--text-xs) text-fg-subtle">{o.customerPhone}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={o.orderStatus} />
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={o.paymentStatus} />
-                  <div className="text-(length:--text-xs) text-fg-subtle">{o.paymentMethod}</div>
-                </td>
-                <td className="px-4 py-3 tabular-nums">{formatPrice(o.total)}</td>
-                <td className="px-4 py-3 text-fg-muted">
-                  {new Date(o.createdAt).toLocaleString('vi-VN')}
-                </td>
-              </tr>
+      <DataTable
+        caption="Danh sách đơn hàng"
+        columns={columns}
+        rows={orders}
+        getRowId={(o) => o.orderCode}
+        emptyTitle="Chưa có đơn"
+        emptyDescription="Đơn hàng mới sẽ xuất hiện tại đây sau khi khách checkout."
+        toolbar={
+          <FilterBar>
+            {FILTERS.map((f) => (
+              <FilterChip
+                key={f.value}
+                href={f.value === 'all' ? '/admin/orders' : `/admin/orders?status=${f.value}`}
+                active={status === f.value}
+              >
+                {f.label}
+              </FilterChip>
             ))}
-            {orders.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-fg-muted">
-                  Chưa có đơn.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+          </FilterBar>
+        }
+      />
     </section>
   )
 }

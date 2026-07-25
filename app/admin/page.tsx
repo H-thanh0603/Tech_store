@@ -1,12 +1,17 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { ErrorState } from '@/components/admin/ui/error-state'
+import { PageHeader } from '@/components/admin/ui/page-header'
+import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { getDashboardStats } from '@/lib/admin/queries'
 import { formatPrice } from '@/lib/format'
+import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-state'
 
 export default async function AdminDashboardPage() {
-  if (!(await isAdminAuthenticated())) redirect('/admin/login')
+  const access = await requireAdminModule('dashboard')
+  if (isForbidden(access)) {
+    return <PermissionDeniedState />
+  }
 
   let stats
   try {
@@ -14,11 +19,12 @@ export default async function AdminDashboardPage() {
   } catch {
     return (
       <section>
-        <h1 className="text-(length:--text-2xl) font-semibold">Dashboard</h1>
-        <p className="mt-4 text-danger">
-          Không đọc được dữ liệu admin. Kiểm tra Supabase local và{' '}
-          <code>SUPABASE_SERVICE_ROLE_KEY</code>.
-        </p>
+        <PageHeader title="Tổng quan" description="Trung tâm điều hành cửa hàng." />
+        <ErrorState
+          message={
+            'Không đọc được dữ liệu admin. Kiểm tra Supabase local và SUPABASE_SERVICE_ROLE_KEY.'
+          }
+        />
       </section>
     )
   }
@@ -32,11 +38,11 @@ export default async function AdminDashboardPage() {
   ]
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-(length:--text-2xl) font-semibold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-(length:--text-sm) text-fg-muted">Tổng quan vận hành cửa hàng.</p>
-      </div>
+    <section>
+      <PageHeader
+        title="Tổng quan"
+        description="Tổng quan vận hành cửa hàng. Biểu đồ chi tiết sẽ có ở Phase 2."
+      />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <Link

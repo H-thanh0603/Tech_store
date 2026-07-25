@@ -9,9 +9,14 @@ export default async function AdminLoginPage() {
   }
 
   return (
-    <section className="space-y-6 py-10">
+    <section className="space-y-6">
       <div className="text-center">
-        <h1 className="text-(length:--text-2xl) font-semibold tracking-tight">Đăng nhập Admin</h1>
+        <p className="text-(length:--text-sm) font-semibold tracking-tight text-accent">
+          TechStore Admin
+        </p>
+        <h1 className="mt-2 text-(length:--text-2xl) font-semibold tracking-tight">
+          Đăng nhập
+        </h1>
         <p className="mt-2 text-(length:--text-sm) text-fg-muted">
           Dùng <code className="rounded bg-surface-muted px-1">ADMIN_SECRET</code> trong{' '}
           <code className="rounded bg-surface-muted px-1">.env.local</code>.
