@@ -19,6 +19,18 @@ Modern tech retail storefront built on Next.js App Router (strict TypeScript), T
 - `npm test -- tests/smoke/app-shell.test.ts` — run smoke test
 - `npm run test:e2e` — placeholder e2e script
 
+## Admin (M4 local)
+
+Staff admin lives at `/admin` (login: `/admin/login`).
+
+1. Set in `.env.local` (server-only, never `NEXT_PUBLIC_`):
+   - `ADMIN_SECRET` — long shared secret for local staff login (min 16 chars)
+   - `SUPABASE_SERVICE_ROLE_KEY` — from `supabase status` / `supabase start` (local only)
+2. Open `http://localhost:3000/admin/login` and sign in with `ADMIN_SECRET`.
+3. Manage products (CRUD, variants, stock, images by URL) and orders (status + payment).
+
+The service-role key must never be exposed to the browser. Catalog writes use the service-role server client; order status changes go through the `admin_update_order` RPC (not granted to `anon`).
+
 ## Local Supabase
 
 Requires Docker Desktop running and the Supabase CLI installed.
