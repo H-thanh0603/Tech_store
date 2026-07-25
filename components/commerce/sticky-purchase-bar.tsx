@@ -19,7 +19,7 @@ export function StickyPurchaseBar({
   pending,
 }: StickyPurchaseBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg-elevated/95 p-3 shadow-(--shadow-lg) backdrop-blur-md lg:hidden">
+    <div className="above-bottom-nav fixed inset-x-0 z-40 border-t border-border bg-bg-elevated/95 p-3 shadow-(--shadow-lg) backdrop-blur-md lg:hidden">
       <div className="container-store flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-(length:--text-xs) text-fg-muted">{productName}</p>

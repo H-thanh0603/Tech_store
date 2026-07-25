@@ -105,7 +105,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const highlights = highlightsForProduct(product.categorySlug, 3)
 
   return (
-    <div className="container-store flex flex-col gap-12 py-8 pb-28 sm:gap-14 sm:py-10 lg:pb-10">
+    <div className="container-store flex flex-col gap-12 py-8 pb-44 sm:gap-14 sm:py-10 lg:pb-10">
       <ProductViewTracker
         product={{
           id: product.id,

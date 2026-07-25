@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => '/',
 }))
 
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
+import { buildHeaderNav, navigationFallback } from '@/lib/content/nav-view'
 
 describe('Button', () => {
   it('renders an accessible button with its label', () => {
@@ -78,11 +80,12 @@ const emptyCart = {
 
 describe('Header', () => {
   it('renders a banner landmark with category navigation and search', () => {
-    render(<Header cart={emptyCart} />)
+    const nav = buildHeaderNav(navigationFallback(), [{ name: 'Apple', slug: 'apple' }])
+    render(<Header cart={emptyCart} nav={nav} />)
     expect(screen.getByRole('banner')).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: /danh mục/i })).toBeInTheDocument()
-    expect(screen.getByRole('search')).toBeInTheDocument()
-    expect(screen.getByLabelText('Tìm sản phẩm')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: /danh mục sản phẩm$/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('search').length).toBeGreaterThan(0)
+    expect(screen.getAllByLabelText('Tìm sản phẩm').length).toBeGreaterThan(0)
   })
 })
 

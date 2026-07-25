@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 
+import { IconCompare, IconHeart } from '@/components/ui/icons'
 import { useOptionalToast } from '@/components/ui/toast'
 import { track } from '@/lib/analytics'
 import {
@@ -78,7 +79,7 @@ export function ListToggles({
           onClick={onWish}
           title="Wishlist"
         >
-          ♥
+          <IconHeart size={16} />
         </button>
         <button
           type="button"
@@ -88,7 +89,7 @@ export function ListToggles({
           onClick={onCompare}
           title="So sánh"
         >
-          ⇄
+          <IconCompare size={16} />
         </button>
       </div>
       {message ? (

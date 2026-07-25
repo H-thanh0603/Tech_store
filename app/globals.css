@@ -5,45 +5,54 @@
    Legacy aliases (--color-surface, --color-accent, --color-fg) keep admin working. */
 
 @theme {
-  /* Design.md tokens */
-  --color-bg-primary: oklch(98.6% 0.004 95);
-  --color-bg-secondary: oklch(96.2% 0.008 95);
-  --color-bg-elevated: oklch(100% 0.001 95);
-  --color-surface-soft: oklch(97.4% 0.006 95);
+  /* Palette: deep navy + electric blue (DESIGN_CELLPHONES_INSPIRED.md §9 option A).
+     Neutrals are tinted toward the navy hue so surfaces read cool, never beige. */
+  --color-bg-primary: oklch(98.8% 0.004 255);
+  --color-bg-secondary: oklch(96.4% 0.008 255);
+  --color-bg-elevated: oklch(100% 0 0);
+  --color-surface-soft: oklch(97.6% 0.006 255);
 
-  --color-text-primary: oklch(18% 0.02 255);
-  --color-text-secondary: oklch(40% 0.02 255);
-  --color-text-muted: oklch(55% 0.015 255);
+  --color-text-primary: oklch(21% 0.035 262);
+  --color-text-secondary: oklch(43% 0.028 262);
+  --color-text-muted: oklch(56% 0.022 262);
 
-  --color-border: oklch(90% 0.01 95);
-  --color-border-strong: oklch(78% 0.018 95);
+  --color-border: oklch(91% 0.012 255);
+  --color-border-strong: oklch(79% 0.02 255);
 
-  --color-brand: oklch(52% 0.12 220);
-  --color-brand-hover: oklch(46% 0.12 220);
-  --color-brand-soft: oklch(94% 0.03 220);
+  /* Navy: header chrome, footer, inverse surfaces. */
+  --color-navy: oklch(26% 0.055 262);
+  --color-navy-deep: oklch(19% 0.05 264);
+  --color-navy-soft: oklch(34% 0.06 262);
 
-  --color-success: oklch(52% 0.13 155);
-  --color-warning: oklch(68% 0.12 75);
-  --color-danger: oklch(54% 0.18 25);
-  --color-info: oklch(52% 0.1 240);
-  --color-price: oklch(18% 0.02 255);
-  --color-sale: oklch(52% 0.17 25);
+  /* Single accent. `brand` is text-safe on white (>=4.5:1); `brand-electric` is
+     the bright variant used only on navy surfaces. */
+  --color-brand: oklch(50% 0.19 258);
+  --color-brand-hover: oklch(44% 0.18 258);
+  --color-brand-soft: oklch(95% 0.032 255);
+  --color-brand-electric: oklch(70% 0.185 250);
+
+  --color-success: oklch(50% 0.13 155);
+  --color-warning: oklch(66% 0.13 75);
+  --color-danger: oklch(54% 0.19 25);
+  --color-info: var(--color-brand);
+  --color-price: oklch(21% 0.035 262);
+  --color-sale: oklch(53% 0.2 25);
 
   /* Legacy aliases used across admin + storefront */
   --color-surface: var(--color-bg-primary);
   --color-surface-muted: var(--color-bg-secondary);
   --color-surface-raised: var(--color-bg-elevated);
-  --color-surface-inverse: oklch(16% 0.02 255);
-  --color-surface-glow: oklch(93% 0.03 220);
+  --color-surface-inverse: var(--color-navy-deep);
+  --color-surface-glow: oklch(93% 0.045 250);
 
   --color-fg: var(--color-text-primary);
   --color-fg-muted: var(--color-text-secondary);
   --color-fg-subtle: var(--color-text-muted);
-  --color-fg-inverse: oklch(98% 0.005 95);
+  --color-fg-inverse: oklch(98% 0.004 255);
 
   --color-accent: var(--color-brand);
   --color-accent-hover: var(--color-brand-hover);
-  --color-accent-active: oklch(42% 0.11 220);
+  --color-accent-active: oklch(40% 0.17 258);
   --color-accent-fg: oklch(99% 0 0);
   --color-accent-subtle: var(--color-brand-soft);
 
@@ -71,10 +80,10 @@
   --radius-xl: 1.25rem;
   --radius-full: 9999px;
 
-  --shadow-sm: 0 1px 2px oklch(20% 0.03 255 / 0.04), 0 0 0 1px oklch(20% 0.02 255 / 0.03);
-  --shadow-md: 0 10px 28px oklch(20% 0.03 255 / 0.07), 0 0 0 1px oklch(20% 0.02 255 / 0.04);
-  --shadow-lg: 0 22px 48px oklch(20% 0.04 255 / 0.1), 0 0 0 1px oklch(20% 0.02 255 / 0.05);
-  --shadow-glow: 0 0 0 1px oklch(52% 0.12 220 / 0.12), 0 12px 36px oklch(52% 0.12 220 / 0.1);
+  --shadow-sm: 0 1px 2px oklch(21% 0.04 262 / 0.05), 0 0 0 1px oklch(21% 0.03 262 / 0.04);
+  --shadow-md: 0 10px 28px oklch(21% 0.04 262 / 0.08), 0 0 0 1px oklch(21% 0.03 262 / 0.04);
+  --shadow-lg: 0 22px 48px oklch(21% 0.05 262 / 0.12), 0 0 0 1px oklch(21% 0.03 262 / 0.05);
+  --shadow-glow: 0 0 0 1px oklch(50% 0.19 258 / 0.16), 0 12px 36px oklch(50% 0.19 258 / 0.18);
 
   --duration-fast: 150ms;
   --duration-normal: 200ms;
@@ -125,7 +134,7 @@ body {
 }
 
 ::selection {
-  background: oklch(52% 0.12 220 / 0.18);
+  background: oklch(50% 0.19 258 / 0.18);
   color: var(--color-text-primary);
 }
 
@@ -166,8 +175,8 @@ body {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 70% at 85% 15%, oklch(52% 0.12 220 / 0.28), transparent 55%),
-    linear-gradient(150deg, oklch(16% 0.025 255) 0%, oklch(20% 0.03 235) 55%, oklch(24% 0.035 220) 100%);
+    radial-gradient(ellipse 70% 70% at 85% 15%, oklch(62% 0.2 252 / 0.32), transparent 55%),
+    linear-gradient(150deg, oklch(17% 0.05 264) 0%, oklch(22% 0.06 260) 55%, oklch(28% 0.07 254) 100%);
   color: var(--color-fg-inverse);
 }
 
@@ -230,6 +239,36 @@ body {
 
 .field-input:focus-visible {
   border-color: var(--color-brand);
+}
+
+/* ─── Mobile chrome (bottom navigation + safe areas) ───────────────────────── */
+
+:root {
+  --bottom-nav-h: 3.5rem;
+}
+
+/** Keeps page content clear of the fixed mobile bottom navigation. */
+.pad-bottom-nav {
+  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+/** Sits a fixed bar directly above the bottom navigation instead of under it. */
+.above-bottom-nav {
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (min-width: 1024px) {
+  .pad-bottom-nav {
+    padding-bottom: 0;
+  }
+
+  .above-bottom-nav {
+    bottom: 0;
+  }
 }
 
 /* Motion — subtle, respects reduced-motion */
