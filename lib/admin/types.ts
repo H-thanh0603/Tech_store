@@ -77,6 +77,66 @@ export interface RecentOrderRow {
   createdAt: string
 }
 
+export interface AdminCategoryRow {
+  id: string
+  name: string
+  slug: string
+  parentId: string | null
+  parentName: string | null
+  isActive: boolean
+  productCount: number
+  updatedAt: string
+}
+
+export interface AdminBrandRow {
+  id: string
+  name: string
+  slug: string
+  logoUrl: string | null
+  isActive: boolean
+  productCount: number
+  updatedAt: string
+}
+
+export type InventoryStockStatus = 'in_stock' | 'low_stock' | 'out_of_stock'
+
+export interface InventoryListRow {
+  inventoryId: string
+  variantId: string
+  productId: string
+  productName: string
+  sku: string
+  attributes: Record<string, string>
+  onHand: number
+  reserved: number
+  available: number
+  threshold: number
+  stockStatus: InventoryStockStatus
+  categoryName: string | null
+  brandName: string | null
+  imageUrl: string | null
+  updatedAt: string
+}
+
+export interface InventoryListResult {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+  rows: InventoryListRow[]
+}
+
+export interface InventoryAdjustmentRow {
+  id: string
+  previousQuantity: number
+  delta: number
+  newQuantity: number
+  reasonCode: string
+  note: string | null
+  actorLabel: string
+  createdAt: string
+}
+
 export interface AdminProductListItem {
   id: string
   name: string
