@@ -4,9 +4,13 @@ import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
 import { StorefrontProviders } from '@/components/layout/storefront-providers'
 import { getCart } from '@/lib/commerce/queries'
+import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export default async function StorefrontLayout({ children }: { children: ReactNode }) {
-  const cart = await getCart()
+  const [cart, supabase] = await Promise.all([getCart(), createSupabaseAuthClient()])
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   return (
     <StorefrontProviders>
@@ -16,7 +20,11 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
       >
         Bỏ qua đến nội dung chính
       </a>
-      <Header cart={cart} />
+      <Header
+        cart={cart}
+        userEmail={user?.email ?? null}
+        userName={(user?.user_metadata?.full_name as string | undefined) ?? null}
+      />
       <main id="main-content" className="flex-1">
         {children}
       </main>

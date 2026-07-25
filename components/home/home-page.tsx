@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { FlashSaleSection } from '@/components/commerce/flash-sale'
 import { ProductGrid } from '@/components/commerce/product-grid'
 import { RecentlyViewedSection } from '@/components/commerce/recently-viewed'
 import { ScrollReveal } from '@/components/home/scroll-reveal'
@@ -11,12 +12,14 @@ import {
   needSelectorItems,
   TRUST_ITEMS,
 } from '@/lib/catalog/highlights'
+import type { FlashOfferCard } from '@/lib/catalog/social'
 import { formatPrice } from '@/lib/format'
 import type { ProductCardData } from '@/lib/catalog/types'
 
 type HomePageProps = {
   featured: ProductCardData[]
   total: number
+  flashOffers?: FlashOfferCard[]
 }
 
 const PROMO_BANNERS = [
@@ -45,7 +48,7 @@ const PROMO_BANNERS = [
 
 const BRANDS = ['Apple', 'Samsung', 'ASUS', 'Dell', 'Lenovo', 'Logitech', 'Sony', 'Xiaomi']
 
-export function HomePageView({ featured, total }: HomePageProps) {
+export function HomePageView({ featured, total, flashOffers = [] }: HomePageProps) {
   const heroProduct = featured[0] ?? null
   const secondary = featured.slice(1, 3)
   const spotlight = featured.slice(0, 4)
@@ -180,6 +183,8 @@ export function HomePageView({ featured, total }: HomePageProps) {
           </div>
         </div>
       </section>
+
+      <FlashSaleSection offers={flashOffers} />
 
       {/* 2. Promo banners */}
       <section aria-label="Banner ưu đãi" className="border-b border-border bg-bg-secondary/50">

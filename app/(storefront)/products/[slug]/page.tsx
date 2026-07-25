@@ -5,12 +5,19 @@ import { notFound } from 'next/navigation'
 import { ListToggles } from '@/components/commerce/list-toggles'
 import { ProductGallery } from '@/components/commerce/product-gallery'
 import { ProductGrid } from '@/components/commerce/product-grid'
+import { ProductHotspots } from '@/components/commerce/product-hotspots'
+import { ProductReviews } from '@/components/commerce/product-reviews'
 import { ProductViewTracker } from '@/components/commerce/product-view-tracker'
 import { VariantSelector } from '@/components/commerce/variant-selector'
 import { SectionHeader } from '@/components/ui/section-header'
 import { JsonLd } from '@/components/seo/json-ld'
 import { highlightsForProduct } from '@/lib/catalog/highlights'
 import { getProductBySlug, getRelatedProducts } from '@/lib/catalog/queries'
+import {
+  getProductHotspots,
+  getProductReviews,
+  getReviewSummary,
+} from '@/lib/catalog/social'
 import type { ProductDetail, ProductSpecData } from '@/lib/catalog/types'
 import { breadcrumbJsonLd, productJsonLd } from '@/lib/seo/json-ld'
 import { getSiteUrl } from '@/lib/site'
@@ -68,7 +75,7 @@ function groupSpecs(specs: ProductSpecData[]): Array<{ group: string; items: Pro
 const FAQ = [
   {
     q: 'Tôi có cần tài khoản để mua không?',
-    a: 'Không. TechStore hỗ trợ guest checkout — chỉ cần thông tin nhận hàng.',
+    a: 'Không bắt buộc — guest checkout vẫn dùng được. Đăng nhập để lưu hồ sơ và lịch sử đơn trên server.',
   },
   {
     q: 'Thanh toán thế nào?',
@@ -88,7 +95,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound()
   }
 
-  const related = await getRelatedProducts(product.id, product.categoryId)
+  const [related, reviews, reviewSummary, hotspots] = await Promise.all([
+    getRelatedProducts(product.id, product.categoryId),
+    getProductReviews(product.id),
+    getReviewSummary(product.id),
+    getProductHotspots(product.id),
+  ])
   const specGroups = groupSpecs(product.specs)
   const highlights = highlightsForProduct(product.categorySlug, 3)
 
@@ -256,6 +268,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </section>
       ) : null}
+
+      <ProductHotspots
+        imageUrl={product.images[0]?.url ?? null}
+        imageAlt={product.images[0]?.alt ?? product.name}
+        hotspots={hotspots}
+      />
+
+      <ProductReviews
+        reviews={reviews}
+        average={reviewSummary.average}
+        count={reviewSummary.count}
+      />
 
       <section aria-labelledby="faq-heading">
         <SectionHeader eyebrow="FAQ" title="Câu hỏi thường gặp" titleId="faq-heading" />
