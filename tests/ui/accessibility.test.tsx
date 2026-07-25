@@ -3,6 +3,10 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}))
+
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,14 +66,11 @@ describe('Badge', () => {
 })
 
 describe('Header', () => {
-  it('renders a banner landmark with primary navigation and a search slot', () => {
-    render(
-      <Header>
-        <input aria-label="Tìm sản phẩm" />
-      </Header>,
-    )
+  it('renders a banner landmark with category navigation and search', () => {
+    render(<Header cartCount={0} />)
     expect(screen.getByRole('banner')).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: /điều hướng chính/i })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: /danh mục/i })).toBeInTheDocument()
+    expect(screen.getByRole('search')).toBeInTheDocument()
     expect(screen.getByLabelText('Tìm sản phẩm')).toBeInTheDocument()
   })
 })

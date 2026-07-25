@@ -11,12 +11,12 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
     <>
       <a
         href="#main-content"
-        className="sr-only rounded-(--radius-md) bg-accent px-4 py-2 text-accent-fg focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        className="sr-only rounded-(--radius-md) bg-brand px-4 py-2 text-accent-fg focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
         Bỏ qua đến nội dung chính
       </a>
       <Header cartCount={cartCount} />
-      <main id="main-content" className="container-store flex-1 py-8 sm:py-10">
+      <main id="main-content" className="flex-1">
         {children}
       </main>
       <Footer />

@@ -8,5 +8,9 @@ export default async function CheckoutPage() {
   if (cart.items.length === 0) {
     redirect('/cart')
   }
-  return <CheckoutForm cart={cart} initialState={{ ok: true }} />
+  return (
+    <div className="container-store py-8 sm:py-10">
+      <CheckoutForm cart={cart} initialState={{ ok: true }} />
+    </div>
+  )
 }

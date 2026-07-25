@@ -75,7 +75,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const specGroups = groupSpecs(product.specs)
 
   return (
-    <div className="flex flex-col gap-12 sm:gap-14">
+    <div className="container-store flex flex-col gap-12 py-8 sm:gap-14 sm:py-10">
       <JsonLd data={productJsonLd(product)} />
       <JsonLd
         data={breadcrumbJsonLd([
