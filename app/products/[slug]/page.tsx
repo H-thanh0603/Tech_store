@@ -5,8 +5,12 @@ import { notFound } from 'next/navigation'
 import { ProductGallery } from '@/components/commerce/product-gallery'
 import { ProductGrid } from '@/components/commerce/product-grid'
 import { VariantSelector } from '@/components/commerce/variant-selector'
+import { JsonLd } from '@/components/seo/json-ld'
 import { getProductBySlug, getRelatedProducts } from '@/lib/catalog/queries'
 import type { ProductDetail, ProductSpecData } from '@/lib/catalog/types'
+import { breadcrumbJsonLd, productJsonLd } from '@/lib/seo/json-ld'
+import { getSiteUrl } from '@/lib/site'
+import { formatPrice } from '@/lib/format'
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>
@@ -16,11 +20,31 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   const { slug } = await params
   const product = await getProductBySlug(slug)
   if (!product) {
-    return { title: 'Không tìm thấy sản phẩm | TechStore' }
+    return { title: 'Không tìm thấy sản phẩm' }
   }
+  const site = getSiteUrl()
+  const url = `${site}/products/${product.slug}`
+  const image = product.images[0]?.url
+  const description =
+    product.description ??
+    `${product.name} — từ ${formatPrice(product.minPrice)}. Mua tại TechStore.`
   return {
-    title: `${product.name} | TechStore`,
-    description: product.description ?? undefined,
+    title: product.name,
+    description,
+    alternates: { canonical: `/products/${product.slug}` },
+    openGraph: {
+      type: 'website',
+      title: product.name,
+      description,
+      url,
+      images: image ? [{ url: image, alt: product.images[0]?.alt ?? product.name }] : undefined,
+    },
+    twitter: {
+      card: image ? 'summary_large_image' : 'summary',
+      title: product.name,
+      description,
+      images: image ? [image] : undefined,
+    },
   }
 }
 
@@ -52,6 +76,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <div className="flex flex-col gap-12 sm:gap-14">
+      <JsonLd data={productJsonLd(product)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Trang chủ', path: '/' },
+          { name: 'Sản phẩm', path: '/products' },
+          { name: product.categoryName, path: `/products?category=${product.categorySlug}` },
+          { name: product.name, path: `/products/${product.slug}` },
+        ])}
+      />
       <nav aria-label="Breadcrumb" className="text-(length:--text-sm) text-fg-muted">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li>

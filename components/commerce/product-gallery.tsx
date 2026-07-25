@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from 'react'
 
 import type { ProductImageData } from '@/lib/catalog/types'
@@ -9,9 +10,6 @@ interface ProductGalleryProps {
   productName: string
 }
 
-// Client gallery: a main image plus thumbnails. Falls back to a placeholder
-// panel when a product has no images (seed: Dell XPS 13). Images are the demo
-// placehold.co URLs, so a plain img avoids next/image domain config coupling.
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -33,40 +31,39 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="aspect-square overflow-hidden rounded-(--radius-xl) border border-border bg-surface-muted shadow-(--shadow-md)">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+      <div className="relative aspect-square overflow-hidden rounded-(--radius-xl) border border-border bg-surface-muted shadow-(--shadow-md)">
+        <Image
           src={active.url}
           alt={active.alt ?? productName}
-          width={800}
-          height={800}
-          className="h-full w-full object-cover"
+          fill
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          priority
+          className="object-cover"
         />
       </div>
 
       {images.length > 1 ? (
-        <ul className="flex flex-wrap gap-2">
+        <ul className="flex flex-wrap gap-2" aria-label="Ảnh sản phẩm">
           {images.map((image, index) => {
             const isActive = index === activeIndex
             return (
-              <li key={image.url}>
+              <li key={`${image.url}-${index}`}>
                 <button
                   type="button"
                   onClick={() => setActiveIndex(index)}
                   aria-pressed={isActive}
                   aria-label={`Ảnh ${index + 1}`}
                   className={[
-                    'size-16 overflow-hidden rounded-(--radius-md) border',
+                    'relative size-16 overflow-hidden rounded-(--radius-md) border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     isActive ? 'border-accent' : 'border-border hover:border-border-strong',
                   ].join(' ')}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={image.url}
                     alt=""
-                    width={64}
-                    height={64}
-                    className="h-full w-full object-cover"
+                    fill
+                    sizes="64px"
+                    className="object-cover"
                   />
                 </button>
               </li>

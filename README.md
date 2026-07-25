@@ -54,3 +54,11 @@ Run the full local gate before pushing:
 ```bash
 npm run lint && npm run type-check && npm test -- --run && supabase db reset && supabase test db && npm run build
 ```
+
+## M5 quality checklist
+
+- SEO: `/robots.txt`, `/sitemap.xml`, product Open Graph + JSON-LD
+- Security: response headers in `next.config.ts`, `/admin/*` middleware guard
+- A11y: skip link, labeled forms, landmarks, focus-visible on nav
+- E2E: `npm run test:e2e` (Playwright smoke)
+

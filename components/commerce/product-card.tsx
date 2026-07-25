@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 import { Badge } from '@/components/ui/badge'
@@ -19,15 +20,12 @@ export function ProductCard({ product }: ProductCardProps) {
     <article className="group relative flex w-full flex-col overflow-hidden rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm) transition-all duration-(--duration-normal) ease-(--ease-out-expo) hover:-translate-y-0.5 hover:border-border-strong hover:shadow-(--shadow-md)">
       <div className="relative aspect-square overflow-hidden bg-surface-muted">
         {product.imageUrl ? (
-          // Demo images come from placehold.co; a plain img keeps the card a
-          // pure presentational unit with no next/image domain config coupling.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={product.imageUrl}
             alt={product.imageAlt ?? product.name}
             width={800}
             height={800}
-            loading="lazy"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="h-full w-full object-cover transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.04]"
           />
         ) : (

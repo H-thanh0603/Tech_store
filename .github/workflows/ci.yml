@@ -23,6 +23,17 @@ jobs:
       - run: npm run type-check
       - run: npm test -- --run
       - run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E smoke
+        run: npm run test:e2e -- --project=chromium
+        env:
+          CI: true
+          ADMIN_SECRET: ci-admin-secret-min-16-chars
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          # App can boot without live Supabase for shell routes; sitemap falls back.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
   database:
     name: Supabase migrations and pgTAP tests
