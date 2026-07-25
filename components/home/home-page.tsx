@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { ProductGrid } from '@/components/commerce/product-grid'
+import { RecentlyViewedSection } from '@/components/commerce/recently-viewed'
 import { SectionHeader } from '@/components/ui/section-header'
 import {
   CATEGORY_EXPLORER,
@@ -311,6 +312,8 @@ export function HomePageView({ featured, total }: HomePageProps) {
           </ul>
         </div>
       </section>
+
+      <RecentlyViewedSection />
 
       {/* 8. Newsletter / price alert */}
       <section id="newsletter" aria-labelledby="newsletter-heading" className="section-y">

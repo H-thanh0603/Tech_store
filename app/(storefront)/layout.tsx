@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
-import { getCartItemCount } from '@/lib/commerce/queries'
+import { getCart } from '@/lib/commerce/queries'
 
 export default async function StorefrontLayout({ children }: { children: ReactNode }) {
-  const cartCount = await getCartItemCount()
+  const cart = await getCart()
 
   return (
     <>
@@ -15,7 +15,7 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
       >
         Bỏ qua đến nội dung chính
       </a>
-      <Header cartCount={cartCount} />
+      <Header cart={cart} />
       <main id="main-content" className="flex-1">
         {children}
       </main>

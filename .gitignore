@@ -15,3 +15,5 @@ test-results/
 playwright-report/
 blob-report/
 
+.deploy-secrets.txt
+

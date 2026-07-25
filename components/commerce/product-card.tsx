@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { ListToggles } from '@/components/commerce/list-toggles'
 import { Badge } from '@/components/ui/badge'
 import { Price } from '@/components/ui/price'
 import { highlightsForProduct } from '@/lib/catalog/highlights'
@@ -39,12 +40,16 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[70%] flex-col gap-1.5">
+        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[55%] flex-col gap-1.5">
           {product.hasDiscount ? <Badge tone="danger">Giảm giá</Badge> : null}
           {outOfStock ? <Badge tone="neutral">Hết hàng</Badge> : null}
           {!outOfStock && product.availableStock > 0 && product.availableStock <= 5 ? (
             <Badge tone="warning">Sắp hết</Badge>
           ) : null}
+        </div>
+
+        <div className="absolute right-2 top-2">
+          <ListToggles product={product} compact />
         </div>
       </div>
 
@@ -58,7 +63,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <h3 className="line-clamp-2 text-(length:--text-base) font-semibold leading-snug tracking-tight text-fg">
           <Link
             href={href}
-            className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+            className="after:absolute after:inset-0 after:z-0 after:content-[''] focus-visible:outline-none"
           >
             {product.name}
           </Link>
@@ -73,7 +78,7 @@ export function ProductCard({ product }: ProductCardProps) {
           ))}
         </ul>
 
-        <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/80 pt-3">
+        <div className="relative z-[1] mt-auto flex items-end justify-between gap-2 border-t border-border/80 pt-3">
           <Price amount={product.minPrice} size="md" />
           <span className="text-(length:--text-xs) font-semibold text-fg-subtle transition-colors group-hover:text-brand">
             {outOfStock ? 'Xem chi tiết' : 'Chọn máy'} →
