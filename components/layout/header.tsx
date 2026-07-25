@@ -1,12 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+
+import { MiniCart } from '@/components/commerce/mini-cart'
+import { SearchSuggest } from '@/components/commerce/search-suggest'
+import { useListCounts } from '@/components/commerce/list-toggles'
+import type { CartData } from '@/lib/commerce/types'
 
 type HeaderProps = {
   children?: ReactNode
-  cartCount?: number
+  cart: CartData
 }
 
 const UTILITY = [
@@ -24,21 +28,12 @@ const CATEGORIES = [
   { href: '/#need-selector', label: 'Tư vấn' },
 ]
 
-export function Header({ children, cartCount = 0 }: HeaderProps) {
-  const router = useRouter()
+export function Header({ children, cart }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [query, setQuery] = useState('')
-
-  function onSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const q = query.trim()
-    router.push(q ? `/products?q=${encodeURIComponent(q)}` : '/products')
-    setMenuOpen(false)
-  }
+  const { wishCount, compareCount } = useListCounts()
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg-elevated/95 backdrop-blur-md">
-      {/* Utility bar — desktop */}
       <div className="hidden border-b border-border bg-bg-secondary md:block">
         <div className="container-store flex items-center justify-between gap-4 py-2 text-(length:--text-xs) text-fg-muted">
           <p className="font-medium tracking-wide">
@@ -54,7 +49,6 @@ export function Header({ children, cartCount = 0 }: HeaderProps) {
         </div>
       </div>
 
-      {/* Main header */}
       <div className="container-store flex items-center gap-3 py-3">
         <button
           type="button"
@@ -84,65 +78,45 @@ export function Header({ children, cartCount = 0 }: HeaderProps) {
           </span>
         </Link>
 
-        <form
-          onSubmit={onSearch}
-          role="search"
-          className="ml-2 hidden min-w-0 flex-1 md:block lg:max-w-xl"
-        >
-          <label htmlFor="header-search" className="sr-only">
-            Tìm sản phẩm
-          </label>
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-fg-subtle" aria-hidden>
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20l-3-3" strokeLinecap="round" />
-              </svg>
-            </span>
-            <input
-              id="header-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm laptop, điện thoại, phụ kiện…"
-              className="min-h-11 w-full rounded-(--radius-md) border border-border bg-bg-primary pl-10 pr-24 text-(length:--text-sm) text-fg shadow-(--shadow-sm) placeholder:text-fg-subtle focus-visible:border-brand"
-            />
-            <button
-              type="submit"
-              className="absolute inset-y-1 right-1 rounded-(--radius-sm) bg-brand px-3 text-(length:--text-sm) font-semibold text-accent-fg hover:bg-brand-hover"
-            >
-              Tìm
-            </button>
-          </div>
-        </form>
+        <SearchSuggest className="ml-2 hidden min-w-0 flex-1 md:block lg:max-w-xl" />
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           {children}
           <Link
-            href="/track-order"
-            className="hidden min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
+            href="/wishlist"
+            className="relative hidden min-h-11 items-center rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
+            aria-label={`Wishlist${wishCount ? `, ${wishCount} sản phẩm` : ''}`}
           >
-            Đơn hàng
-          </Link>
-          <Link
-            href="/cart"
-            className="inline-flex min-h-11 items-center gap-2 rounded-(--radius-md) border border-border bg-bg-elevated px-3 text-(length:--text-sm) font-semibold text-fg shadow-(--shadow-sm) transition-colors hover:border-border-strong"
-          >
-            <span aria-hidden>🛒</span>
-            <span className="hidden sm:inline">Giỏ</span>
-            {cartCount > 0 ? (
-              <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-brand px-1.5 py-0.5 text-(length:--text-xs) font-semibold tabular-nums text-accent-fg">
-                {cartCount > 99 ? '99+' : cartCount}
+            ♥
+            {wishCount > 0 ? (
+              <span className="ml-1 inline-flex min-w-5 justify-center rounded-full bg-surface-muted px-1 text-(length:--text-xs) tabular-nums">
+                {wishCount}
               </span>
             ) : null}
           </Link>
+          <Link
+            href="/compare"
+            className="relative hidden min-h-11 items-center rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg md:inline-flex"
+            aria-label={`So sánh${compareCount ? `, ${compareCount} sản phẩm` : ''}`}
+          >
+            ⇄
+            {compareCount > 0 ? (
+              <span className="ml-1 inline-flex min-w-5 justify-center rounded-full bg-surface-muted px-1 text-(length:--text-xs) tabular-nums">
+                {compareCount}
+              </span>
+            ) : null}
+          </Link>
+          <Link
+            href="/track-order"
+            className="hidden min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg lg:inline-flex"
+          >
+            Đơn hàng
+          </Link>
+          <MiniCart cart={cart} />
         </div>
       </div>
 
-      {/* Category nav — desktop */}
-      <nav
-        aria-label="Danh mục"
-        className="hidden border-t border-border lg:block"
-      >
+      <nav aria-label="Danh mục" className="hidden border-t border-border lg:block">
         <div className="container-store flex items-center gap-1 overflow-x-auto py-1">
           {CATEGORIES.map((item) => (
             <Link
@@ -156,21 +130,15 @@ export function Header({ children, cartCount = 0 }: HeaderProps) {
         </div>
       </nav>
 
-      {/* Mobile drawer */}
       {menuOpen ? (
         <div className="border-t border-border bg-bg-elevated lg:hidden">
-          <form onSubmit={onSearch} role="search" className="container-store py-3">
-            <label htmlFor="mobile-search" className="sr-only">
-              Tìm sản phẩm
-            </label>
-            <input
-              id="mobile-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm sản phẩm…"
-              className="min-h-11 w-full rounded-(--radius-md) border border-border bg-bg-primary px-3 text-(length:--text-sm)"
+          <div className="container-store py-3">
+            <SearchSuggest
+              compact
+              onNavigate={() => setMenuOpen(false)}
+              inputClassName="min-h-11 w-full rounded-(--radius-md) border border-border bg-bg-primary px-3 pl-10 text-(length:--text-sm)"
             />
-          </form>
+          </div>
           <nav aria-label="Menu mobile" className="container-store flex flex-col gap-1 pb-4">
             <p className="px-1 pb-1 text-(length:--text-xs) font-semibold uppercase tracking-wide text-fg-subtle">
               Danh mục
@@ -186,6 +154,20 @@ export function Header({ children, cartCount = 0 }: HeaderProps) {
               </Link>
             ))}
             <div className="my-2 border-t border-border" />
+            <Link
+              href="/wishlist"
+              onClick={() => setMenuOpen(false)}
+              className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) text-fg-muted hover:bg-surface-muted hover:text-fg"
+            >
+              Wishlist {wishCount > 0 ? `(${wishCount})` : ''}
+            </Link>
+            <Link
+              href="/compare"
+              onClick={() => setMenuOpen(false)}
+              className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) text-fg-muted hover:bg-surface-muted hover:text-fg"
+            >
+              So sánh {compareCount > 0 ? `(${compareCount})` : ''}
+            </Link>
             {UTILITY.map((item) => (
               <Link
                 key={item.href}

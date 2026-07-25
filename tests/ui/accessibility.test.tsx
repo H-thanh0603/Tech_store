@@ -65,9 +65,20 @@ describe('Badge', () => {
   })
 })
 
+const emptyCart = {
+  items: [],
+  itemCount: 0,
+  subtotal: 0,
+  discountTotal: 0,
+  shippingTotal: 0 as const,
+  total: 0,
+  appliedCouponCode: null,
+  canCheckout: false,
+}
+
 describe('Header', () => {
   it('renders a banner landmark with category navigation and search', () => {
-    render(<Header cartCount={0} />)
+    render(<Header cart={emptyCart} />)
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: /danh mục/i })).toBeInTheDocument()
     expect(screen.getByRole('search')).toBeInTheDocument()

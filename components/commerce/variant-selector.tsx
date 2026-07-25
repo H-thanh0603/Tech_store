@@ -6,6 +6,7 @@ import { StickyPurchaseBar } from '@/components/commerce/sticky-purchase-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Price } from '@/components/ui/price'
+import { track } from '@/lib/analytics'
 import { canAddToCart, resolveSelectedVariant, variantLabel } from '@/lib/catalog/variant-selection'
 import type { ProductVariantData } from '@/lib/catalog/types'
 import { addToCart } from '@/lib/commerce/actions'
@@ -27,7 +28,11 @@ export function VariantSelector({
   const formId = useId()
   const [selectedId, setSelectedId] = useState<string | undefined>(variants[0]?.id)
   const [qty, setQty] = useState(1)
-  const [state, formAction, isPending] = useActionState(addToCart, INITIAL_STATE)
+  const [state, formAction, isPending] = useActionState(async (prev: ActionState, formData: FormData) => {
+    const result = await addToCart(prev, formData)
+    if (result.ok) track('add_to_cart', { variantId: String(formData.get('variantId') ?? '') })
+    return result
+  }, INITIAL_STATE)
   const selected = resolveSelectedVariant(variants, selectedId)
   const buyable = canAddToCart(selected)
 
@@ -65,7 +70,10 @@ export function VariantSelector({
                 <button
                   key={variant.id}
                   type="button"
-                  onClick={() => setSelectedId(variant.id)}
+                  onClick={() => {
+                    setSelectedId(variant.id)
+                    track('variant_selected', { variantId: variant.id })
+                  }}
                   aria-pressed={isSelected}
                   disabled={outOfStock && !isSelected}
                   className={[

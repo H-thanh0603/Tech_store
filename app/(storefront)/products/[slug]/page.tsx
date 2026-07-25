@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { ListToggles } from '@/components/commerce/list-toggles'
 import { ProductGallery } from '@/components/commerce/product-gallery'
 import { ProductGrid } from '@/components/commerce/product-grid'
+import { ProductViewTracker } from '@/components/commerce/product-view-tracker'
 import { VariantSelector } from '@/components/commerce/variant-selector'
 import { SectionHeader } from '@/components/ui/section-header'
 import { JsonLd } from '@/components/seo/json-ld'
@@ -92,6 +94,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <div className="container-store flex flex-col gap-12 py-8 pb-28 sm:gap-14 sm:py-10 lg:pb-10">
+      <ProductViewTracker
+        product={{
+          id: product.id,
+          slug: product.slug,
+          name: product.name,
+          brandName: product.brandName,
+          minPrice: product.minPrice,
+          imageUrl: product.images[0]?.url ?? null,
+          categorySlug: product.categorySlug,
+        }}
+      />
       <JsonLd data={productJsonLd(product)} />
       <JsonLd
         data={breadcrumbJsonLd([
@@ -144,9 +157,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 {product.brandName}
               </p>
             ) : null}
-            <h1 className="text-balance text-(length:--text-3xl) font-semibold tracking-tight text-fg">
-              {product.name}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-balance text-(length:--text-3xl) font-semibold tracking-tight text-fg">
+                {product.name}
+              </h1>
+              <ListToggles
+                product={{
+                  id: product.id,
+                  slug: product.slug,
+                  name: product.name,
+                  brandName: product.brandName,
+                  minPrice: product.minPrice,
+                  imageUrl: product.images[0]?.url ?? null,
+                  categorySlug: product.categorySlug,
+                }}
+              />
+            </div>
             <p className="text-(length:--text-sm) text-fg-muted">
               {product.categoryName}
               {product.inStock ? ' · Còn hàng' : ' · Hết hàng'}
