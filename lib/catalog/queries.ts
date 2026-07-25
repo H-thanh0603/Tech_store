@@ -81,6 +81,32 @@ function isSort(value: string | undefined): value is CatalogSort {
   return value !== undefined && (CATALOG_SORTS as readonly string[]).includes(value)
 }
 
+export type CatalogFacetOption = { name: string; slug: string }
+
+/** Active categories/brands for filter UI (public read via RLS). */
+export async function getCatalogFacets(): Promise<{
+  categories: CatalogFacetOption[]
+  brands: CatalogFacetOption[]
+}> {
+  const db = getSupabaseServerClient()
+  const [categoriesRes, brandsRes] = await Promise.all([
+    db.from('categories').select('name, slug').eq('is_active', true).order('name'),
+    db.from('brands').select('name, slug').eq('is_active', true).order('name'),
+  ])
+  if (categoriesRes.error) throw categoriesRes.error
+  if (brandsRes.error) throw brandsRes.error
+  return {
+    categories: (categoriesRes.data ?? []).map((row) => ({
+      name: String(row.name),
+      slug: String(row.slug),
+    })),
+    brands: (brandsRes.data ?? []).map((row) => ({
+      name: String(row.name),
+      slug: String(row.slug),
+    })),
+  }
+}
+
 // Normalizes untrusted filter input to safe, concrete values. Page is clamped
 // to a positive integer, price bounds drop non-finite/negative values, and an
 // unknown sort falls back to 'relevance'. Pure: no DB access, easy to test.

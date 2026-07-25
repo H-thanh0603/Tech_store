@@ -38,9 +38,9 @@ const transferOrder: OrderConfirmationData = {
 describe('CheckoutForm', () => {
   it('renders all required checkout fields with labels', () => {
     render(<CheckoutForm cart={cart} initialState={{ ok: true }} />)
-    expect(screen.getByLabelText('Họ và tên')).toBeInTheDocument()
-    expect(screen.getByLabelText('Số điện thoại')).toBeInTheDocument()
-    expect(screen.getByLabelText('Tỉnh/thành phố')).toBeInTheDocument()
+    expect(screen.getByLabelText(/họ và tên/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/số điện thoại/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/tỉnh\/thành phố/i)).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /cod/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /chuyển khoản/i })).toBeInTheDocument()
   })

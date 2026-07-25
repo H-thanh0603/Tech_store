@@ -24,15 +24,23 @@ export function CartPageContent({ cart }: CartPageContentProps) {
           Giỏ hàng đang trống
         </h1>
         <p className="text-(length:--text-base) leading-relaxed text-fg-muted">
-          Khám phá thiết bị phù hợp cho công việc và giải trí — thêm sản phẩm để
-          tiếp tục thanh toán.
+          Chọn thiết bị theo nhu cầu — học tập, lập trình, sáng tạo — rồi quay lại đây để thanh
+          toán guest checkout.
         </p>
-        <Link
-          href="/products"
-          className="inline-flex min-h-11 items-center justify-center rounded-(--radius-md) bg-accent px-5 text-(length:--text-sm) font-semibold text-accent-fg shadow-(--shadow-glow) transition-colors duration-(--duration-fast) hover:bg-accent-hover"
-        >
-          Xem sản phẩm
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/products"
+            className="inline-flex min-h-11 items-center justify-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-semibold text-accent-fg hover:bg-brand-hover"
+          >
+            Xem sản phẩm
+          </Link>
+          <Link
+            href="/#need-selector"
+            className="inline-flex min-h-11 items-center justify-center rounded-(--radius-md) border border-border px-5 text-(length:--text-sm) font-semibold text-fg"
+          >
+            Chọn theo nhu cầu
+          </Link>
+        </div>
       </section>
     )
   }
@@ -41,11 +49,14 @@ export function CartPageContent({ cart }: CartPageContentProps) {
     <section aria-labelledby="cart-heading" className="flex flex-col gap-6">
       <div className="border-b border-border pb-5">
         <p className="eyebrow">Giỏ hàng</p>
-        <h1 id="cart-heading" className="mt-1 text-(length:--text-3xl) font-semibold tracking-tight text-fg">
+        <h1
+          id="cart-heading"
+          className="mt-1 text-(length:--text-3xl) font-semibold tracking-tight text-fg"
+        >
           Sản phẩm đã chọn
         </h1>
         <p className="mt-1 text-(length:--text-sm) text-fg-muted">
-          {cart.itemCount} sản phẩm · kiểm tra số lượng trước khi đặt
+          {cart.itemCount} dòng · kiểm tra số lượng và tồn kho trước khi đặt
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -53,8 +64,14 @@ export function CartPageContent({ cart }: CartPageContentProps) {
           {cart.items.map((item) => (
             <CartItemRow key={item.id} item={item} />
           ))}
+          <Link
+            href="/products"
+            className="text-(length:--text-sm) font-semibold text-brand hover:text-brand-hover"
+          >
+            ← Tiếp tục mua sắm
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
+        <div className="flex flex-col gap-4 lg:sticky lg:top-28 lg:self-start">
           <CouponForm appliedCode={cart.appliedCouponCode ?? undefined} />
           <CartSummary cart={cart} />
         </div>
