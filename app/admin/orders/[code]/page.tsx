@@ -1,9 +1,13 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 import { OrderActionsForm } from '@/components/admin/order-actions-form'
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { OrderNotesPanel } from '@/components/admin/order-notes-form'
+import { PageHeader } from '@/components/admin/ui/page-header'
+import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-state'
+import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { getAdminOrder } from '@/lib/admin/queries'
+import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { formatPrice } from '@/lib/format'
 
 export default async function AdminOrderDetailPage({
@@ -11,7 +15,8 @@ export default async function AdminOrderDetailPage({
 }: {
   params: Promise<{ code: string }>
 }) {
-  if (!(await isAdminAuthenticated())) redirect('/admin/login')
+  const access = await requireAdminModule('orders')
+  if (isForbidden(access)) return <PermissionDeniedState />
 
   const { code } = await params
   const order = await getAdminOrder(decodeURIComponent(code))
@@ -19,18 +24,20 @@ export default async function AdminOrderDetailPage({
 
   return (
     <section className="space-y-8">
-      <div>
-        <Link href="/admin/orders" className="text-(length:--text-sm) text-accent hover:underline">
-          ← Đơn hàng
-        </Link>
-        <h1 className="mt-2 text-(length:--text-2xl) font-semibold">{order.orderCode}</h1>
-        <p className="text-(length:--text-sm) text-fg-muted">
-          {new Date(order.createdAt).toLocaleString('vi-VN')}
-        </p>
-      </div>
+      <PageHeader
+        title={order.orderCode}
+        description={`Đặt lúc ${new Date(order.createdAt).toLocaleString('vi-VN')}${
+          order.updatedAt ? ` · Cập nhật ${new Date(order.updatedAt).toLocaleString('vi-VN')}` : ''
+        }`}
+        actions={
+          <Link href="/admin/orders" className="text-(length:--text-sm) text-accent hover:underline">
+            ← Đơn hàng
+          </Link>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-3 rounded-(--radius-lg) border border-border p-4">
+        <div className="space-y-3 rounded-(--radius-lg) border border-border bg-surface-raised p-4 shadow-(--shadow-sm)">
           <h2 className="font-semibold">Khách hàng</h2>
           <dl className="space-y-1 text-(length:--text-sm)">
             <div>
@@ -56,10 +63,15 @@ export default async function AdminOrderDetailPage({
             </div>
             {order.note ? (
               <div>
-                <dt className="text-fg-muted">Ghi chú</dt>
+                <dt className="text-fg-muted">Ghi chú khách</dt>
                 <dd>{order.note}</dd>
               </div>
             ) : null}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <StatusBadge status={order.orderStatus} />
+              <StatusBadge status={order.paymentStatus} />
+              <StatusBadge status="draft" label={order.paymentMethod} />
+            </div>
           </dl>
         </div>
 
@@ -70,11 +82,12 @@ export default async function AdminOrderDetailPage({
         />
       </div>
 
-      <div className="overflow-x-auto rounded-(--radius-lg) border border-border">
+      <div className="overflow-x-auto rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm)">
         <table className="min-w-full text-left text-(length:--text-sm)">
+          <caption className="sr-only">Snapshot sản phẩm trong đơn</caption>
           <thead className="bg-surface-muted text-fg-muted">
             <tr>
-              <th className="px-4 py-3">Sản phẩm</th>
+              <th className="px-4 py-3">Sản phẩm (snapshot)</th>
               <th className="px-4 py-3">SKU</th>
               <th className="px-4 py-3">SL</th>
               <th className="px-4 py-3">Đơn giá</th>
@@ -102,26 +115,56 @@ export default async function AdminOrderDetailPage({
         </table>
       </div>
 
-      <div className="ml-auto max-w-sm space-y-1 text-(length:--text-sm)">
-        <div className="flex justify-between">
-          <span className="text-fg-muted">Tạm tính</span>
-          <span className="tabular-nums">{formatPrice(order.subtotal)}</span>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="ml-auto w-full max-w-sm space-y-1 rounded-(--radius-lg) border border-border bg-surface-raised p-4 text-(length:--text-sm) shadow-(--shadow-sm)">
+          <div className="flex justify-between">
+            <span className="text-fg-muted">Tạm tính</span>
+            <span className="tabular-nums">{formatPrice(order.subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-fg-muted">
+              Giảm giá{order.couponCode ? ` (${order.couponCode})` : ''}
+            </span>
+            <span className="tabular-nums">-{formatPrice(order.discountTotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-fg-muted">Ship</span>
+            <span className="tabular-nums">{formatPrice(order.shippingTotal)}</span>
+          </div>
+          <div className="flex justify-between border-t border-border pt-2 text-(length:--text-base) font-semibold">
+            <span>Tổng</span>
+            <span className="tabular-nums">{formatPrice(order.total)}</span>
+          </div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-fg-muted">
-            Giảm giá{order.couponCode ? ` (${order.couponCode})` : ''}
-          </span>
-          <span className="tabular-nums">-{formatPrice(order.discountTotal)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-fg-muted">Ship</span>
-          <span className="tabular-nums">{formatPrice(order.shippingTotal)}</span>
-        </div>
-        <div className="flex justify-between border-t border-border pt-2 text-(length:--text-base) font-semibold">
-          <span>Tổng</span>
-          <span className="tabular-nums">{formatPrice(order.total)}</span>
+
+        <div className="rounded-(--radius-lg) border border-border bg-surface-raised p-4 shadow-(--shadow-sm)">
+          <h2 className="mb-3 font-semibold">Timeline trạng thái</h2>
+          {(order.statusEvents?.length ?? 0) === 0 ? (
+            <p className="text-(length:--text-sm) text-fg-muted">
+              Chưa có event (các thay đổi sau migration sẽ được ghi).
+            </p>
+          ) : (
+            <ol className="space-y-3">
+              {order.statusEvents?.map((event) => (
+                <li key={event.id} className="border-l-2 border-accent pl-3 text-(length:--text-sm)">
+                  <div className="font-medium">
+                    {event.eventType === 'payment_status' ? 'Thanh toán' : 'Đơn'}:{' '}
+                    {event.fromStatus ?? '—'} → {event.toStatus}
+                  </div>
+                  {event.reason ? (
+                    <p className="text-fg-muted">Lý do: {event.reason}</p>
+                  ) : null}
+                  <p className="text-(length:--text-xs) text-fg-subtle">
+                    {event.actorLabel} · {new Date(event.createdAt).toLocaleString('vi-VN')}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
+
+      <OrderNotesPanel orderCode={order.orderCode} notes={order.internalNotes ?? []} />
     </section>
   )
 }

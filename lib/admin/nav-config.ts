@@ -18,12 +18,12 @@ export type AdminNavItem = {
 export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: '/admin', label: 'Tổng quan', module: 'dashboard', exact: true },
   { href: '/admin/products', label: 'Sản phẩm', module: 'products' },
-  { href: '/admin/categories', label: 'Danh mục', module: 'categories', placeholder: true },
-  { href: '/admin/brands', label: 'Thương hiệu', module: 'brands', placeholder: true },
-  { href: '/admin/inventory', label: 'Tồn kho', module: 'inventory', placeholder: true },
+  { href: '/admin/categories', label: 'Danh mục', module: 'categories' },
+  { href: '/admin/brands', label: 'Thương hiệu', module: 'brands' },
+  { href: '/admin/inventory', label: 'Tồn kho', module: 'inventory' },
   { href: '/admin/orders', label: 'Đơn hàng', module: 'orders' },
-  { href: '/admin/customers', label: 'Khách hàng', module: 'customers', placeholder: true },
-  { href: '/admin/coupons', label: 'Khuyến mãi', module: 'coupons', placeholder: true },
+  { href: '/admin/customers', label: 'Khách hàng', module: 'customers' },
+  { href: '/admin/coupons', label: 'Khuyến mãi', module: 'coupons' },
   { href: '/admin/reports', label: 'Báo cáo', module: 'reports', placeholder: true },
   { href: '/admin/settings', label: 'Cài đặt', module: 'settings', placeholder: true },
 ] as const

@@ -7,11 +7,14 @@ import { adminUserMessage } from '@/lib/admin/errors'
 import { canMarkPaymentPaid, canTransitionOrderStatus } from '@/lib/admin/status-rules'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
-import { orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
+import { orderNoteSchema, orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
 import type { OrderStatus, PaymentStatus } from '@/lib/commerce/types'
 
-function fail(code: string): AdminActionState {
-  return { ok: false, code, message: adminUserMessage(code) }
+function fail(
+  code: string,
+  fieldErrors?: Record<string, string[] | undefined>,
+): AdminActionState {
+  return { ok: false, code, message: adminUserMessage(code), fieldErrors }
 }
 
 async function assertAdmin(): Promise<AdminActionState | null> {
@@ -26,6 +29,7 @@ async function assertAdmin(): Promise<AdminActionState | null> {
 function revalidateOrders(orderCode?: string) {
   revalidatePath('/admin')
   revalidatePath('/admin/orders')
+  revalidatePath('/admin/customers')
   if (orderCode) revalidatePath(`/admin/orders/${orderCode}`)
 }
 
@@ -39,8 +43,11 @@ export async function updateOrderStatus(
   const parsed = orderStatusSchema.safeParse({
     orderCode: formData.get('orderCode'),
     orderStatus: formData.get('orderStatus'),
+    reason: formData.get('reason') ?? '',
   })
-  if (!parsed.success) return fail('VALIDATION_ERROR')
+  if (!parsed.success) {
+    return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+  }
 
   const db = getSupabaseAdminClient()
   const { data: order, error: readError } = await db
@@ -60,6 +67,8 @@ export async function updateOrderStatus(
     p_order_code: order.order_code,
     p_order_status: to,
     p_payment_status: null,
+    p_reason: parsed.data.reason || null,
+    p_actor_label: 'admin',
   })
 
   if (error) return fail('INTERNAL_ERROR')
@@ -111,6 +120,8 @@ export async function markOrderPaid(
     p_order_code: order.order_code,
     p_order_status: nextOrderStatus,
     p_payment_status: 'paid' satisfies PaymentStatus,
+    p_reason: null,
+    p_actor_label: 'admin',
   })
 
   if (error) return fail('INTERNAL_ERROR')
@@ -119,4 +130,30 @@ export async function markOrderPaid(
 
   revalidateOrders(order.order_code)
   return { ok: true, message: 'Đã xác nhận thanh toán.' }
+}
+
+export async function addOrderInternalNote(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const gate = await assertAdmin()
+  if (gate) return gate
+
+  const parsed = orderNoteSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    body: formData.get('body'),
+  })
+  if (!parsed.success) return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_add_order_note', {
+    p_order_code: parsed.data.orderCode,
+    p_body: parsed.data.body,
+    p_actor_label: 'admin',
+  })
+  if (error) return fail('INTERNAL_ERROR')
+  const code = (data as { code?: string } | null)?.code
+  if (code !== 'OK') return fail(code ?? 'INTERNAL_ERROR')
+
+  revalidateOrders(parsed.data.orderCode.toUpperCase())
+  return { ok: true, message: 'Đã thêm ghi chú nội bộ.' }
 }
