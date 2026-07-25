@@ -17,6 +17,66 @@ export interface DashboardStats {
   revenue7d: number
 }
 
+export type DashboardChartRange = 7 | 30 | 90
+
+export interface DashboardKpis {
+  revenueToday: number
+  revenueYesterday: number
+  revenueMonth: number
+  revenuePrevMonth: number
+  ordersToday: number
+  ordersYesterday: number
+  pendingOrders: number
+  aovMonth: number
+  monthOrderCount: number
+  lowStockCount: number
+  outOfStockCount: number
+  timezone: string
+}
+
+export interface RevenueDayRow {
+  date: string
+  revenue: number
+  orderCount: number
+}
+
+export interface OrdersByStatusRow {
+  status: string
+  count: number
+}
+
+export interface RevenueByCategoryRow {
+  categoryId: string
+  categoryName: string
+  revenue: number
+  quantity: number
+}
+
+export interface TopProductRow {
+  productName: string
+  sku: string
+  quantity: number
+  revenue: number
+}
+
+export interface StockAlertRow {
+  productId: string
+  productName: string
+  sku: string
+  available: number
+  threshold: number
+  status: 'low_stock' | 'out_of_stock'
+}
+
+export interface RecentOrderRow {
+  orderCode: string
+  customerName: string
+  orderStatus: string
+  paymentStatus: string
+  total: number
+  createdAt: string
+}
+
 export interface AdminProductListItem {
   id: string
   name: string
@@ -29,6 +89,18 @@ export interface AdminProductListItem {
   variantCount: number
   minAvailable: number | null
   updatedAt: string
+  imageUrl?: string | null
+  totalAvailable?: number | null
+  minPrice?: number | null
+  maxPrice?: number | null
+}
+
+export interface AdminProductListResult {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+  rows: AdminProductListItem[]
 }
 
 export interface AdminVariantRow {

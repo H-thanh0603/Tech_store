@@ -439,6 +439,103 @@ export async function deleteSpec(
   return { ok: true, message: 'Đã xóa thông số.' }
 }
 
+export async function setProductArchiveState(
+  productId: string,
+  archived: boolean,
+): Promise<AdminActionState> {
+  const gate = await assertAdmin()
+  if (gate) return gate
+
+  const db = getSupabaseAdminClient()
+  const { error } = await db
+    .from('products')
+    .update(
+      archived
+        ? { is_archived: true, is_published: false }
+        : { is_archived: false },
+    )
+    .eq('id', productId)
+
+  if (error) return fail('INTERNAL_ERROR')
+
+  revalidateCatalog(productId)
+  return {
+    ok: true,
+    message: archived ? 'Đã lưu trữ sản phẩm.' : 'Đã bỏ lưu trữ sản phẩm.',
+  }
+}
+
+export async function bulkUpdateProducts(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const gate = await assertAdmin()
+  if (gate) return gate
+
+  const action = String(formData.get('bulkAction') ?? '')
+  const ids = formData
+    .getAll('productIds')
+    .map((v) => String(v))
+    .filter(Boolean)
+    .slice(0, 100)
+
+  if (ids.length === 0) {
+    return fail('VALIDATION_ERROR', { productIds: ['Chọn ít nhất một sản phẩm.'] })
+  }
+  if (!['publish', 'draft', 'archive'].includes(action)) {
+    return fail('VALIDATION_ERROR', { bulkAction: ['Hành động không hợp lệ.'] })
+  }
+
+  const db = getSupabaseAdminClient()
+
+  if (action === 'archive') {
+    const { error } = await db
+      .from('products')
+      .update({ is_archived: true, is_published: false })
+      .in('id', ids)
+    if (error) return fail('INTERNAL_ERROR')
+  } else if (action === 'draft') {
+    const { error } = await db
+      .from('products')
+      .update({ is_published: false, is_archived: false })
+      .in('id', ids)
+    if (error) return fail('INTERNAL_ERROR')
+  } else {
+    // publish only products that have at least one active variant
+    const { data: withVariants, error: listError } = await db
+      .from('product_variants')
+      .select('product_id')
+      .in('product_id', ids)
+      .eq('is_active', true)
+    if (listError) return fail('INTERNAL_ERROR')
+    const eligible = Array.from(
+      new Set((withVariants ?? []).map((row) => String(row.product_id))),
+    )
+    if (eligible.length === 0) return fail('PUBLISH_NEEDS_VARIANT')
+    const { error } = await db
+      .from('products')
+      .update({ is_published: true, is_archived: false })
+      .in('id', eligible)
+    if (error) {
+      if (error.message?.includes('active variant') || error.code === 'P0001') {
+        return fail('PUBLISH_NEEDS_VARIANT')
+      }
+      return fail('INTERNAL_ERROR')
+    }
+  }
+
+  revalidateCatalog()
+  return {
+    ok: true,
+    message:
+      action === 'archive'
+        ? `Đã lưu trữ ${ids.length} sản phẩm.`
+        : action === 'draft'
+          ? `Đã chuyển ${ids.length} sản phẩm sang nháp.`
+          : `Đã xuất bản các sản phẩm hợp lệ.`,
+  }
+}
+
 export async function replaceUseCases(
   productId: string,
   _prev: AdminActionState,
