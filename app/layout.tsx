@@ -3,7 +3,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google'
 
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
-import { appMetadata } from '@/lib/app-metadata'
+import { buildRootMetadata } from '@/lib/app-metadata'
 import { getCartItemCount } from '@/lib/commerce/queries'
 
 import './globals.css'
@@ -14,7 +14,7 @@ const jakarta = Plus_Jakarta_Sans({
   variable: '--font-jakarta',
 })
 
-export const metadata: Metadata = appMetadata
+export const metadata: Metadata = buildRootMetadata()
 
 export default async function RootLayout({
   children,

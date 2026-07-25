@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
-    exclude: ['**/node_modules/**', '**/.next/**', '.claude/**'],
+    exclude: ['**/node_modules/**', '**/.next/**', '.claude/**', '**/e2e/**'],
   },
   resolve: {
     alias: {

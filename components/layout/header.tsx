@@ -31,12 +31,15 @@ export function Header({ children, cartCount = 0 }: HeaderProps) {
           </span>
         </Link>
 
-        <nav aria-label="Điều hướng chính" className="order-3 flex w-full items-center gap-0.5 sm:order-0 sm:w-auto">
+        <nav
+          aria-label="Điều hướng chính"
+          className="order-3 flex w-full items-center gap-0.5 overflow-x-auto sm:order-0 sm:w-auto"
+        >
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="inline-flex min-h-(--size-touch) items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted transition-colors duration-(--duration-fast) hover:bg-surface-muted hover:text-fg"
+              className="inline-flex min-h-(--size-touch) shrink-0 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted transition-colors duration-(--duration-fast) hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {link.label}
             </Link>
