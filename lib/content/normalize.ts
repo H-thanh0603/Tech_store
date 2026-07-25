@@ -174,6 +174,7 @@ export function mapSectionRow(row: SectionRow): MappedSection {
       sortOrder: toOrder(row.sort_order),
       config: parsed.config,
       collection: null,
+      collections: [],
     },
     warning: parsed.error ? `config fallback for section_key=${row.section_key}: ${parsed.error}` : null,
   }

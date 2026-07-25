@@ -32,6 +32,9 @@ const emptyConfig = z.object({}).strict()
 const heroConfig = z
   .object({
     bannerSlot: z.literal('home_hero').default('home_hero'),
+    /** Side cards in the hero's right column (§4.1). */
+    sideBannerSlot: z.literal('home_promo_grid').default('home_promo_grid'),
+    sideLimit: z.number().int().min(0).max(3).default(3),
     ctaLabel: z.string().min(1).max(60).optional(),
     ctaHref: safeHref.optional(),
     showStats: z.boolean().default(false),
@@ -42,6 +45,36 @@ const bannerGridConfig = z
   .object({
     bannerSlot: z.enum(['home_promo_grid', 'home_campaign_strip']),
     limit: z.number().int().min(1).max(6).default(3),
+  })
+  .strict()
+
+const campaignLinksConfig = z
+  .object({
+    bannerSlot: z.literal('home_campaign_strip').default('home_campaign_strip'),
+    limit: z.number().int().min(1).max(8).default(6),
+  })
+  .strict()
+
+const categoryGridConfig = z
+  .object({
+    limit: z.number().int().min(4).max(12).default(8),
+  })
+  .strict()
+
+const dealTabsConfig = z
+  .object({
+    tabs: z
+      .array(
+        z
+          .object({
+            label: z.string().min(1).max(40),
+            collectionSlug: z.string().min(1).max(64),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(4),
+    limit: z.number().int().min(4).max(12).default(8),
   })
   .strict()
 
@@ -57,7 +90,11 @@ const productCollectionConfig = z
 const SECTION_CONFIG_SCHEMAS: Record<SectionType, z.ZodType<Record<string, unknown>>> = {
   hero: heroConfig,
   banner_grid: bannerGridConfig,
+  campaign_links: campaignLinksConfig,
+  member_block: emptyConfig,
   category_mosaic: emptyConfig,
+  category_grid: categoryGridConfig,
+  deal_tabs: dealTabsConfig,
   product_collection: productCollectionConfig,
   need_selector: emptyConfig,
   brand_strip: emptyConfig,

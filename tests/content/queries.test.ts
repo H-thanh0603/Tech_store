@@ -295,6 +295,203 @@ describe('getActiveHomepageSections', () => {
     expect(from).toHaveBeenCalledTimes(3)
   })
 
+  it('resolves every tab of a deal_tabs section in config order', async () => {
+    const { client } = mockClient({
+      homepage_sections: {
+        data: [
+          sectionRow({
+            section_key: 'deals',
+            section_type: 'deal_tabs',
+            config: {
+              tabs: [
+                { label: 'Giảm giá', collectionSlug: 'sale' },
+                { label: 'Mới', collectionSlug: 'new' },
+              ],
+              limit: 8,
+            },
+          }),
+        ],
+        error: null,
+      },
+      homepage_collections: {
+        data: [
+          {
+            id: 'col-2',
+            slug: 'new',
+            title: 'Mới',
+            subtitle: null,
+            collection_type: 'manual',
+            filters: {},
+            homepage_collection_items: [{ product_id: 'p2', sort_order: 10 }],
+          },
+          {
+            id: 'col-1',
+            slug: 'sale',
+            title: 'Giảm giá',
+            subtitle: null,
+            collection_type: 'manual',
+            filters: {},
+            homepage_collection_items: [{ product_id: 'p1', sort_order: 10 }],
+          },
+        ],
+        error: null,
+      },
+      catalog_products: { data: [productRow('p1', 'First'), productRow('p2', 'Second')], error: null },
+    })
+
+    const sections = await getActiveHomepageSections(client)
+
+    // Config order wins over the order the database returned the rows in.
+    expect(sections[0]?.collections.map((collection) => collection.slug)).toEqual(['sale', 'new'])
+    // `collection` stays the first tab so single-collection renderers keep working.
+    expect(sections[0]?.collection?.slug).toBe('sale')
+  })
+
+  it('keeps a deal_tabs section when only some tabs have products', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client } = mockClient({
+      homepage_sections: {
+        data: [
+          sectionRow({
+            section_key: 'deals',
+            section_type: 'deal_tabs',
+            config: {
+              tabs: [
+                { label: 'Trống', collectionSlug: 'empty' },
+                { label: 'Có hàng', collectionSlug: 'sale' },
+              ],
+            },
+          }),
+        ],
+        error: null,
+      },
+      homepage_collections: {
+        data: [
+          {
+            id: 'col-0',
+            slug: 'empty',
+            title: 'Trống',
+            subtitle: null,
+            collection_type: 'manual',
+            filters: {},
+            homepage_collection_items: [],
+          },
+          {
+            id: 'col-1',
+            slug: 'sale',
+            title: 'Có hàng',
+            subtitle: null,
+            collection_type: 'manual',
+            filters: {},
+            homepage_collection_items: [{ product_id: 'p1', sort_order: 10 }],
+          },
+        ],
+        error: null,
+      },
+      catalog_products: { data: [productRow('p1', 'First')], error: null },
+    })
+
+    const sections = await getActiveHomepageSections(client)
+
+    expect(sections[0]?.collections.map((collection) => collection.slug)).toEqual(['sale'])
+  })
+
+  it('drops a deal_tabs section when no tab has products', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client } = mockClient({
+      homepage_sections: {
+        data: [
+          sectionRow({
+            section_key: 'deals',
+            section_type: 'deal_tabs',
+            config: { tabs: [{ label: 'Trống', collectionSlug: 'empty' }] },
+          }),
+        ],
+        error: null,
+      },
+      homepage_collections: { data: [], error: null },
+    })
+
+    await expect(getActiveHomepageSections(client)).resolves.toEqual([])
+  })
+
+  it('resolves a dynamic collection from the catalog instead of curated items', async () => {
+    const { client, from } = mockClient({
+      homepage_sections: {
+        data: [
+          sectionRow({
+            section_key: 'sale',
+            section_type: 'product_collection',
+            config: { collectionSlug: 'sale', limit: 2 },
+          }),
+        ],
+        error: null,
+      },
+      homepage_collections: {
+        data: [
+          {
+            id: 'col-1',
+            slug: 'sale',
+            title: 'Đang giảm giá',
+            subtitle: null,
+            collection_type: 'discounted',
+            filters: { categorySlug: 'laptop' },
+            // A dynamic collection ignores curated items entirely.
+            homepage_collection_items: [{ product_id: 'ignored', sort_order: 10 }],
+          },
+        ],
+        error: null,
+      },
+      catalog_products: {
+        data: [productRow('p1', 'First'), productRow('p2', 'Second'), productRow('p3', 'Third')],
+        error: null,
+      },
+    })
+
+    const sections = await getActiveHomepageSections(client)
+
+    expect(sections[0]?.collection?.type).toBe('discounted')
+    expect(sections[0]?.collection?.products.map((product) => product.id)).toEqual(['p1', 'p2'])
+    // sections + collections + one catalog query for the dynamic collection.
+    expect(from).toHaveBeenCalledTimes(3)
+  })
+
+  it('degrades a dynamic collection to empty when its catalog query fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client } = mockClient({
+      homepage_sections: {
+        data: [
+          sectionRow({
+            section_key: 'sale',
+            section_type: 'product_collection',
+            config: { collectionSlug: 'sale' },
+          }),
+        ],
+        error: null,
+      },
+      homepage_collections: {
+        data: [
+          {
+            id: 'col-1',
+            slug: 'sale',
+            title: 'Đang giảm giá',
+            subtitle: null,
+            collection_type: 'newest',
+            filters: {},
+            homepage_collection_items: [],
+          },
+        ],
+        error: null,
+      },
+      catalog_products: { data: null, error: { message: 'boom' } },
+    })
+
+    // The section is dropped rather than rendering an empty rail, and the page lives.
+    await expect(getActiveHomepageSections(client)).resolves.toEqual([])
+    expect(error).toHaveBeenCalled()
+  })
+
   it('throws a UI-safe error and logs the raw error on failure', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const dbError = { message: 'permission denied for table homepage_sections', code: '42501' }

@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { mapCatalogRowToCard } from '@/lib/catalog/queries'
 import type { ProductCardData } from '@/lib/catalog/types'
+import { parseCollectionFilters } from '@/lib/content/collection-filters'
 import {
   buildNavigationTree,
   mapBannerRow,
@@ -45,7 +46,7 @@ const SECTION_SELECT = 'id, section_key, section_type, title, subtitle, eyebrow,
 // child table's RLS policy to the embedded rows, so unpublished or archived
 // products stay hidden and the whole collection set costs one round-trip.
 const COLLECTION_SELECT =
-  'id, slug, title, subtitle, collection_type, homepage_collection_items ( product_id, sort_order )'
+  'id, slug, title, subtitle, collection_type, filters, homepage_collection_items ( product_id, sort_order )'
 
 const PRODUCT_CARD_SELECT =
   'id, name, slug, category_slug, brand_name, min_price, has_discount, available_stock, image_url, image_alt'
@@ -58,11 +59,12 @@ interface CollectionRow {
   title: string
   subtitle: string | null
   collection_type: string
+  filters: unknown
   homepage_collection_items: Array<{ product_id: string; sort_order: number | string | null }> | null
 }
 
 function toCollectionType(value: string): CollectionType {
-  return value === 'featured' || value === 'newest' ? value : 'manual'
+  return value === 'featured' || value === 'newest' || value === 'discounted' ? value : 'manual'
 }
 
 /** Curated product ids in display order. */
@@ -72,6 +74,53 @@ function orderedProductIds(row: CollectionRow): string[] {
     sort_order: item.sort_order,
   }))
   return sortByOrder(items).map((item) => item.id)
+}
+
+/** Hard ceiling on a dynamic rail, so one collection can never fetch the catalog. */
+const DYNAMIC_COLLECTION_LIMIT = 12
+
+/**
+ * Products for a non-manual collection, resolved at request time.
+ *
+ * Each dynamic collection is one indexed query against `catalog_products` (RLS
+ * keeps unpublished rows out) capped at 12 rows. They run in parallel with each
+ * other, so a three-tab deal section costs three short queries, not a waterfall.
+ */
+async function fetchDynamicCollection(
+  row: CollectionRow,
+  type: Exclude<CollectionType, 'manual'>,
+  supabase: SupabaseClient,
+): Promise<ProductCardData[]> {
+  const filters = parseCollectionFilters(row.filters)
+  let query = supabase.from('catalog_products').select(PRODUCT_CARD_SELECT)
+
+  if (filters.categorySlug) {
+    query = query.eq('category_slug', filters.categorySlug)
+  }
+  if (filters.brandSlug) {
+    query = query.eq('brand_slug', filters.brandSlug)
+  }
+  if (filters.useCase) {
+    query = query.contains('use_cases', [filters.useCase])
+  }
+  if (type === 'discounted') {
+    query = query.eq('has_discount', true)
+  }
+  if (type === 'featured') {
+    query = query.order('is_featured', { ascending: false })
+  }
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(DYNAMIC_COLLECTION_LIMIT)
+
+  if (error) {
+    console.error(`[content] failed to resolve ${type} collection "${row.slug}"`, error)
+    return []
+  }
+
+  return (data ?? []).map((productRow) => mapCatalogRowToCard(productRow))
 }
 
 /**
@@ -96,54 +145,103 @@ async function fetchCollectionsBySlug(
   }
 
   const rows = (data ?? []) as CollectionRow[]
-  const idsByCollection = new Map(rows.map((row) => [row.id, orderedProductIds(row)]))
+  const manualRows = rows.filter((row) => toCollectionType(row.collection_type) === 'manual')
+  const dynamicRows = rows.filter((row) => toCollectionType(row.collection_type) !== 'manual')
+
+  const idsByCollection = new Map(manualRows.map((row) => [row.id, orderedProductIds(row)]))
   const allProductIds = [...new Set([...idsByCollection.values()].flat())]
 
-  let cardsById = new Map<string, ProductCardData>()
-  if (allProductIds.length > 0) {
-    const { data: productData, error: productError } = await supabase
-      .from('catalog_products')
-      .select(PRODUCT_CARD_SELECT)
-      .in('id', allProductIds)
+  // Curated products (one batch) and dynamic collections (one query each) start
+  // together, so adding a dynamic rail does not lengthen the critical path.
+  const [curatedResult, dynamicProducts] = await Promise.all([
+    allProductIds.length > 0
+      ? supabase.from('catalog_products').select(PRODUCT_CARD_SELECT).in('id', allProductIds)
+      : Promise.resolve({ data: [], error: null }),
+    Promise.all(
+      dynamicRows.map((row) =>
+        fetchDynamicCollection(
+          row,
+          toCollectionType(row.collection_type) as Exclude<CollectionType, 'manual'>,
+          supabase,
+        ),
+      ),
+    ),
+  ])
 
-    if (productError) {
-      console.error('[content] failed to load collection products', productError)
-      throw new Error(UI_ERROR)
-    }
-
-    cardsById = new Map(
-      (productData ?? []).map((row) => {
-        const card = mapCatalogRowToCard(row)
-        return [card.id, card]
-      }),
-    )
+  if (curatedResult.error) {
+    console.error('[content] failed to load collection products', curatedResult.error)
+    throw new Error(UI_ERROR)
   }
+
+  const cardsById = new Map<string, ProductCardData>(
+    (curatedResult.data ?? []).map((row) => {
+      const card = mapCatalogRowToCard(row)
+      return [card.id, card]
+    }),
+  )
+
+  const dynamicBySlug = new Map<string, ProductCardData[]>(
+    dynamicRows.map((row, index) => [row.slug, dynamicProducts[index] ?? []]),
+  )
 
   const bySlug = new Map<string, HomepageCollection>()
   for (const row of rows) {
-    const ids = idsByCollection.get(row.id) ?? []
+    const type = toCollectionType(row.collection_type)
+    const products =
+      type === 'manual'
+        ? reorderByIds([...cardsById.values()], idsByCollection.get(row.id) ?? [])
+        : (dynamicBySlug.get(row.slug) ?? [])
+
     bySlug.set(row.slug, {
       id: row.id,
       slug: row.slug,
       title: row.title,
       subtitle: row.subtitle,
-      type: toCollectionType(row.collection_type),
-      products: reorderByIds([...cardsById.values()], ids),
+      type,
+      products,
     })
   }
   return bySlug
 }
 
 /**
- * Active homepage sections in display order, with `product_collection` sections
- * resolved to real product cards.
+ * Collection slugs a section depends on, in config order.
+ *
+ * `product_collection` has one; `deal_tabs` has one per tab. Anything else has
+ * none, which keeps the batch fetch below to exactly the slugs in use.
+ */
+function collectionSlugsOf(section: HomepageSection): string[] {
+  if (section.type === 'product_collection') {
+    const slug = section.config.collectionSlug
+    return typeof slug === 'string' ? [slug] : []
+  }
+  if (section.type === 'deal_tabs') {
+    const tabs = section.config.tabs
+    if (!Array.isArray(tabs)) {
+      return []
+    }
+    return tabs
+      .map((tab) =>
+        tab !== null && typeof tab === 'object'
+          ? (tab as Record<string, unknown>).collectionSlug
+          : undefined,
+      )
+      .filter((slug): slug is string => typeof slug === 'string')
+  }
+  return []
+}
+
+/**
+ * Active homepage sections in display order, with `product_collection` and
+ * `deal_tabs` sections resolved to real product cards.
  *
  * Cost is a fixed 3 round-trips regardless of how many sections exist: the
  * sections, the collections with their embedded items, then the product cards.
  * There is no per-section query, so adding sections never creates a waterfall.
  *
- * A `product_collection` section whose collection is missing, hidden or empty is
- * dropped: an empty product rail is worse than no rail.
+ * A section whose collections are all missing, hidden or empty is dropped: an
+ * empty product rail — or a tab strip with nothing behind it — is worse than no
+ * section at all.
  */
 async function loadActiveHomepageSections(
   supabase: SupabaseClient = getSupabaseServerClient(),
@@ -170,35 +268,35 @@ async function loadActiveHomepageSections(
     }
   }
 
-  const slugs = [
-    ...new Set(
-      sections
-        .filter((section) => section.type === 'product_collection')
-        .map((section) => section.config.collectionSlug)
-        .filter((slug): slug is string => typeof slug === 'string'),
-    ),
-  ]
+  const slugs = [...new Set(sections.flatMap(collectionSlugsOf))]
   const collections = await fetchCollectionsBySlug(slugs, supabase)
 
   const resolved: HomepageSection[] = []
   for (const section of sections) {
-    if (section.type !== 'product_collection') {
+    const wanted = collectionSlugsOf(section)
+    if (wanted.length === 0) {
       resolved.push(section)
       continue
     }
 
-    const slug = section.config.collectionSlug
-    const collection = typeof slug === 'string' ? collections.get(slug) : undefined
-    if (!collection || collection.products.length === 0) {
-      console.warn(`[content] dropping section_key=${section.key}: collection "${String(slug)}" has no products`)
+    const limit = typeof section.config.limit === 'number' ? section.config.limit : undefined
+    const available = wanted
+      .map((slug) => collections.get(slug))
+      .filter((collection): collection is HomepageCollection => Boolean(collection))
+      .filter((collection) => collection.products.length > 0)
+      .map((collection) => ({
+        ...collection,
+        products: limit === undefined ? collection.products : collection.products.slice(0, limit),
+      }))
+
+    if (available.length === 0) {
+      console.warn(
+        `[content] dropping section_key=${section.key}: no collection in [${wanted.join(', ')}] has products`,
+      )
       continue
     }
 
-    const limit = typeof section.config.limit === 'number' ? section.config.limit : collection.products.length
-    resolved.push({
-      ...section,
-      collection: { ...collection, products: collection.products.slice(0, limit) },
-    })
+    resolved.push({ ...section, collection: available[0], collections: available })
   }
 
   return resolved

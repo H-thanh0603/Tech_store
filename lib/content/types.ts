@@ -11,7 +11,11 @@ import type { ProductCardData } from '@/lib/catalog/types'
 export const SECTION_TYPES = [
   'hero',
   'banner_grid',
+  'campaign_links',
+  'member_block',
   'category_mosaic',
+  'category_grid',
+  'deal_tabs',
   'product_collection',
   'need_selector',
   'brand_strip',
@@ -29,7 +33,7 @@ export const BANNER_SLOTS = ['home_hero', 'home_promo_grid', 'home_campaign_stri
 
 export type BannerSlot = (typeof BANNER_SLOTS)[number]
 
-export const COLLECTION_TYPES = ['manual', 'featured', 'newest'] as const
+export const COLLECTION_TYPES = ['manual', 'featured', 'newest', 'discounted'] as const
 
 export type CollectionType = (typeof COLLECTION_TYPES)[number]
 
@@ -84,6 +88,12 @@ export interface HomepageSection {
    * section type.
    */
   collection: HomepageCollection | null
+  /**
+   * All collections this section references, in config order. A
+   * `product_collection` has exactly one (the same object as `collection`); a
+   * `deal_tabs` section has one per tab. Empty for every other type.
+   */
+  collections: HomepageCollection[]
 }
 
 export interface NavNode {
