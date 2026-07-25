@@ -16,7 +16,10 @@ export function CartSummary({ cart }: CartSummaryProps) {
       aria-labelledby="cart-summary-heading"
       className="rounded-(--radius-lg) border border-border bg-surface-raised p-5 shadow-(--shadow-md)"
     >
-      <h2 id="cart-summary-heading" className="text-(length:--text-xl) font-semibold tracking-tight text-fg">
+      <h2
+        id="cart-summary-heading"
+        className="text-(length:--text-xl) font-semibold tracking-tight text-fg"
+      >
         Tóm tắt đơn hàng
       </h2>
       <dl className="mt-5 flex flex-col gap-3 text-(length:--text-sm)">
@@ -26,10 +29,12 @@ export function CartSummary({ cart }: CartSummaryProps) {
         </div>
         <div className="flex justify-between gap-4">
           <dt className="text-fg-muted">Giảm giá</dt>
-          <dd className="font-medium tabular-nums text-success">-{formatPrice(cart.discountTotal)}</dd>
+          <dd className="font-medium tabular-nums text-success">
+            -{formatPrice(cart.discountTotal)}
+          </dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt className="text-fg-muted">Vận chuyển</dt>
+          <dt className="text-fg-muted">Vận chuyển (dự kiến)</dt>
           <dd className="font-medium text-success">Miễn phí</dd>
         </div>
         <div className="flex justify-between gap-4 border-t border-border pt-3 text-(length:--text-base)">
@@ -39,24 +44,27 @@ export function CartSummary({ cart }: CartSummaryProps) {
       </dl>
 
       {isCheckoutDisabled ? (
-        <p aria-live="polite" className="mt-4 rounded-(--radius-md) bg-danger-subtle px-3 py-2 text-(length:--text-sm) text-danger">
+        <p
+          aria-live="polite"
+          className="mt-4 rounded-(--radius-md) bg-danger-subtle px-3 py-2 text-(length:--text-sm) text-danger"
+        >
           Kiểm tra lại giá và tình trạng hàng trước khi thanh toán.
         </p>
       ) : null}
 
       {isCheckoutDisabled ? (
-        <a
+        <span
           role="link"
           aria-disabled="true"
           tabIndex={-1}
           className="mt-5 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-(--radius-md) bg-surface-muted px-4 text-(length:--text-sm) font-semibold text-fg-muted"
         >
           Đến thanh toán
-        </a>
+        </span>
       ) : (
         <Link
           href="/checkout"
-          className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-(--radius-md) bg-accent px-4 text-sm font-semibold text-accent-fg shadow-(--shadow-glow) transition-colors hover:bg-accent-hover"
+          className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-(--radius-md) bg-brand px-4 text-sm font-semibold text-accent-fg transition-colors hover:bg-brand-hover"
         >
           Đến thanh toán
         </Link>

@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import type { ProductImageData } from '@/lib/catalog/types'
 
@@ -12,6 +12,23 @@ interface ProductGalleryProps {
 
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0)
+
+  const go = useCallback(
+    (delta: number) => {
+      if (images.length <= 1) return
+      setActiveIndex((i) => (i + delta + images.length) % images.length)
+    },
+    [images.length],
+  )
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft') go(-1)
+      if (e.key === 'ArrowRight') go(1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [go])
 
   if (images.length === 0) {
     return (
@@ -40,6 +57,26 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           priority
           className="object-cover"
         />
+        {images.length > 1 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              className="absolute left-3 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-fg shadow-(--shadow-sm)"
+              aria-label="Ảnh trước"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => go(1)}
+              className="absolute right-3 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-fg shadow-(--shadow-sm)"
+              aria-label="Ảnh sau"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
       </div>
 
       {images.length > 1 ? (
@@ -54,17 +91,11 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                   aria-pressed={isActive}
                   aria-label={`Ảnh ${index + 1}`}
                   className={[
-                    'relative size-16 overflow-hidden rounded-(--radius-md) border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    isActive ? 'border-accent' : 'border-border hover:border-border-strong',
+                    'relative size-16 overflow-hidden rounded-(--radius-md) border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+                    isActive ? 'border-brand ring-1 ring-brand' : 'border-border hover:border-border-strong',
                   ].join(' ')}
                 >
-                  <Image
-                    src={image.url}
-                    alt=""
-                    fill
-                    sizes="64px"
-                    className="object-cover"
-                  />
+                  <Image src={image.url} alt="" fill sizes="64px" className="object-cover" />
                 </button>
               </li>
             )
