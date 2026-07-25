@@ -25,7 +25,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const hasResults = result.products.length > 0
 
   return (
-    <section aria-labelledby="products-heading" className="flex flex-col gap-7">
+    <section
+      aria-labelledby="products-heading"
+      className="container-store flex flex-col gap-7 py-8 sm:py-10"
+    >
       <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-2">
           <p className="eyebrow">Catalog</p>

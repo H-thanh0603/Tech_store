@@ -19,8 +19,15 @@ export default async function OrderConfirmationPage({ params }: { params: Promis
   if (error || !data || data.code !== 'OK') notFound()
   const order = data as OrderConfirmationData
   return (
-    <div className="grid gap-6">
-      <header><p className="text-sm uppercase tracking-wide text-fg-subtle">Đặt hàng thành công</p><h1 className="text-3xl font-semibold">Đơn hàng {order.orderCode}</h1></header>
+    <div className="container-store grid max-w-3xl gap-6 py-8 sm:py-10">
+      <header>
+        <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+          Đặt hàng thành công
+        </p>
+        <h1 className="mt-2 text-(length:--text-3xl) font-semibold tracking-tight">
+          Đơn hàng {order.orderCode}
+        </h1>
+      </header>
       <OrderStatus status={order.orderStatus} paymentStatus={order.paymentStatus} />
       <PaymentSummary order={order} />
     </div>

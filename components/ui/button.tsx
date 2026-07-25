@@ -8,9 +8,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-accent-fg shadow-(--shadow-sm) hover:bg-accent-hover hover:shadow-(--shadow-glow) active:bg-accent-active',
+    'bg-brand text-accent-fg shadow-(--shadow-sm) hover:bg-brand-hover active:bg-accent-active',
   secondary:
-    'border border-border bg-surface-raised text-fg shadow-(--shadow-sm) hover:border-border-strong hover:bg-surface-muted active:bg-surface-muted',
+    'border border-border bg-bg-elevated text-fg shadow-(--shadow-sm) hover:border-border-strong hover:bg-surface-muted active:bg-surface-muted',
   ghost: 'bg-transparent text-fg hover:bg-surface-muted active:bg-surface-muted',
 }
 
