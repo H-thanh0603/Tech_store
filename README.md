@@ -1,64 +1,73 @@
-# Tech_store
+# TechStore
 
-Modern tech retail storefront built on Next.js App Router (strict TypeScript), Tailwind CSS v4, and local Supabase Postgres. Catalog reads run in Server Components against RLS-protected tables.
+Modern tech retail storefront: Next.js App Router (strict TypeScript), Tailwind CSS v4, Supabase Postgres (RLS + RPC). Guest cart/checkout, staff admin, SEO/security polish.
 
-## Setup
+## Hosting (M6)
 
-1. Install dependencies: `npm ci`
-2. Copy env placeholders: `cp .env.example .env.local`
-3. Start Docker Desktop, then `supabase start` and paste the printed `API_URL` / `anon key` into `.env.local`.
-4. `npm run dev`
+| Layer | Platform | Why |
+|-------|----------|-----|
+| **App** | **Vercel** (free Hobby) | Native Next.js — not Render for the storefront |
+| **Database** | **Supabase** (free project) | Same migrations as local Docker |
+
+Details: [docs/ops/PLATFORM.md](docs/ops/PLATFORM.md) · Deploy: [docs/ops/DEPLOY.md](docs/ops/DEPLOY.md) · Runbook: [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md) · Demo: [docs/ops/DEMO.md](docs/ops/DEMO.md)
+
+```
+Browser → Vercel (Next.js)
+              ↓
+         Supabase Cloud (Postgres + RLS + RPC)
+```
+
+## Local setup
+
+1. `npm ci`
+2. `cp .env.example .env.local`
+3. Start Docker Desktop → `supabase start` → paste API URL / anon / service_role into `.env.local`
+4. Set `ADMIN_SECRET` (≥ 16 chars)
+5. `npm run dev` → http://localhost:3000
 
 ## Scripts
 
-- `npm run dev` — start Next.js dev server
-- `npm run build` — build app for production
-- `npm run start` — start production server
-- `npm run lint` — run ESLint
-- `npm run type-check` — run TypeScript check
-- `npm test -- tests/smoke/app-shell.test.ts` — run smoke test
-- `npm run test:e2e` — placeholder e2e script
+| Command | Purpose |
+|---------|---------|
+| `npm run dev` | Dev server |
+| `npm run build` / `start` | Production build & serve |
+| `npm run lint` / `type-check` | Static checks |
+| `npm test -- --run` | Unit / component tests |
+| `npm run test:e2e` | Playwright smoke |
+| `supabase db reset` | Local DB + seed |
+| `supabase test db` | pgTAP |
 
-## Admin (M4 local)
+## Admin
 
-Staff admin lives at `/admin` (login: `/admin/login`).
-
-1. Set in `.env.local` (server-only, never `NEXT_PUBLIC_`):
-   - `ADMIN_SECRET` — long shared secret for local staff login (min 16 chars)
-   - `SUPABASE_SERVICE_ROLE_KEY` — from `supabase status` / `supabase start` (local only)
-2. Open `http://localhost:3000/admin/login` and sign in with `ADMIN_SECRET`.
-3. Manage products (CRUD, variants, stock, images by URL) and orders (status + payment).
-
-The service-role key must never be exposed to the browser. Catalog writes use the service-role server client; order status changes go through the `admin_update_order` RPC (not granted to `anon`).
-
-## Local Supabase
-
-Requires Docker Desktop running and the Supabase CLI installed.
-
-- `supabase start` — start the local Supabase stack (Postgres, API, Studio)
-- `supabase db reset` — recreate the database, apply migrations, and load `supabase/seed.sql`
-- `supabase test db` — run the pgTAP catalog tests in `supabase/tests/`
-- `supabase stop` — stop the local stack
-
-Catalog schema lives in `supabase/migrations/`, deterministic seed data in `supabase/seed.sql`. RLS is enabled on every catalog table; `anon`/`authenticated` can read only published, non-archived rows. Never commit `.env` files or the local service-role key.
+- URL: `/admin/login`
+- Password: `ADMIN_SECRET` (server env only)
+- Service role key never goes to the browser
 
 ## Quality gate
 
-CI (`.github/workflows/ci.yml`) runs two jobs on push/PR to `main`:
+CI (`.github/workflows/ci.yml`):
 
-- **app** — `npm ci`, `npm run lint`, `npm run type-check`, `npm test -- --run`, `npm run build`
-- **database** — starts Supabase, applies migrations + seed, runs `supabase test db` (pgTAP)
+- **app** — lint, type-check, unit tests, build, Playwright chromium
+- **database** — Supabase start + pgTAP
 
-Run the full local gate before pushing:
+Local full gate:
 
 ```bash
 npm run lint && npm run type-check && npm test -- --run && supabase db reset && supabase test db && npm run build
 ```
 
-## M5 quality checklist
+## Milestone status
 
-- SEO: `/robots.txt`, `/sitemap.xml`, product Open Graph + JSON-LD
-- Security: response headers in `next.config.ts`, `/admin/*` middleware guard
-- A11y: skip link, labeled forms, landmarks, focus-visible on nav
-- E2E: `npm run test:e2e` (Playwright smoke)
+| Mốc | Trạng thái |
+|-----|------------|
+| M1 Foundation | Done |
+| M2 Browse | Done |
+| M3 Buy | Done |
+| M4 Operate (admin) | Done |
+| M5 Polish | Done |
+| M6 Launch-ready | Docs + health + Vercel config (you connect free accounts) |
 
+## Project docs
+
+- Blueprint: `docs/Claude_Code_TechStore_Blueprint.md`
+- Specs/plans: `docs/superpowers/`

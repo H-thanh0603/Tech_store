@@ -37,6 +37,14 @@ test.describe('storefront smoke', () => {
     const mapBody = await sitemap.text()
     expect(mapBody).toContain('<urlset')
   })
+
+  test('health endpoint is ok', async ({ request }) => {
+    const res = await request.get('/api/health')
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.service).toBe('techstore')
+  })
 })
 
 test.describe('admin security', () => {
