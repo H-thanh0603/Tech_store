@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from 'react'
 
 import { AdminSidebar } from '@/components/admin/shell/admin-sidebar'
+import { makeBackgroundInert, trapDialogTab } from '@/lib/a11y/dialog'
 import type { AdminNavItem } from '@/lib/admin/nav-config'
 
 type MobileNavDrawerProps = {
@@ -14,6 +15,8 @@ type MobileNavDrawerProps = {
 export function MobileNavDrawer({ open, onClose, items }: MobileNavDrawerProps) {
   const titleId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -24,14 +27,17 @@ export function MobileNavDrawer({ open, onClose, items }: MobileNavDrawerProps) 
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const restoreBackground = makeBackgroundInert(rootRef.current)
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose()
+      else trapDialogTab(event, panelRef.current)
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
+      restoreBackground()
       document.removeEventListener('keydown', onKeyDown)
       previouslyFocused.current?.focus()
     }
@@ -40,17 +46,20 @@ export function MobileNavDrawer({ open, onClose, items }: MobileNavDrawerProps) 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div ref={rootRef} className="fixed inset-0 z-50 lg:hidden">
       <button
         type="button"
+        tabIndex={-1}
         className="absolute inset-0 bg-fg/40"
         aria-label="Đóng menu điều hướng"
         onClick={onClose}
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="absolute inset-y-0 left-0 flex w-[min(100%,18rem)] flex-col bg-surface-raised shadow-(--shadow-lg)"
       >
         <div className="flex items-center justify-between border-b border-border px-3 py-3">

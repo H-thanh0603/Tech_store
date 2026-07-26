@@ -1,10 +1,8 @@
 /**
  * Admin module permissions.
  *
- * Current auth is a single shared ADMIN_SECRET session (role = "admin").
  * This map is centralized so sidebar and server guards never hard-code
- * permission checks inline. Multi-role staff can plug in later without
- * rewriting UI components.
+ * permission checks inline.
  */
 
 export type AdminRole = 'admin' | 'manager' | 'staff'
@@ -42,15 +40,17 @@ const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
     'brands',
     'inventory',
     'orders',
-    'customers',
     'coupons',
     'reports',
   ],
-  staff: ['dashboard', 'products', 'inventory', 'orders', 'customers'],
+  staff: ['dashboard', 'inventory', 'orders'],
 }
 
-/** Session today always maps to full admin. */
 export const DEFAULT_ADMIN_ROLE: AdminRole = 'admin'
+
+export function isAdminRole(value: unknown): value is AdminRole {
+  return value === 'admin' || value === 'manager' || value === 'staff'
+}
 
 export function modulesForRole(role: AdminRole): readonly AdminModule[] {
   return ROLE_MODULES[role]

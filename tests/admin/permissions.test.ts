@@ -21,8 +21,9 @@ describe('admin permissions', () => {
 
   it('limits staff modules', () => {
     expect(canAccessModule('staff', 'coupons')).toBe(false)
-    expect(canAccessModule('staff', 'products')).toBe(true)
+    expect(canAccessModule('staff', 'products')).toBe(false)
     expect(canAccessModule('staff', 'orders')).toBe(true)
+    expect(canAccessModule('staff', 'inventory')).toBe(true)
     expect(canAccessModule('staff', 'categories')).toBe(false)
   })
 

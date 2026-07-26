@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { requireAdminSession } from '@/lib/admin/auth'
+import { requireAdminSession, type AdminSession } from '@/lib/admin/auth'
 import { adminUserMessage } from '@/lib/admin/errors'
 import { canMarkPaymentPaid, canTransitionOrderStatus } from '@/lib/admin/status-rules'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
@@ -17,12 +17,11 @@ function fail(
   return { ok: false, code, message: adminUserMessage(code), fieldErrors }
 }
 
-async function assertAdmin(): Promise<AdminActionState | null> {
+async function assertAdmin(): Promise<AdminSession | AdminActionState> {
   try {
-    await requireAdminSession()
-    return null
-  } catch {
-    return fail('UNAUTHORIZED')
+    return await requireAdminSession('orders')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
 }
 
@@ -37,8 +36,8 @@ export async function updateOrderStatus(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = orderStatusSchema.safeParse({
     orderCode: formData.get('orderCode'),
@@ -68,7 +67,7 @@ export async function updateOrderStatus(
     p_order_status: to,
     p_payment_status: null,
     p_reason: parsed.data.reason || null,
-    p_actor_label: 'admin',
+    p_actor_label: admin.actorLabel,
   })
 
   if (error) return fail('INTERNAL_ERROR')
@@ -83,8 +82,8 @@ export async function markOrderPaid(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = orderPaymentSchema.safeParse({
     orderCode: formData.get('orderCode'),
@@ -121,7 +120,7 @@ export async function markOrderPaid(
     p_order_status: nextOrderStatus,
     p_payment_status: 'paid' satisfies PaymentStatus,
     p_reason: null,
-    p_actor_label: 'admin',
+    p_actor_label: admin.actorLabel,
   })
 
   if (error) return fail('INTERNAL_ERROR')
@@ -136,8 +135,8 @@ export async function addOrderInternalNote(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = orderNoteSchema.safeParse({
     orderCode: formData.get('orderCode'),
@@ -148,7 +147,7 @@ export async function addOrderInternalNote(
   const { data, error } = await getSupabaseAdminClient().rpc('admin_add_order_note', {
     p_order_code: parsed.data.orderCode,
     p_body: parsed.data.body,
-    p_actor_label: 'admin',
+    p_actor_label: admin.actorLabel,
   })
   if (error) return fail('INTERNAL_ERROR')
   const code = (data as { code?: string } | null)?.code

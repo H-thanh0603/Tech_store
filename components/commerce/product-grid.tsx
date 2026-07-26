@@ -10,9 +10,9 @@ interface ProductGridProps {
 export function ProductGrid({ products }: ProductGridProps) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-      {products.map((product) => (
+      {products.map((product, index) => (
         <li key={product.id} className="flex min-w-0">
-          <ProductCard product={product} />
+          <ProductCard product={product} imageLoading={index === 0 ? 'eager' : 'lazy'} />
         </li>
       ))}
     </ul>

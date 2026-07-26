@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
 import { IconChevronDown, IconClose, navIcon } from '@/components/ui/icons'
+import { makeBackgroundInert, trapDialogTab } from '@/lib/a11y/dialog'
 import type { MenuEntry, MenuLink } from '@/lib/content/nav-view'
 
 /**
@@ -26,6 +27,7 @@ type MobileNavDrawerProps = {
 
 export function MobileNavDrawer({ open, entries, quickLinks, onClose }: MobileNavDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -35,17 +37,21 @@ export function MobileNavDrawer({ open, entries, quickLinks, onClose }: MobileNa
     const previouslyFocused = document.activeElement as HTMLElement | null
     const { overflow } = document.body.style
     document.body.style.overflow = 'hidden'
+    const restoreBackground = makeBackgroundInert(rootRef.current)
     panelRef.current?.focus()
 
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         onClose()
+      } else {
+        trapDialogTab(event, panelRef.current)
       }
     }
     document.addEventListener('keydown', onKey)
 
     return () => {
       document.removeEventListener('keydown', onKey)
+      restoreBackground()
       document.body.style.overflow = overflow
       previouslyFocused?.focus?.()
     }
@@ -56,7 +62,7 @@ export function MobileNavDrawer({ open, entries, quickLinks, onClose }: MobileNa
   }
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div ref={rootRef} className="fixed inset-0 z-50 lg:hidden">
       <button
         type="button"
         aria-label="Đóng menu"

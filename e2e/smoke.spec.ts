@@ -16,6 +16,13 @@ test.describe('storefront smoke', () => {
     await expect(page).toHaveURL(/\/products/)
   })
 
+  test('product detail page is reachable from the catalog', async ({ page }) => {
+    await page.goto('/products')
+    await page.locator('article').first().getByRole('link').first().click()
+    await expect(page).toHaveURL(/\/products\/[^/]+$/)
+    await expect(page.getByRole('button', { name: /thêm vào giỏ|tạm hết hàng/i }).first()).toBeVisible()
+  })
+
   test('cart page renders empty or cart state', async ({ page }) => {
     await page.goto('/cart')
     await expect(page.getByRole('main')).toBeVisible()
@@ -24,6 +31,11 @@ test.describe('storefront smoke', () => {
   test('track order form is accessible', async ({ page }) => {
     await page.goto('/track-order')
     await expect(page.getByRole('main')).toBeVisible()
+  })
+
+  test('customer account redirects guests to login', async ({ page }) => {
+    await page.goto('/account')
+    await expect(page).toHaveURL(/\/account\/login/)
   })
 
   test('robots and sitemap respond', async ({ request }) => {
@@ -51,7 +63,7 @@ test.describe('admin security', () => {
   test('admin dashboard redirects unauthenticated users to login', async ({ page }) => {
     await page.goto('/admin')
     await expect(page).toHaveURL(/\/admin\/login/)
-    await expect(page.getByLabel(/mật khẩu admin/i)).toBeVisible()
+    await expect(page.getByLabel(/^mật khẩu$/i)).toBeVisible()
   })
 
   test('admin products also require login', async ({ page }) => {
@@ -91,6 +103,47 @@ test.describe('mobile shell', () => {
 
     await page.keyboard.press('Escape')
     await expect(drawer).toBeHidden()
+  })
+
+  test('category drawer traps tab focus', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Mở menu danh mục' }).click()
+    const drawer = page.getByRole('dialog', { name: /danh mục và điều hướng/i })
+    const focusable = drawer.locator('a[href], button:not([disabled])')
+
+    await focusable.last().focus()
+    await page.keyboard.press('Tab')
+    await expect(focusable.first()).toBeFocused()
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(focusable.last()).toBeFocused()
+  })
+})
+
+test.describe.serial('guest checkout journey', () => {
+  test('adds a product, checks out and tracks the order', async ({ page }) => {
+    await page.goto('/products')
+    await page.locator('article').first().getByRole('link').first().click()
+    await page.getByRole('button', { name: 'Thêm vào giỏ', exact: true }).first().click()
+    await expect(page.getByText('Đã thêm vào giỏ', { exact: true })).toBeVisible()
+
+    await page.goto('/cart')
+    await page.getByRole('link', { name: 'Đến thanh toán' }).click()
+    await page.getByLabel(/Họ và tên/).fill('E2E Guest')
+    await page.getByLabel(/Số điện thoại/).fill('0901234567')
+    await page.getByLabel(/Tỉnh\/thành phố/).fill('TP.HCM')
+    await page.getByLabel(/Quận\/huyện/).fill('Quận 1')
+    await page.getByLabel(/Phường\/xã/).fill('Bến Nghé')
+    await page.getByLabel(/Địa chỉ cụ thể/).fill('1 Nguyễn Huệ')
+    await page.getByRole('button', { name: 'Đặt hàng', exact: true }).click()
+    await expect(page).toHaveURL(/\/orders\/[^/]+\/confirmation$/)
+
+    const orderCode = new URL(page.url()).pathname.split('/')[2]
+    await page.goto('/track-order')
+    await page.getByLabel('Mã đơn hàng').fill(orderCode)
+    await page.getByLabel('Số điện thoại').fill('0901234567')
+    await page.getByRole('button', { name: 'Tra cứu đơn hàng' }).click()
+    await expect(page).toHaveURL(new RegExp(`/orders/${orderCode}$`))
   })
 })
 

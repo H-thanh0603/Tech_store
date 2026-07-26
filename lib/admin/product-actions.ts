@@ -37,10 +37,10 @@ function revalidateCatalog(productId?: string, slug?: string) {
 
 async function assertAdmin(): Promise<AdminActionState | null> {
   try {
-    await requireAdminSession()
+    await requireAdminSession('products')
     return null
-  } catch {
-    return fail('UNAUTHORIZED')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
 }
 

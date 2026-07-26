@@ -17,6 +17,11 @@ export const adminLoginSchema = z.object({
   secret: z.string().min(1, 'Nhập mật khẩu admin.'),
 })
 
+export const adminAccountLoginSchema = z.object({
+  email: z.string().trim().email('Email không hợp lệ.'),
+  password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),
+})
+
 export const productUpsertSchema = z.object({
   name: z.string().trim().min(2).max(200),
   slug: slugSchema,

@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { CART_COOKIE, getCartTokenHash, ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
 import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
 import { isCommerceErrorCode, toUserMessage } from '@/lib/commerce/errors'
+import { getRateLimitIdentity } from '@/lib/commerce/request-identity'
 import type { ActionState, CommerceErrorCode } from '@/lib/commerce/types'
 import { cartItemSchema, checkoutSchema, couponCodeSchema, trackingSchema } from '@/lib/commerce/validation'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
@@ -132,9 +133,6 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   // Prefer cookie-session client so place_order can read auth.uid() and attach user_id.
   const { createSupabaseAuthClient } = await import('@/lib/supabase/auth-server')
   const authClient = await createSupabaseAuthClient()
-  const {
-    data: { user },
-  } = await authClient.auth.getUser()
   const { data, error } = await authClient.rpc('place_order', {
     p_cart_token_hash: await getCartTokenHash(),
     p_idempotency_key: parsed.data.idempotencyKey,
@@ -142,7 +140,6 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     p_customer: parsed.data,
     p_payment_method: parsed.data.paymentMethod,
     p_coupon_code: null,
-    p_user_id: user?.id ?? null,
   })
   const state = rpcState(data as RpcResult | null, error)
   if (!state.ok) {
@@ -180,7 +177,7 @@ export async function trackOrder(_: ActionState, formData: FormData): Promise<Ac
 
   const rawAccessToken = createOpaqueToken()
   const requestHeaders = await headers()
-  const requestIdentity = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
+  const requestIdentity = getRateLimitIdentity(requestHeaders, await getCartTokenHash())
   const { data, error } = await getSupabaseServerClient().rpc('order_track', {
     p_order_code: parsed.data.orderCode,
     p_phone: parsed.data.phone,

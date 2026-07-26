@@ -16,4 +16,15 @@ playwright-report/
 blob-report/
 
 .deploy-secrets.txt
+_deploy_*.json
+_vercel_*.json
+_mig_*.sql
+_mig_*.json
+_content_mig.json
+_payload_count.txt
+dev-server.log
+.vercel
+.claude
+.codegraph
+.playwright-mcp
 
