@@ -112,7 +112,7 @@ select ok(
 );
 
 select is(
-  (admin_update_order('TS-ADMIN-001', 'cancelled', null)->>'code'),
+  (admin_update_order('TS-ADMIN-001', 'cancelled', null, 'Customer requested cancellation')->>'code'),
   'OK',
   'cancel order'
 );
