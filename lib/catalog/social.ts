@@ -34,10 +34,9 @@ export type FlashOfferCard = {
 
 export async function getProductReviews(productId: string, limit = 12): Promise<ProductReview[]> {
   const { data, error } = await getSupabaseServerClient()
-    .from('product_reviews')
+    .from('public_product_reviews')
     .select('id, author_name, rating, title, body, created_at')
     .eq('product_id', productId)
-    .eq('is_published', true)
     .order('created_at', { ascending: false })
     .limit(limit)
 

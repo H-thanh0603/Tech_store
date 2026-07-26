@@ -46,11 +46,14 @@ function timingSafeEqual(a: string, b: string): boolean {
   return out === 0
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Refresh customer Supabase session for storefront + auth routes.
-  if (!pathname.startsWith('/admin')) {
+  const useSupabaseAdminAuth =
+    process.env.NODE_ENV === 'production' || process.env.ADMIN_AUTH_MODE === 'supabase'
+
+  // Supabase admin authorization is enforced by server-side page/action guards.
+  if (!pathname.startsWith('/admin') || useSupabaseAdminAuth) {
     return updateSession(request)
   }
 

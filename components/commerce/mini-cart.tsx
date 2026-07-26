@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 
+import { IconCart } from '@/components/ui/icons'
 import { track } from '@/lib/analytics'
 import { formatPrice } from '@/lib/format'
 import type { CartData } from '@/lib/commerce/types'
@@ -49,7 +50,7 @@ export function MiniCart({ cart }: MiniCartProps) {
           })
         }}
       >
-        <span aria-hidden>🛒</span>
+        <IconCart size={18} />
         <span className="hidden sm:inline">Giỏ</span>
         {cart.itemCount > 0 ? (
           <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-brand px-1.5 py-0.5 text-(length:--text-xs) font-semibold tabular-nums text-accent-fg">

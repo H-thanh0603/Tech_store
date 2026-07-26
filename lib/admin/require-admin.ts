@@ -1,26 +1,24 @@
 import { redirect } from 'next/navigation'
 
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { getAdminSession, type AdminSession } from '@/lib/admin/auth'
 import {
   canAccessModule,
-  DEFAULT_ADMIN_ROLE,
   type AdminModule,
   type AdminRole,
 } from '@/lib/admin/permissions'
 
-export type AdminSession = {
-  role: AdminRole
-}
+export type { AdminSession } from '@/lib/admin/auth'
 
 /**
  * Server-side gate for admin pages and mutations.
  * Redirects unauthenticated users to login; returns role for permission checks.
  */
 export async function requireAdminPage(): Promise<AdminSession> {
-  if (!(await isAdminAuthenticated())) {
+  const session = await getAdminSession()
+  if (!session) {
     redirect('/admin/login')
   }
-  return { role: DEFAULT_ADMIN_ROLE }
+  return session
 }
 
 /**

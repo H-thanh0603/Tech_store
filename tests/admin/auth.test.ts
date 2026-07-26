@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  adminAuthMode,
   createAdminSessionToken,
   secretsMatch,
   verifyAdminSessionToken,
@@ -10,6 +11,7 @@ const ORIGINAL = process.env.ADMIN_SECRET
 
 afterEach(() => {
   process.env.ADMIN_SECRET = ORIGINAL
+  vi.unstubAllEnvs()
 })
 
 describe('admin auth tokens', () => {
@@ -35,5 +37,12 @@ describe('admin auth tokens', () => {
   it('compares secrets in constant-time style', () => {
     expect(secretsMatch('same-secret-value', 'same-secret-value')).toBe(true)
     expect(secretsMatch('same-secret-value', 'other-secret-value')).toBe(false)
+  })
+
+  it('never enables the shared-secret mode in production', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('ADMIN_AUTH_MODE', 'legacy-secret')
+
+    expect(adminAuthMode()).toBe('supabase')
   })
 })

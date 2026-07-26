@@ -9,9 +9,10 @@ import type { ProductCardData } from '@/lib/catalog/types'
 
 interface ProductCardProps {
   product: ProductCardData
+  imageLoading?: 'eager' | 'lazy'
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, imageLoading = 'lazy' }: ProductCardProps) {
   const href = `/products/${product.slug}`
   const outOfStock = !product.inStock
   const highlights = highlightsForProduct(product.categorySlug, 2)
@@ -25,6 +26,7 @@ export function ProductCard({ product }: ProductCardProps) {
             alt={product.imageAlt ?? product.name}
             width={800}
             height={600}
+            loading={imageLoading}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="h-full w-full object-cover transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.03]"
           />

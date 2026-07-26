@@ -12,6 +12,8 @@
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest",
+    "schema:check": "node scripts/check-schema-contract.mjs",
+    "security:check": "node scripts/check-secret-hygiene.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

@@ -1,5 +1,6 @@
 const MESSAGES: Record<string, string> = {
   UNAUTHORIZED: 'Phiên đăng nhập admin đã hết hạn. Vui lòng đăng nhập lại.',
+  FORBIDDEN: 'Tài khoản không có quyền thực hiện thao tác này.',
   VALIDATION_ERROR: 'Thông tin không hợp lệ. Kiểm tra lại các trường.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   SLUG_TAKEN: 'Slug đã được dùng. Chọn slug khác.',

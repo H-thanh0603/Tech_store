@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { requireAdminSession } from '@/lib/admin/auth'
+import { requireAdminSession, type AdminSession } from '@/lib/admin/auth'
 import { adminUserMessage } from '@/lib/admin/errors'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
@@ -15,12 +15,11 @@ function fail(
   return { ok: false, code, message: adminUserMessage(code), fieldErrors }
 }
 
-async function assertAdmin(): Promise<AdminActionState | null> {
+async function assertAdmin(): Promise<AdminSession | AdminActionState> {
   try {
-    await requireAdminSession()
-    return null
-  } catch {
-    return fail('UNAUTHORIZED')
+    return await requireAdminSession('coupons')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
 }
 
@@ -34,6 +33,7 @@ async function writeAudit(
   action: string,
   entityId: string,
   payload: Record<string, unknown>,
+  actorLabel: string,
 ) {
   try {
     await getSupabaseAdminClient().from('admin_audit_logs').insert({
@@ -41,7 +41,7 @@ async function writeAudit(
       entity_type: 'coupon',
       entity_id: entityId,
       payload,
-      actor_label: 'admin',
+      actor_label: actorLabel,
     })
   } catch {
     // Audit table may not exist until migration applied; don't fail business action.
@@ -52,8 +52,8 @@ export async function upsertCoupon(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = couponUpsertSchema.safeParse({
     id: formData.get('id') ?? '',
@@ -99,14 +99,14 @@ export async function upsertCoupon(
       if (error.code === '23505') return fail('SLUG_TAKEN')
       return fail('INTERNAL_ERROR')
     }
-    await writeAudit('coupon_update', parsed.data.code, payload)
+    await writeAudit('coupon_update', parsed.data.code, payload, admin.actorLabel)
   } else {
     const { error } = await db.from('coupons').insert(payload)
     if (error) {
       if (error.code === '23505') return fail('SLUG_TAKEN')
       return fail('INTERNAL_ERROR')
     }
-    await writeAudit('coupon_create', parsed.data.code, payload)
+    await writeAudit('coupon_create', parsed.data.code, payload, admin.actorLabel)
   }
 
   revalidateCoupons()
@@ -117,8 +117,8 @@ export async function setCouponActive(
   couponId: string,
   isActive: boolean,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const { data, error } = await getSupabaseAdminClient()
     .from('coupons')
@@ -128,9 +128,12 @@ export async function setCouponActive(
     .maybeSingle()
   if (error) return fail('INTERNAL_ERROR')
 
-  await writeAudit(isActive ? 'coupon_activate' : 'coupon_deactivate', data?.code ?? couponId, {
-    isActive,
-  })
+  await writeAudit(
+    isActive ? 'coupon_activate' : 'coupon_deactivate',
+    data?.code ?? couponId,
+    { isActive },
+    admin.actorLabel,
+  )
   revalidateCoupons()
   return {
     ok: true,

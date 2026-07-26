@@ -10,6 +10,7 @@ import {
   inventoryThresholdSchema,
 } from '@/lib/admin/catalog-validation'
 import { adminUserMessage } from '@/lib/admin/errors'
+import type { AdminModule } from '@/lib/admin/permissions'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
 
@@ -26,12 +27,12 @@ function fail(
   }
 }
 
-async function assertAdmin(): Promise<AdminActionState | null> {
+async function assertAdmin(module: AdminModule): Promise<AdminActionState | null> {
   try {
-    await requireAdminSession()
+    await requireAdminSession(module)
     return null
-  } catch {
-    return fail('UNAUTHORIZED')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
 }
 
@@ -49,9 +50,8 @@ export async function upsertCategory(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('categories')
   if (gate) return gate
-
   const parsed = categoryUpsertSchema.safeParse({
     id: formData.get('id') ?? '',
     name: formData.get('name'),
@@ -109,7 +109,7 @@ export async function setCategoryActive(
   categoryId: string,
   isActive: boolean,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('categories')
   if (gate) return gate
 
   const { error } = await getSupabaseAdminClient()
@@ -123,7 +123,7 @@ export async function setCategoryActive(
 }
 
 export async function deleteCategory(categoryId: string): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('categories')
   if (gate) return gate
 
   const db = getSupabaseAdminClient()
@@ -147,7 +147,7 @@ export async function upsertBrand(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('brands')
   if (gate) return gate
 
   const parsed = brandUpsertSchema.safeParse({
@@ -186,7 +186,7 @@ export async function upsertBrand(
 }
 
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('brands')
   if (gate) return gate
 
   const { error } = await getSupabaseAdminClient()
@@ -200,7 +200,7 @@ export async function setBrandActive(brandId: string, isActive: boolean): Promis
 }
 
 export async function deleteBrand(brandId: string): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('brands')
   if (gate) return gate
 
   const db = getSupabaseAdminClient()
@@ -224,8 +224,10 @@ export async function adjustInventory(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('inventory')
   if (gate) return gate
+  const admin = await requireAdminSession('inventory')
+  if (admin.role === 'staff') return fail('FORBIDDEN')
 
   const expectedRaw = formData.get('expectedQuantity')
   const thresholdRaw = formData.get('lowStockThreshold')
@@ -261,7 +263,7 @@ export async function adjustInventory(
     p_delta: delta,
     p_reason_code: parsed.data.reasonCode,
     p_note: parsed.data.note || null,
-    p_actor_label: 'admin',
+    p_actor_label: admin.actorLabel,
     p_expected_quantity: parsed.data.expectedQuantity ?? null,
     p_low_stock_threshold: parsed.data.lowStockThreshold ?? null,
   })
@@ -281,8 +283,10 @@ export async function updateInventoryThreshold(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
+  const gate = await assertAdmin('inventory')
   if (gate) return gate
+  const admin = await requireAdminSession('inventory')
+  if (admin.role === 'staff') return fail('FORBIDDEN')
 
   const parsed = inventoryThresholdSchema.safeParse({
     variantId: formData.get('variantId'),

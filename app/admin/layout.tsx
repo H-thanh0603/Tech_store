@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 
 import { AdminShell } from '@/components/admin/shell/admin-shell'
-import { isAdminAuthenticated } from '@/lib/admin/auth'
-import { DEFAULT_ADMIN_ROLE } from '@/lib/admin/permissions'
+import { getAdminSession } from '@/lib/admin/auth'
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const authed = await isAdminAuthenticated()
+  const session = await getAdminSession()
 
-  if (!authed) {
+  if (!session) {
     // Login (and any unauthenticated admin page) — no shell chrome.
     return (
       <div className="flex min-h-screen flex-col bg-surface text-fg">
@@ -16,5 +15,5 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     )
   }
 
-  return <AdminShell role={DEFAULT_ADMIN_ROLE}>{children}</AdminShell>
+  return <AdminShell role={session.role}>{children}</AdminShell>
 }

@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
+  // Playwright drives the dev server on http://127.0.0.1:3000. Without this,
+  // Next blocks its own dev chunks as a cross-origin request, the page never
+  // hydrates, and every interaction test fails for the wrong reason.
+  // Dev-only setting: it has no effect on `next start`.
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   images: {
     // Seed demos use placehold.co SVG placeholders.
     dangerouslyAllowSVG: true,

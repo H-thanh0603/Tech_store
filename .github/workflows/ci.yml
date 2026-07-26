@@ -18,10 +18,29 @@ jobs:
           node-version: 20
           cache: npm
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start
+          supabase db reset --yes
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
       - run: npm ci
       - run: npm run lint
       - run: npm run type-check
       - run: npm test -- --run
+      - run: npm run security:check
+      - run: npm run schema:check
       - run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -31,9 +50,15 @@ jobs:
           CI: true
           ADMIN_SECRET: ci-admin-secret-min-16-chars
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
-          # App can boot without live Supabase for shell routes; sitemap falls back.
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      - name: Upload E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
 
   database:
     name: Supabase migrations and pgTAP tests
@@ -47,6 +72,17 @@ jobs:
 
       - name: Start Supabase (applies migrations and seed)
         run: supabase start
+
+      - name: Reset local database
+        run: supabase db reset --yes
+
+      - name: Check schema contract
+        shell: bash
+        run: |
+          eval "$(supabase status -o env)"
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
+          node scripts/check-schema-contract.mjs
 
       - name: Run pgTAP tests
         run: supabase test db
