@@ -6,18 +6,20 @@ import { StorefrontProviders } from '@/components/layout/storefront-providers'
 import { getCatalogFacets } from '@/lib/catalog/queries'
 import { getCart } from '@/lib/commerce/queries'
 import { buildHeaderNav, navigationFallback } from '@/lib/content/nav-view'
-import { getNavigationTree } from '@/lib/content/queries'
+import { getMegaMenuHighlights, getNavigationTree } from '@/lib/content/queries'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export default async function StorefrontLayout({ children }: { children: ReactNode }) {
-  // One parallel batch per request. `getNavigationTree` and `getCatalogFacets`
-  // are the only extra queries the new header needs, and both are cached, so a
-  // page that also renders filters does not pay for facets twice.
-  const [cart, supabase, navigation, facets] = await Promise.all([
+  // One parallel batch per request. `getNavigationTree`, `getCatalogFacets` and
+  // `getMegaMenuHighlights` are the only extra queries the header needs, and all
+  // three are cached, so a page that also renders filters or the homepage does
+  // not pay for any of them twice.
+  const [cart, supabase, navigation, facets, highlights] = await Promise.all([
     getCart(),
     createSupabaseAuthClient(),
     getNavigationTree(),
     getCatalogFacets(),
+    getMegaMenuHighlights(),
   ])
   const {
     data: { user },
@@ -28,6 +30,7 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
   const nav = buildHeaderNav(
     navigation.length > 0 ? navigation : navigationFallback(),
     facets.brands,
+    highlights,
   )
 
   return (

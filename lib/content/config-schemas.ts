@@ -86,6 +86,30 @@ const productCollectionConfig = z
   })
   .strict()
 
+/**
+ * §4.10: accessory mosaic. Each tile links to a real catalog filter (category /
+ * brand / useCase already present in the catalog) — there is no "sub-category"
+ * table yet, so a tile is honest about what it actually narrows down to
+ * instead of pretending a dedicated charger/cable/case taxonomy exists.
+ */
+const accessoryMosaicConfig = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            label: z.string().min(1).max(40),
+            categorySlug: z.string().min(1).max(64).optional(),
+            useCase: z.string().min(1).max(64).optional(),
+            brandSlug: z.string().min(1).max(64).optional(),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(9),
+  })
+  .strict()
+
 /** Every SectionType must have an entry; the Record type enforces exhaustiveness. */
 const SECTION_CONFIG_SCHEMAS: Record<SectionType, z.ZodType<Record<string, unknown>>> = {
   hero: heroConfig,
@@ -96,6 +120,7 @@ const SECTION_CONFIG_SCHEMAS: Record<SectionType, z.ZodType<Record<string, unkno
   category_grid: categoryGridConfig,
   deal_tabs: dealTabsConfig,
   product_collection: productCollectionConfig,
+  accessory_mosaic: accessoryMosaicConfig,
   need_selector: emptyConfig,
   brand_strip: emptyConfig,
   editorial: emptyConfig,

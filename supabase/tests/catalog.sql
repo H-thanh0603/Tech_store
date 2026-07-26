@@ -39,49 +39,49 @@ set local role anon;
 
 select results_eq(
   $$select count(*) from products$$,
-  ARRAY[4::bigint],
+  ARRAY[15::bigint],
   'Anonymous role sees only published, non-archived products'
 );
 
 select results_eq(
   $$select count(*) from categories$$,
-  ARRAY[3::bigint],
+  ARRAY[8::bigint],
   'Anonymous role sees only active categories'
 );
 
 select results_eq(
   $$select count(*) from brands$$,
-  ARRAY[3::bigint],
+  ARRAY[7::bigint],
   'Anonymous role sees only active brands'
 );
 
 select results_eq(
   $$select count(*) from product_variants$$,
-  ARRAY[7::bigint],
+  ARRAY[18::bigint],
   'Anonymous role sees only active variants of published products'
 );
 
 select results_eq(
   $$select count(*) from inventory$$,
-  ARRAY[7::bigint],
+  ARRAY[18::bigint],
   'Anonymous role sees only inventory for visible variants'
 );
 
 select results_eq(
   $$select count(*) from product_images$$,
-  ARRAY[4::bigint],
+  ARRAY[15::bigint],
   'Anonymous role sees only images of published products'
 );
 
 select results_eq(
   $$select count(*) from product_specs$$,
-  ARRAY[9::bigint],
+  ARRAY[25::bigint],
   'Anonymous role sees only specs of published products'
 );
 
 select results_eq(
   $$select count(*) from product_use_cases$$,
-  ARRAY[6::bigint],
+  ARRAY[15::bigint],
   'Anonymous role sees only use cases of published products'
 );
 

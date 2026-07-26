@@ -137,7 +137,10 @@ test.describe('homepage commerce zone', () => {
 
   test('deal tabs switch product sets without a reload', async ({ page }) => {
     await page.goto('/')
-    const tabs = page.getByRole('tab')
+    // S3 added more deal_tabs sections (§4.6/§4.7), so tabs/tabpanels are no
+    // longer unique page-wide — scope to the first tablist's own section.
+    const dealsSection = page.locator('section', { has: page.getByRole('tablist') }).first()
+    const tabs = dealsSection.getByRole('tab')
     await expect(tabs.first()).toBeVisible()
 
     const secondTab = tabs.nth(1)
@@ -149,7 +152,7 @@ test.describe('homepage commerce zone', () => {
     }).toPass()
 
     // The panel is labelled by the active tab, so switching must relabel it.
-    await expect(page.getByRole('tabpanel')).toBeVisible()
+    await expect(dealsSection.getByRole('tabpanel')).toBeVisible()
     expect(label?.trim().length).toBeGreaterThan(0)
   })
 

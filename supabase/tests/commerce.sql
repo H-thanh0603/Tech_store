@@ -205,8 +205,8 @@ set local role anon;
 
 select is(
   (select count(*)::integer from catalog_products),
-  4,
-  'anon still sees exactly the 4 published catalog products'
+  15,
+  'anon still sees exactly the 15 published catalog products'
 );
 
 select ok(

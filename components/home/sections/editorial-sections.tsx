@@ -60,6 +60,70 @@ export function CategoryMosaicSection({ section }: SectionProps) {
   )
 }
 
+/**
+ * §4.10: nhóm nhỏ phụ kiện (sạc, cáp, bàn phím, chuột, ốp lưng...) dưới dạng
+ * mosaic nhiều ô lệch nhịp so với product rail/grid ở các section khác.
+ *
+ * Mỗi ô trỏ tới một filter catalog có thật (category/useCase/brand) — không có
+ * bảng sub-category riêng cho "sạc"/"cáp" nên nhãn hiển thị là editorial nhưng
+ * đường dẫn luôn là một bộ lọc catalog thật, không phải trang giả.
+ */
+export function AccessoryMosaicSection({ section }: SectionProps) {
+  const items = Array.isArray(section.config.items)
+    ? (section.config.items as Array<Record<string, unknown>>)
+    : []
+
+  if (items.length === 0) {
+    return null
+  }
+
+  return (
+    <section aria-labelledby="accessory-mosaic-heading" className="section-y border-b border-border">
+      <div className="container-store">
+        <SectionHeader
+          eyebrow={section.eyebrow ?? undefined}
+          title={section.title ?? 'Phụ kiện theo nhóm'}
+          description={section.subtitle ?? undefined}
+          titleId="accessory-mosaic-heading"
+          actionHref="/products?category=phu-kien"
+          actionLabel="Tất cả phụ kiện"
+        />
+        <ul className="grid auto-rows-fr gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {items.map((item, index) => {
+            const label = typeof item.label === 'string' ? item.label : null
+            if (!label) {
+              return null
+            }
+            const href = `/products${buildCatalogQuery({
+              category: typeof item.categorySlug === 'string' ? item.categorySlug : undefined,
+              useCase: typeof item.useCase === 'string' ? item.useCase : undefined,
+              brand: typeof item.brandSlug === 'string' ? item.brandSlug : undefined,
+            })}`
+            return (
+              <li key={label}>
+                <ScrollReveal delayMs={(index % 8) * 40}>
+                  <Link
+                    href={href}
+                    className="reveal-soft flex h-full min-h-24 flex-col items-center justify-center gap-1 rounded-(--radius-lg) border border-border bg-bg-elevated p-4 text-center shadow-(--shadow-sm) transition-colors hover:border-brand"
+                  >
+                    <span
+                      className="inline-flex size-9 items-center justify-center rounded-(--radius-md) bg-brand-soft text-(length:--text-sm) font-bold text-brand"
+                      aria-hidden
+                    >
+                      {label.slice(0, 1)}
+                    </span>
+                    <p className="text-(length:--text-sm) font-semibold text-fg">{label}</p>
+                  </Link>
+                </ScrollReveal>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
 export function NeedSelectorSection({ section }: SectionProps) {
   const needs = needSelectorItems()
 

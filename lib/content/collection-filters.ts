@@ -16,13 +16,26 @@ const slug = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be a lowercase slug')
 
+/**
+ * Price bound in whole VND, matching the storefront catalog's integer-only
+ * money convention. Capped at 500,000,000 VND — far above any real product —
+ * so a typo cannot produce a query with no practical upper bound.
+ */
+const priceBound = z.number().int().min(0).max(500_000_000)
+
 export const collectionFiltersSchema = z
   .object({
     categorySlug: slug.optional(),
     brandSlug: slug.optional(),
     useCase: slug.optional(),
+    /** §4.6: price-band tabs (e.g. "under 10M", "10-20M") for a category. */
+    minPrice: priceBound.optional(),
+    maxPrice: priceBound.optional(),
   })
   .strict()
+  .refine((value) => value.minPrice === undefined || value.maxPrice === undefined || value.minPrice <= value.maxPrice, {
+    message: 'minPrice must not exceed maxPrice',
+  })
 
 export type CollectionFilters = z.infer<typeof collectionFiltersSchema>
 

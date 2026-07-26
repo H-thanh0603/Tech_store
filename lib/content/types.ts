@@ -17,6 +17,7 @@ export const SECTION_TYPES = [
   'category_grid',
   'deal_tabs',
   'product_collection',
+  'accessory_mosaic',
   'need_selector',
   'brand_strip',
   'editorial',

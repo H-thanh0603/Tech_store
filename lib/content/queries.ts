@@ -15,6 +15,7 @@ import {
   type NavigationRow,
   type SectionRow,
 } from '@/lib/content/normalize'
+import type { MenuHighlight } from '@/lib/content/nav-view'
 import {
   isBannerSlot,
   type Banner,
@@ -102,6 +103,12 @@ async function fetchDynamicCollection(
   }
   if (filters.useCase) {
     query = query.contains('use_cases', [filters.useCase])
+  }
+  if (filters.minPrice !== undefined) {
+    query = query.gte('min_price', filters.minPrice)
+  }
+  if (filters.maxPrice !== undefined) {
+    query = query.lte('min_price', filters.maxPrice)
   }
   if (type === 'discounted') {
     query = query.eq('has_discount', true)
@@ -350,6 +357,67 @@ async function loadHomepageCollection(
   return collections.get(slug) ?? null
 }
 
+const MEGA_MENU_HIGHLIGHTS_PER_CATEGORY = 4
+
+/** Same shape as PRODUCT_CARD_SELECT; kept local since CatalogRow is not exported. */
+interface MegaMenuProductRow {
+  id: string
+  name: string
+  slug: string
+  category_slug: string
+  brand_name: string | null
+  min_price: number | string | null
+  has_discount: boolean | null
+  available_stock: number | string | null
+  image_url: string | null
+  image_alt: string | null
+}
+
+/**
+ * Featured products for the mega menu (§3.4: "Sản phẩm nổi bật" per category
+ * panel), grouped by category slug.
+ *
+ * One query, capped at a small multiple of the per-category limit and sliced
+ * in JS: PostgREST cannot express "top N per group" directly, and the active
+ * category count is small enough (~10) that this never approaches the row cap.
+ * Cached like every other content query, so the header pays for it once per
+ * request no matter how many components read it.
+ */
+async function loadMegaMenuHighlights(
+  supabase: SupabaseClient = getSupabaseServerClient(),
+): Promise<Map<string, MenuHighlight[]>> {
+  const { data, error } = await supabase
+    .from('catalog_products')
+    .select(PRODUCT_CARD_SELECT)
+    .order('is_featured', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (error) {
+    console.error('[content] failed to load mega menu highlights', error)
+    return new Map()
+  }
+
+  const byCategory = new Map<string, MenuHighlight[]>()
+  for (const row of (data ?? []) as MegaMenuProductRow[]) {
+    const list = byCategory.get(row.category_slug) ?? []
+    if (list.length >= MEGA_MENU_HIGHLIGHTS_PER_CATEGORY) {
+      continue
+    }
+    const card = mapCatalogRowToCard(row)
+    list.push({
+      id: card.id,
+      name: card.name,
+      href: `/products/${card.slug}`,
+      imageUrl: card.imageUrl,
+      imageAlt: card.imageAlt,
+      minPrice: card.minPrice,
+    })
+    byCategory.set(row.category_slug, list)
+  }
+  return byCategory
+}
+
 /**
  * Navigation tree (max 3 levels).
  *
@@ -403,3 +471,4 @@ export const getActiveHomepageSections = cache(loadActiveHomepageSections)
 export const getBannerSlot = cache(loadBannerSlot)
 export const getHomepageCollection = cache(loadHomepageCollection)
 export const getNavigationTree = cache(loadNavigationTree)
+export const getMegaMenuHighlights = cache(loadMegaMenuHighlights)

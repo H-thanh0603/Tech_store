@@ -40,6 +40,16 @@ export interface MenuPromo {
   ctaLabel: string
 }
 
+/** A featured product tile inside a mega panel — image + name + price only. */
+export interface MenuHighlight {
+  id: string
+  name: string
+  href: string
+  imageUrl: string | null
+  imageAlt: string | null
+  minPrice: number
+}
+
 export interface MegaPanel {
   /** Product groups: children of the nav entry, grouped by their own children. */
   groups: MenuColumn[]
@@ -47,6 +57,8 @@ export interface MegaPanel {
   needs: MenuLink[]
   priceBands: MenuLink[]
   promo: MenuPromo
+  /** Up to 4 featured products in this category; empty when none are cached. */
+  highlights: MenuHighlight[]
 }
 
 export interface MenuEntry {
@@ -187,6 +199,7 @@ function dedupeGroups(groups: MenuColumn[]): MenuColumn[] {
 export function buildHeaderNav(
   navigation: readonly NavNode[],
   brands: readonly FacetOption[],
+  highlightsByCategory: ReadonlyMap<string, MenuHighlight[]> = new Map(),
 ): HeaderNavView {
   const entries: MenuEntry[] = navigation.map((node) => {
     const categorySlug = categorySlugOf(node)
@@ -212,6 +225,7 @@ export function buildHeaderNav(
             needs: toNeeds(categorySlug),
             priceBands: toPriceBands(categorySlug),
             promo: toPromo(node, categorySlug),
+            highlights: categorySlug ? (highlightsByCategory.get(categorySlug) ?? []) : [],
           }
         : null,
     }

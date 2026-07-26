@@ -1,10 +1,12 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import { IconChevronDown, IconGrid, navIcon } from '@/components/ui/icons'
-import type { MegaPanel, MenuEntry, MenuLink } from '@/lib/content/nav-view'
+import { formatPrice } from '@/lib/format'
+import type { MegaPanel, MenuEntry, MenuHighlight, MenuLink } from '@/lib/content/nav-view'
 
 /**
  * Desktop category bar + mega menu.
@@ -281,6 +283,59 @@ function MegaPanelContent({ panel, onNavigate }: { panel: MegaPanel; onNavigate:
           </Link>
         </div>
       </div>
+      {panel.highlights.length > 0 ? (
+        <div className="col-span-full border-t border-border pt-5">
+          <HighlightRow highlights={panel.highlights} onNavigate={onNavigate} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** §3.4: "Sản phẩm nổi bật" — up to 4 real, in-stock-agnostic featured cards. */
+function HighlightRow({
+  highlights,
+  onNavigate,
+}: {
+  highlights: MenuHighlight[]
+  onNavigate: () => void
+}) {
+  return (
+    <div>
+      <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+        Sản phẩm nổi bật
+      </p>
+      <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {highlights.map((product) => (
+          <li key={product.id}>
+            <Link
+              href={product.href}
+              onClick={onNavigate}
+              className="flex items-center gap-3 rounded-(--radius-md) border border-border p-2 transition-colors hover:border-brand hover:bg-brand-soft"
+            >
+              <span className="relative size-12 shrink-0 overflow-hidden rounded-(--radius-sm) bg-bg-secondary">
+                {product.imageUrl ? (
+                  <Image
+                    src={product.imageUrl}
+                    alt={product.imageAlt ?? product.name}
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                  />
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-(length:--text-xs) font-medium text-fg">
+                  {product.name}
+                </span>
+                <span className="block text-(length:--text-xs) font-semibold text-brand">
+                  {formatPrice(product.minPrice)}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

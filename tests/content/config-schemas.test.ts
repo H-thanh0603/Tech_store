@@ -151,7 +151,7 @@ describe('parseSectionConfig', () => {
   })
 
   it('has a schema for every section type', () => {
-    const typesRequiringConfig = new Set(['banner_grid', 'product_collection', 'deal_tabs'])
+    const typesRequiringConfig = new Set(['banner_grid', 'product_collection', 'deal_tabs', 'accessory_mosaic'])
 
     for (const type of SECTION_TYPES) {
       const { config, error } = parseSectionConfig(type, {})

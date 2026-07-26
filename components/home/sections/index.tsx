@@ -8,6 +8,7 @@ import { DealTabsSection } from '@/components/home/sections/deal-tabs'
 import {
   BrandStripSection,
   CategoryMosaicSection,
+  AccessoryMosaicSection,
   EditorialSection,
   GuidesSection,
   NeedSelectorSection,
@@ -40,6 +41,7 @@ const RENDERERS: Record<SectionType, (props: SectionProps) => ReactNode> = {
   category_grid: CategoryGridSection,
   deal_tabs: DealTabsSection,
   product_collection: ProductCollectionSection,
+  accessory_mosaic: AccessoryMosaicSection,
   need_selector: NeedSelectorSection,
   brand_strip: BrandStripSection,
   editorial: EditorialSection,
