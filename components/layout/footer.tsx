@@ -28,25 +28,27 @@ export function Footer() {
   const year = new Date().getFullYear()
 
   return (
-    <footer className="mt-auto border-t border-border bg-surface-inverse text-fg-inverse">
+    <footer className="mt-auto border-t border-border bg-bg-elevated text-fg">
       <div className="container-store grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="flex flex-col gap-4 sm:col-span-2 lg:col-span-1">
           <div className="inline-flex items-center gap-2.5">
             <span
               aria-hidden
-              className="grid size-9 place-items-center rounded-(--radius-md) bg-brand text-(length:--text-sm) font-bold text-accent-fg"
+              className="grid size-9 place-items-center rounded-(--radius-md) bg-gradient-to-tr from-brand via-brand-hover to-brand-electric text-(length:--text-sm) font-extrabold text-white shadow-sm shadow-brand/20"
             >
               TS
             </span>
-            <p className="text-(length:--text-lg) font-semibold tracking-tight">TechStore</p>
+            <p className="text-(length:--text-lg) font-bold tracking-tight text-fg">TechStore</p>
           </div>
-          <p className="max-w-sm text-(length:--text-sm) leading-relaxed text-fg-inverse/70">
+          <p className="max-w-sm text-(length:--text-sm) leading-relaxed text-fg-muted font-medium">
             Thiết bị công nghệ chọn lọc — thông số rõ, giá minh bạch, mua nhanh với COD hoặc
             chuyển khoản. Guest checkout hoặc đăng nhập để lưu hồ sơ.
           </p>
-          <p className="text-(length:--text-xs) text-fg-inverse/50">
-            Demo store · Catalog seed · Guest + local account
-          </p>
+          <div className="flex flex-wrap gap-2 text-(length:--text-xs) font-semibold text-fg-subtle">
+            <span className="rounded-full bg-brand-soft px-2.5 py-1 text-brand">✓ Chính hãng 100%</span>
+            <span className="rounded-full bg-bg-secondary px-2.5 py-1">⚡ Giao hàng 2h</span>
+            <span className="rounded-full bg-bg-secondary px-2.5 py-1">🛡️ Bảo hành 12 tháng</span>
+          </div>
         </div>
 
         <FooterColumn title="Danh mục" links={EXPLORE} />
@@ -54,10 +56,10 @@ export function Footer() {
         <FooterColumn title="Cửa hàng" links={STORE} />
       </div>
 
-      <div className="border-t border-white/10">
-        <div className="container-store flex flex-col gap-2 py-5 text-(length:--text-xs) text-fg-inverse/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} TechStore. Không thu thập dữ liệu nhạy cảm không cần thiết.</p>
-          <p>Vi-VN · VND · Mobile-first</p>
+      <div className="border-t border-border/80 bg-bg-secondary/50">
+        <div className="container-store flex flex-col gap-2 py-5 text-(length:--text-xs) font-medium text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
+          <p>© {year} TechStore. Mọi quyền được bảo lưu. Nền tảng bán lẻ công nghệ hàng đầu.</p>
+          <p>Vi-VN · VND · Fast Checkout</p>
         </div>
       </div>
     </footer>
@@ -73,7 +75,7 @@ function FooterColumn({
 }) {
   return (
     <div>
-      <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.14em] text-fg-inverse/45">
+      <p className="text-(length:--text-xs) font-bold uppercase tracking-[0.14em] text-fg-subtle">
         {title}
       </p>
       <ul className="mt-4 flex flex-col gap-1">
@@ -81,7 +83,7 @@ function FooterColumn({
           <li key={link.href + link.label}>
             <Link
               href={link.href}
-              className="inline-flex min-h-10 items-center text-(length:--text-sm) text-fg-inverse/75 transition-colors hover:text-fg-inverse"
+              className="inline-flex min-h-10 items-center text-(length:--text-sm) font-medium text-fg-muted transition-colors hover:text-brand"
             >
               {link.label}
             </Link>

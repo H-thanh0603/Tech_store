@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 
+import { FloatingActions } from '@/components/layout/floating-actions'
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
 import { StorefrontProviders } from '@/components/layout/storefront-providers'
+import { PromoPopup } from '@/components/ui/promo-popup'
 import { getCatalogFacets } from '@/lib/catalog/queries'
 import { getCart } from '@/lib/commerce/queries'
 import { buildHeaderNav, navigationFallback } from '@/lib/content/nav-view'
@@ -50,6 +52,8 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
       <main id="main-content" className="flex-1">
         {children}
       </main>
+      <PromoPopup />
+      <FloatingActions />
       {/* Clears the fixed mobile bottom navigation. */}
       <div className="pad-bottom-nav">
         <Footer />

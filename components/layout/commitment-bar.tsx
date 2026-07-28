@@ -39,9 +39,9 @@ function CommitmentItem({
   return (
     <Link
       href={href}
-      className="inline-flex shrink-0 items-center gap-1.5 text-(length:--text-xs) font-medium text-fg-inverse/75 transition-colors hover:text-fg-inverse"
+      className="inline-flex shrink-0 items-center gap-1.5 text-(length:--text-xs) font-medium text-fg-muted transition-colors hover:text-brand"
     >
-      <Icon size={15} className="text-brand-electric" />
+      <Icon size={15} className="text-brand" />
       {label}
     </Link>
   )
@@ -49,7 +49,7 @@ function CommitmentItem({
 
 export function CommitmentBar() {
   return (
-    <div className="bg-navy-deep text-fg-inverse">
+    <div className="border-b border-border/80 bg-brand-soft/50 text-fg">
       <div className="container-store py-1.5">
         {/* Desktop: static row, no motion. */}
         <ul className="hidden items-center justify-between gap-4 lg:flex">

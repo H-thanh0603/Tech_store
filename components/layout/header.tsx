@@ -87,11 +87,11 @@ export function Header({ children, cart, nav, userEmail, userName }: HeaderProps
           <Link href="/" className="group inline-flex min-h-11 shrink-0 items-center gap-2.5">
             <span
               aria-hidden
-              className="grid size-9 place-items-center rounded-(--radius-md) bg-navy-deep text-(length:--text-sm) font-bold tracking-tight text-fg-inverse transition-transform duration-(--duration-fast) group-hover:scale-[1.03]"
+              className="grid size-9 place-items-center rounded-(--radius-md) bg-gradient-to-tr from-brand via-brand-hover to-brand-electric text-(length:--text-sm) font-extrabold tracking-tight text-white shadow-sm shadow-brand/25 transition-transform duration-(--duration-fast) group-hover:scale-[1.05]"
             >
               TS
             </span>
-            <span className="text-(length:--text-lg) font-semibold tracking-tight text-fg">
+            <span className="text-(length:--text-lg) font-bold tracking-tight text-fg">
               TechStore
             </span>
           </Link>

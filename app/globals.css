@@ -1,12 +1,9 @@
 @import 'tailwindcss';
 
-/* TechStore customer design system — aligned with docs/design.md
-   Editorial tech retail: product-first, neutral surfaces, single brand cyan.
-   Legacy aliases (--color-surface, --color-accent, --color-fg) keep admin working. */
+/* TechStore customer design system — Light Theme Only
+   Editorial tech retail: product-first, neutral surfaces, single brand cyan. */
 
 @theme {
-  /* Palette: deep navy + electric blue (DESIGN_CELLPHONES_INSPIRED.md §9 option A).
-     Neutrals are tinted toward the navy hue so surfaces read cool, never beige. */
   --color-bg-primary: oklch(98.8% 0.004 255);
   --color-bg-secondary: oklch(96.4% 0.008 255);
   --color-bg-elevated: oklch(100% 0 0);
@@ -19,17 +16,16 @@
   --color-border: oklch(91% 0.012 255);
   --color-border-strong: oklch(79% 0.02 255);
 
-  /* Navy: header chrome, footer, inverse surfaces. */
-  --color-navy: oklch(26% 0.055 262);
-  --color-navy-deep: oklch(19% 0.05 264);
-  --color-navy-soft: oklch(34% 0.06 262);
+  /* Light Theme Surface tokens replacing dark navy */
+  --color-navy: oklch(98.5% 0.005 255);
+  --color-navy-deep: oklch(97.5% 0.008 255);
+  --color-navy-soft: oklch(96.5% 0.01 255);
 
-  /* Single accent. `brand` is text-safe on white (>=4.5:1); `brand-electric` is
-     the bright variant used only on navy surfaces. */
+  /* Single accent. `brand` is text-safe on white (>=4.5:1); `brand-electric` is cyan accent. */
   --color-brand: oklch(50% 0.19 258);
   --color-brand-hover: oklch(44% 0.18 258);
   --color-brand-soft: oklch(95% 0.032 255);
-  --color-brand-electric: oklch(70% 0.185 250);
+  --color-brand-electric: oklch(52% 0.22 255);
 
   --color-success: oklch(50% 0.13 155);
   --color-warning: oklch(66% 0.13 75);
@@ -38,17 +34,17 @@
   --color-price: oklch(21% 0.035 262);
   --color-sale: oklch(53% 0.2 25);
 
-  /* Legacy aliases used across admin + storefront */
+  /* Legacy aliases used across admin + storefront — all light surfaces */
   --color-surface: var(--color-bg-primary);
   --color-surface-muted: var(--color-bg-secondary);
   --color-surface-raised: var(--color-bg-elevated);
-  --color-surface-inverse: var(--color-navy-deep);
+  --color-surface-inverse: oklch(97.5% 0.008 255);
   --color-surface-glow: oklch(93% 0.045 250);
 
   --color-fg: var(--color-text-primary);
   --color-fg-muted: var(--color-text-secondary);
   --color-fg-subtle: var(--color-text-muted);
-  --color-fg-inverse: oklch(98% 0.004 255);
+  --color-fg-inverse: oklch(21% 0.035 262);
 
   --color-accent: var(--color-brand);
   --color-accent-hover: var(--color-brand-hover);
@@ -175,9 +171,10 @@ body {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 70% at 85% 15%, oklch(62% 0.2 252 / 0.32), transparent 55%),
-    linear-gradient(150deg, oklch(17% 0.05 264) 0%, oklch(22% 0.06 260) 55%, oklch(28% 0.07 254) 100%);
-  color: var(--color-fg-inverse);
+    radial-gradient(ellipse 80% 60% at 85% 0%, oklch(92% 0.08 255 / 0.65), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 10% 100%, oklch(95% 0.05 240 / 0.5), transparent 50%),
+    linear-gradient(180deg, oklch(99.2% 0.003 250) 0%, oklch(96.8% 0.008 250) 100%);
+  color: var(--color-text-primary);
 }
 
 .surface-hero::after {
@@ -185,10 +182,10 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(oklch(100% 0 0 / 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(100% 0 0 / 0.035) 1px, transparent 1px);
+    linear-gradient(oklch(20% 0.03 250 / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(20% 0.03 250 / 0.025) 1px, transparent 1px);
   background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse 70% 70% at 70% 40%, black, transparent);
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
   pointer-events: none;
 }
 
@@ -247,12 +244,10 @@ body {
   --bottom-nav-h: 3.5rem;
 }
 
-/** Keeps page content clear of the fixed mobile bottom navigation. */
 .pad-bottom-nav {
   padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
 }
 
-/** Sits a fixed bar directly above the bottom navigation instead of under it. */
 .above-bottom-nav {
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
 }
@@ -416,23 +411,5 @@ body {
   }
   100% {
     background-position: -100% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  .reveal-soft:hover {
-    transform: none;
   }
 }
