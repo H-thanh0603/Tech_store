@@ -52,8 +52,6 @@ const COLLECTION_SELECT =
 const PRODUCT_CARD_SELECT =
   'id, name, slug, category_slug, brand_name, min_price, has_discount, available_stock, image_url, image_alt'
 
-const UI_ERROR = 'Failed to load homepage content'
-
 interface CollectionRow {
   id: string
   slug: string

@@ -38,10 +38,10 @@ describe('ProductCard', () => {
 
   it('shows a discount badge only when discounted', () => {
     const { rerender } = render(<ProductCard product={makeProduct({ hasDiscount: true })} />)
-    expect(screen.getByText('Giảm giá')).toBeInTheDocument()
+    expect(screen.getByText('Hot Sale')).toBeInTheDocument()
 
     rerender(<ProductCard product={makeProduct({ hasDiscount: false })} />)
-    expect(screen.queryByText('Giảm giá')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hot Sale')).not.toBeInTheDocument()
   })
 
   it('shows an out-of-stock badge when stock is depleted', () => {

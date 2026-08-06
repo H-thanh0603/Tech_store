@@ -492,12 +492,12 @@ describe('getActiveHomepageSections', () => {
     expect(error).toHaveBeenCalled()
   })
 
-  it('throws a UI-safe error and logs the raw error on failure', async () => {
+  it('falls back to an empty list and logs the raw error on failure', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const dbError = { message: 'permission denied for table homepage_sections', code: '42501' }
     const { client } = mockClient({ homepage_sections: { data: null, error: dbError } })
 
-    await expect(getActiveHomepageSections(client)).rejects.toThrow('Failed to load homepage content')
+    await expect(getActiveHomepageSections(client)).resolves.toEqual([])
     expect(error).toHaveBeenCalledWith(expect.any(String), dbError)
   })
 })
