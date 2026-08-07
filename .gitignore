@@ -26,5 +26,6 @@ dev-server.log
 .vercel
 .claude
 .codegraph
+.worktrees/
 .playwright-mcp
 
