@@ -27,7 +27,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI ? 'npm run start' : 'npm run dev',
+    // Always dev mode: `next start` runs with NODE_ENV=production, which
+    // forces ADMIN_AUTH_MODE=supabase (no seeded admin) and blocks E2E login.
+    // Dev keeps legacy-secret so E2E can mint the techstore_admin cookie.
+    command: 'npm run dev',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
