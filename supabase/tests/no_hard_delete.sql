@@ -62,9 +62,14 @@ select lives_ok(
   'unpurchased product can be deleted'
 );
 
--- 5. Archiving is still allowed (no hard delete).
+-- 5. Archiving is still allowed (no hard delete) for a product with an
+-- active variant — archive does not touch is_published, so the publish
+-- guard stays out of the way.
 insert into products (id, category_id, name, slug, is_published)
-values ('00000000-0000-0000-0000-000000000d07', '10000000-0000-0000-0000-000000000001', 'Archive Me', 'archive-me', true);
+values ('00000000-0000-0000-0000-000000000d07', '10000000-0000-0000-0000-000000000001', 'Archive Me', 'archive-me', false);
+
+insert into product_variants (id, product_id, sku, regular_price, is_active)
+values ('00000000-0000-0000-0000-000000000d08', '00000000-0000-0000-0000-000000000d07', 'SKU-ARCH', 4000, true);
 
 select lives_ok(
   $$update products set is_archived = true where id = '00000000-0000-0000-0000-000000000d07'$$,
