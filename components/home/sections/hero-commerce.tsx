@@ -37,25 +37,25 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
   const href = mainBanner?.href ?? ctaHref
 
   return (
-    <section aria-labelledby="hero-heading" className="surface-hero">
+    <section aria-labelledby="hero-heading" className="surface-hero border-b border-border">
       <div className="container-store relative z-10 grid gap-4 py-6 lg:grid-cols-[15rem_minmax(0,1fr)_18rem] lg:gap-4 lg:py-8">
         {/* Category rail — desktop only; mobile uses the row below the banner. */}
         <nav
           aria-label="Danh mục nổi bật"
-          className="hidden rounded-(--radius-lg) border border-white/10 bg-white/5 p-2 lg:block"
+          className="hidden rounded-(--radius-lg) border border-border bg-bg-elevated/95 p-2 shadow-sm lg:block"
         >
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-0.5">
             {categories.map((entry) => {
               const Icon = navIcon(entry.iconKey)
               return (
                 <li key={entry.id}>
                   <Link
                     href={entry.href}
-                    className="flex min-h-11 items-center gap-2.5 rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+                    className="flex min-h-11 items-center gap-2.5 rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted transition-all hover:bg-brand-soft hover:text-brand"
                   >
-                    {Icon ? <Icon size={18} className="text-brand-electric" /> : null}
-                    <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-                    <IconChevronRight size={14} className="opacity-50" />
+                    {Icon ? <Icon size={18} className="text-brand" /> : null}
+                    <span className="min-w-0 flex-1 truncate font-semibold">{entry.label}</span>
+                    <IconChevronRight size={14} className="opacity-40" />
                   </Link>
                 </li>
               )
@@ -67,7 +67,7 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
         <div className="flex flex-col gap-3">
           <Link
             href={href}
-            className="group relative flex flex-1 flex-col justify-end overflow-hidden rounded-(--radius-xl) border border-white/10 bg-white/5"
+            className="group relative flex flex-1 flex-col justify-end overflow-hidden rounded-(--radius-xl) border border-border bg-bg-elevated shadow-md transition-all hover:shadow-lg hover:border-brand/40"
           >
             <div className="relative aspect-[16/9] w-full sm:aspect-[2/1] lg:aspect-[21/9]">
               {mainBanner?.imageDesktopUrl ? (
@@ -86,43 +86,43 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
                   fill
                   priority
                   sizes="(max-width: 1024px) 100vw, 60vw"
-                  className="object-cover opacity-70 transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.02]"
+                  className="object-cover opacity-85 transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.02]"
                 />
               ) : null}
-              <div className="absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-black/75 via-black/25 to-transparent p-5 sm:p-7">
+              <div className="absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent p-5 sm:p-7">
                 {section.eyebrow ? (
-                  <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.14em] text-brand-electric">
+                  <span className="inline-flex w-fit rounded-full bg-brand-soft/90 px-3 py-1 text-(length:--text-xs) font-bold uppercase tracking-[0.14em] text-brand border border-brand/20">
                     {section.eyebrow}
-                  </p>
+                  </span>
                 ) : null}
                 <h1
                   id="hero-heading"
-                  className="max-w-2xl text-balance font-display text-(length:--text-hero) font-semibold leading-[1.06] tracking-tight text-white"
+                  className="max-w-2xl text-balance font-display text-(length:--text-hero) font-extrabold leading-[1.06] tracking-tight text-white drop-shadow-sm"
                 >
                   {title}
                 </h1>
                 {subtitle ? (
-                  <p className="max-w-xl text-(length:--text-base) leading-relaxed text-white/75">
+                  <p className="max-w-xl text-(length:--text-base) leading-relaxed text-white/90 font-medium">
                     {subtitle}
                   </p>
                 ) : null}
-                <span className="mt-2 inline-flex w-fit min-h-11 items-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-semibold text-accent-fg transition-colors group-hover:bg-brand-hover">
-                  {ctaLabel}
+                <span className="mt-2 inline-flex w-fit min-h-11 items-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-bold text-white shadow-md transition-all group-hover:bg-brand-hover group-hover:shadow-lg">
+                  {ctaLabel} →
                 </span>
               </div>
             </div>
           </Link>
 
           {showStats ? (
-            <dl className="grid grid-cols-3 gap-2 rounded-(--radius-lg) border border-white/10 bg-white/5 px-4 py-3">
+            <dl className="grid grid-cols-3 gap-2 rounded-(--radius-lg) border border-border bg-bg-elevated/95 px-4 py-3 shadow-sm">
               {[
                 { k: 'Sản phẩm', v: context.total > 0 ? String(context.total) : '—' },
                 { k: 'Thanh toán', v: 'COD / CK' },
                 { k: 'Đơn hàng', v: 'Tra cứu 24/7' },
               ].map((stat) => (
                 <div key={stat.k}>
-                  <dt className="text-(length:--text-xs) text-white/45">{stat.k}</dt>
-                  <dd className="mt-0.5 text-(length:--text-sm) font-semibold text-white">
+                  <dt className="text-(length:--text-xs) font-medium text-fg-subtle">{stat.k}</dt>
+                  <dd className="mt-0.5 text-(length:--text-sm) font-bold text-fg">
                     {stat.v}
                   </dd>
                 </div>
@@ -151,10 +151,10 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
                 <li key={`m-${entry.id}`}>
                   <Link
                     href={entry.href}
-                    className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-(--radius-md) border border-white/10 bg-white/5 px-1 text-center text-(length:--text-xs) font-medium text-white/85"
+                    className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-(--radius-md) border border-border bg-bg-elevated px-1 text-center text-(length:--text-xs) font-medium text-fg shadow-xs transition-colors hover:border-brand hover:text-brand"
                   >
-                    {Icon ? <Icon size={20} className="text-brand-electric" /> : null}
-                    <span className="line-clamp-2 leading-tight">{entry.label}</span>
+                    {Icon ? <Icon size={20} className="text-brand" /> : null}
+                    <span className="line-clamp-2 leading-tight font-semibold">{entry.label}</span>
                   </Link>
                 </li>
               )
@@ -164,15 +164,15 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
       </div>
 
       {heroProduct ? (
-        <div className="container-store relative z-10 pb-6 text-(length:--text-sm) text-white/55 lg:pb-8">
+        <div className="container-store relative z-10 pb-6 text-(length:--text-sm) text-fg-muted lg:pb-8">
           Nổi bật:{' '}
           <Link
             href={`/products/${heroProduct.slug}`}
-            className="font-medium text-white/85 underline-offset-2 hover:underline"
+            className="font-bold text-brand underline-offset-2 hover:underline"
           >
             {heroProduct.name}
           </Link>{' '}
-          từ {formatPrice(heroProduct.minPrice)}
+          từ <span className="font-bold text-fg">{formatPrice(heroProduct.minPrice)}</span>
         </div>
       ) : null}
     </section>
@@ -183,30 +183,30 @@ function SideBannerCard({ banner }: { banner: Banner }) {
   return (
     <Link
       href={banner.href}
-      className="group flex h-full flex-col justify-between gap-2 overflow-hidden rounded-(--radius-lg) border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/10"
+      className="group flex h-full flex-col justify-between gap-2 overflow-hidden rounded-(--radius-lg) border border-border bg-bg-elevated p-4 shadow-sm transition-all hover:border-brand/50 hover:shadow-md"
     >
       {banner.imageDesktopUrl ? (
-        <span className="relative block aspect-[16/9] overflow-hidden rounded-(--radius-md)">
+        <span className="relative block aspect-[16/9] overflow-hidden rounded-(--radius-md) bg-bg-secondary">
           <Image
             src={banner.imageDesktopUrl}
             alt={banner.title ?? ''}
             fill
             sizes="(max-width: 1024px) 16rem, 18rem"
-            className="object-cover"
+            className="object-cover transition-transform group-hover:scale-105"
           />
         </span>
       ) : null}
       <span className="block">
-        <span className="block text-(length:--text-sm) font-semibold text-white">
+        <span className="block text-(length:--text-sm) font-bold text-fg">
           {banner.title ?? banner.name}
         </span>
         {banner.subtitle ? (
-          <span className="mt-1 block text-(length:--text-xs) leading-relaxed text-white/65">
+          <span className="mt-1 block text-(length:--text-xs) leading-relaxed text-fg-muted font-medium">
             {banner.subtitle}
           </span>
         ) : null}
       </span>
-      <span className="text-(length:--text-xs) font-semibold text-brand-electric group-hover:underline">
+      <span className="text-(length:--text-xs) font-bold text-brand group-hover:underline">
         Xem ngay →
       </span>
     </Link>

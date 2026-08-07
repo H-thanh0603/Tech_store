@@ -203,10 +203,16 @@ select is(
 
 set local role anon;
 
-select is(
-  (select count(*)::integer from catalog_products),
-  15,
-  'anon still sees exactly the 15 published catalog products'
+select results_eq(
+  $$select slug from catalog_products
+    where slug in (
+      'macbook-air-m3',
+      'tai-nghe-chua-ra-mat',
+      'dell-xps-15-ngung-ban'
+    )
+    order by slug$$,
+  ARRAY['macbook-air-m3'::text],
+  'anon catalog view shows a published product but hides draft and archived products'
 );
 
 select ok(

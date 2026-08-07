@@ -216,8 +216,15 @@ describe('getProducts', () => {
     expect(result.pageCount).toBe(1)
   })
 
-  it('throws a UI-safe error on query failure', async () => {
-    const client = mockClient({ data: null, error: { message: 'boom' }, count: null })
-    await expect(getProducts({}, client)).rejects.toThrow('Failed to load products')
+  it('falls back to an empty list and logs the DB error on query failure', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const dbError = { message: 'boom' }
+    const client = mockClient({ data: null, error: dbError, count: null })
+
+    const result = await getProducts({}, client)
+    expect(result.products).toEqual([])
+    expect(result.total).toBe(0)
+    expect(result.pageCount).toBe(1)
+    expect(warn).toHaveBeenCalledWith('[catalog] failed to load products', dbError)
   })
 })

@@ -95,7 +95,7 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
   const active = entries.find((entry) => entry.id === openId) ?? null
 
   return (
-    <div ref={rootRef} className="relative hidden bg-navy text-fg-inverse lg:block">
+    <div ref={rootRef} className="relative hidden border-t border-border/80 bg-bg-elevated text-fg lg:block shadow-xs">
       <nav aria-label="Danh mục sản phẩm" className="container-store">
         <ul className="flex items-center gap-0.5">
           <li>
@@ -109,8 +109,8 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
               }}
               className={`inline-flex min-h-11 items-center gap-2 rounded-(--radius-md) px-3 text-(length:--text-sm) font-semibold transition-colors ${
                 allOpen
-                  ? 'bg-brand text-accent-fg'
-                  : 'text-fg-inverse hover:bg-white/10'
+                  ? 'bg-brand text-white shadow-xs'
+                  : 'text-fg font-semibold hover:bg-surface-muted hover:text-brand'
               }`}
             >
               <IconGrid size={18} />
@@ -127,7 +127,7 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
                 <li key={entry.id}>
                   <Link
                     href={entry.href}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-inverse/85 transition-colors hover:bg-white/10 hover:text-fg-inverse"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-brand"
                     onMouseEnter={cancelScheduledOpen}
                   >
                     {Icon ? <Icon size={16} /> : null}
@@ -152,9 +152,6 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
                   onMouseEnter={() => scheduleOpen(entry.id)}
                   onMouseLeave={cancelScheduledOpen}
                   onFocus={() => {
-                    // Tabbing onto a trigger must not open its panel (that would
-                    // fight the click toggle); it only dismisses a panel opened
-                    // by hover so the keyboard user is not left with stale UI.
                     cancelScheduledOpen()
                     setAllOpen(false)
                     setOpenId((current) => (current === entry.id ? current : null))
@@ -178,7 +175,7 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
                     }
                   }}
                   className={`inline-flex min-h-11 items-center gap-1.5 rounded-(--radius-md) px-3 text-(length:--text-sm) font-medium transition-colors ${
-                    isOpen ? 'bg-white/12 text-fg-inverse' : 'text-fg-inverse/85 hover:bg-white/10'
+                    isOpen ? 'bg-brand-soft text-brand font-semibold' : 'text-fg-muted hover:bg-surface-muted hover:text-fg'
                   }`}
                 >
                   {Icon ? <Icon size={16} /> : null}
@@ -192,7 +189,7 @@ export function MegaMenuBar({ entries, quickLinks }: MegaMenuBarProps) {
           <li className="ml-auto">
             <Link
               href="/products"
-              className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-semibold text-brand-electric hover:bg-white/10"
+              className="inline-flex min-h-11 items-center rounded-(--radius-md) px-3 text-(length:--text-sm) font-semibold text-brand hover:bg-brand-soft transition-colors"
             >
               Xem tất cả sản phẩm →
             </Link>

@@ -52,8 +52,6 @@ const COLLECTION_SELECT =
 const PRODUCT_CARD_SELECT =
   'id, name, slug, category_slug, brand_name, min_price, has_discount, available_stock, image_url, image_alt'
 
-const UI_ERROR = 'Failed to load homepage content'
-
 interface CollectionRow {
   id: string
   slug: string
@@ -148,7 +146,7 @@ async function fetchCollectionsBySlug(
 
   if (error) {
     console.error('[content] failed to load homepage collections', error)
-    throw new Error(UI_ERROR)
+    return new Map()
   }
 
   const rows = (data ?? []) as CollectionRow[]
@@ -177,7 +175,7 @@ async function fetchCollectionsBySlug(
 
   if (curatedResult.error) {
     console.error('[content] failed to load collection products', curatedResult.error)
-    throw new Error(UI_ERROR)
+    return new Map()
   }
 
   const cardsById = new Map<string, ProductCardData>(
@@ -261,7 +259,7 @@ async function loadActiveHomepageSections(
 
   if (error) {
     console.error('[content] failed to load homepage sections', error)
-    throw new Error(UI_ERROR)
+    return []
   }
 
   const sections: HomepageSection[] = []

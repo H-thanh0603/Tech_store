@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test'
 
+// The promo popup (cd64928) auto-opens ~1.2s after mount on every commerce page
+// as a full-screen modal that intercepts pointer events on add-to-cart and
+// product-card buttons. Pre-seed its "seen" flag on every page before it mounts
+// so the popup never appears and cannot block clicks. Deterministic — no timer +
+// click races to dismiss afterward.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ts_promo_closed', 'true')
+  })
+})
+
 test.describe('storefront smoke', () => {
   test('home has main landmark and brand', async ({ page }) => {
     await page.goto('/')
@@ -124,6 +135,7 @@ test.describe.serial('guest checkout journey', () => {
   test('adds a product, checks out and tracks the order', async ({ page }) => {
     await page.goto('/products')
     await page.locator('article').first().getByRole('link').first().click()
+
     await page.getByRole('button', { name: 'Thêm vào giỏ', exact: true }).first().click()
     await expect(page.getByText('Đã thêm vào giỏ', { exact: true })).toBeVisible()
 

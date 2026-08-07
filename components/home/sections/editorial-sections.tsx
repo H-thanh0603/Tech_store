@@ -203,30 +203,30 @@ export function EditorialSection({ section }: SectionProps) {
   return (
     <section
       aria-labelledby="editorial-heading"
-      className="border-b border-border bg-surface-inverse text-fg-inverse"
+      className="border-b border-border bg-brand-soft/30 text-fg"
     >
       <div className="container-store grid gap-10 py-14 lg:grid-cols-2 lg:items-center lg:py-20">
         <ScrollReveal>
           <div>
             {section.eyebrow ? (
-              <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.14em] text-white/45">
+              <p className="text-(length:--text-xs) font-bold uppercase tracking-[0.14em] text-brand">
                 {section.eyebrow}
               </p>
             ) : null}
             <h2
               id="editorial-heading"
-              className="mt-2 text-balance text-(length:--text-3xl) font-semibold tracking-tight"
+              className="mt-2 text-balance text-(length:--text-3xl) font-bold tracking-tight text-fg"
             >
               {section.title ?? 'Máy tốt không chỉ là thông số.'}
             </h2>
             {section.subtitle ? (
-              <p className="mt-4 max-w-md text-(length:--text-base) leading-relaxed text-white/70">
+              <p className="mt-4 max-w-md text-(length:--text-base) leading-relaxed text-fg-muted font-medium">
                 {section.subtitle}
               </p>
             ) : null}
             <Link
               href="#guides"
-              className="mt-6 inline-flex min-h-11 items-center text-(length:--text-sm) font-semibold text-white underline-offset-4 hover:underline"
+              className="mt-6 inline-flex min-h-11 items-center text-(length:--text-sm) font-bold text-brand hover:underline"
             >
               Đọc gợi ý chọn máy →
             </Link>
@@ -243,9 +243,9 @@ export function EditorialSection({ section }: SectionProps) {
               <ScrollReveal delayMs={index * 70}>
                 <Link
                   href={`/products${buildCatalogQuery({ useCase: item.useCase })}`}
-                  className="flex min-h-28 items-end rounded-(--radius-lg) border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/10"
+                  className="flex min-h-28 items-end rounded-(--radius-lg) border border-border bg-bg-elevated p-4 shadow-sm transition-all hover:border-brand hover:shadow-md hover:text-brand"
                 >
-                  <span className="text-(length:--text-base) font-semibold">{item.label}</span>
+                  <span className="text-(length:--text-base) font-bold text-fg">{item.label}</span>
                 </Link>
               </ScrollReveal>
             </li>
@@ -329,7 +329,7 @@ export function NewsletterSection({ section }: SectionProps) {
                 <p className="eyebrow">{section.eyebrow ?? 'Theo dõi giá'}</p>
                 <h2
                   id="newsletter-heading"
-                  className="mt-2 text-(length:--text-2xl) font-semibold tracking-tight"
+                  className="mt-2 text-(length:--text-2xl) font-bold tracking-tight text-fg"
                 >
                   {section.title ?? 'Tìm nhanh thiết bị bạn đang quan tâm'}
                 </h2>
@@ -351,20 +351,20 @@ export function NewsletterSection({ section }: SectionProps) {
                   />
                   <button
                     type="submit"
-                    className="inline-flex min-h-11 items-center justify-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-semibold text-accent-fg hover:bg-brand-hover"
+                    className="inline-flex min-h-11 items-center justify-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-bold text-white hover:bg-brand-hover shadow-sm"
                   >
                     Mở catalog
                   </button>
                 </form>
               </div>
-              <div className="flex flex-col justify-center gap-3 border-t border-border bg-surface-inverse px-6 py-10 text-fg-inverse sm:px-10 lg:border-l lg:border-t-0">
-                <p className="text-(length:--text-sm) font-semibold">Lưu lại trên tài khoản</p>
-                <p className="text-(length:--text-sm) text-white/65">
+              <div className="flex flex-col justify-center gap-3 border-t border-border bg-gradient-to-br from-brand-soft/80 to-bg-secondary px-6 py-10 text-fg sm:px-10 lg:border-l lg:border-t-0">
+                <p className="text-(length:--text-sm) font-bold text-fg">Lưu lại trên tài khoản</p>
+                <p className="text-(length:--text-sm) text-fg-muted">
                   Hồ sơ giao hàng, wishlist, so sánh và mã đơn được giữ trên thiết bị của bạn.
                 </p>
                 <Link
                   href="/account"
-                  className="inline-flex min-h-11 w-fit items-center rounded-(--radius-md) border border-white/20 px-4 text-(length:--text-sm) font-semibold hover:bg-white/10"
+                  className="inline-flex min-h-11 w-fit items-center rounded-(--radius-md) border border-border bg-bg-elevated px-4 text-(length:--text-sm) font-bold text-brand shadow-xs hover:border-brand"
                 >
                   Mở tài khoản →
                 </Link>

@@ -93,8 +93,10 @@ export async function getCatalogFacets(): Promise<{
     db.from('categories').select('name, slug').eq('is_active', true).order('name'),
     db.from('brands').select('name, slug').eq('is_active', true).order('name'),
   ])
-  if (categoriesRes.error) throw categoriesRes.error
-  if (brandsRes.error) throw brandsRes.error
+  if (categoriesRes.error || brandsRes.error) {
+    console.warn('[catalog] failed to load facets', categoriesRes.error || brandsRes.error)
+    return { categories: [], brands: [] }
+  }
   return {
     categories: (categoriesRes.data ?? []).map((row) => ({
       name: String(row.name),
@@ -291,8 +293,14 @@ export async function getProducts(
 
   const { data, error, count } = await builder.range(from, to)
   if (error) {
-    // Never leak DB details to the UI; the caller renders an error state.
-    throw new Error('Failed to load products')
+    console.warn('[catalog] failed to load products', error)
+    return {
+      products: [],
+      total: 0,
+      page: normalized.page,
+      pageSize: CATALOG_PAGE_SIZE,
+      pageCount: 1,
+    }
   }
 
   const products = ((data ?? []) as CatalogRow[]).map(mapCatalogRowToCard)

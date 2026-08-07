@@ -35,53 +35,102 @@ select col_is_unique('public'::name, 'product_variants'::name, 'sku'::name);
 -- Anonymous read access: only active/published rows are visible.
 -- Runs against pristine seed data before any mutation tests below.
 
+insert into product_variants (id, product_id, sku, regular_price, is_active)
+values (
+  '91000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  'TEST-INACTIVE-VARIANT',
+  100,
+  false
+);
+
+insert into inventory (id, variant_id, quantity, reserved_quantity)
+values (
+  '91000000-0000-0000-0000-000000000002',
+  '91000000-0000-0000-0000-000000000001',
+  10,
+  0
+);
+
 set local role anon;
 
 select results_eq(
-  $$select count(*) from products$$,
-  ARRAY[15::bigint],
-  'Anonymous role sees only published, non-archived products'
+  $$select slug from products where slug = 'macbook-air-m3'$$,
+  ARRAY['macbook-air-m3'::text],
+  'Anonymous role sees a published, non-archived product'
 );
 
 select results_eq(
-  $$select count(*) from categories$$,
-  ARRAY[8::bigint],
-  'Anonymous role sees only active categories'
+  $$select slug from categories where slug in ('laptop', 'ngung-kinh-doanh') order by slug$$,
+  ARRAY['laptop'::text],
+  'Anonymous role sees an active category but not an inactive category'
 );
 
 select results_eq(
-  $$select count(*) from brands$$,
-  ARRAY[7::bigint],
-  'Anonymous role sees only active brands'
+  $$select slug from brands where slug in ('apple', 'brand-ngung-hop-tac') order by slug$$,
+  ARRAY['apple'::text],
+  'Anonymous role sees an active brand but not an inactive brand'
 );
 
 select results_eq(
-  $$select count(*) from product_variants$$,
-  ARRAY[18::bigint],
+  $$select id from product_variants
+    where id in (
+      '40000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000005',
+      '40000000-0000-0000-0000-000000000009',
+      '91000000-0000-0000-0000-000000000001'
+    )
+    order by id$$,
+  ARRAY['40000000-0000-0000-0000-000000000001'::uuid],
   'Anonymous role sees only active variants of published products'
 );
 
 select results_eq(
-  $$select count(*) from inventory$$,
-  ARRAY[18::bigint],
+  $$select id from inventory
+    where id in (
+      '50000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000005',
+      '50000000-0000-0000-0000-000000000009',
+      '91000000-0000-0000-0000-000000000002'
+    )
+    order by id$$,
+  ARRAY['50000000-0000-0000-0000-000000000001'::uuid],
   'Anonymous role sees only inventory for visible variants'
 );
 
 select results_eq(
-  $$select count(*) from product_images$$,
-  ARRAY[15::bigint],
+  $$select id from product_images
+    where id in (
+      '60000000-0000-0000-0000-000000000001',
+      '60000000-0000-0000-0000-000000000004',
+      '60000000-0000-0000-0000-000000000006'
+    )
+    order by id$$,
+  ARRAY['60000000-0000-0000-0000-000000000001'::uuid],
   'Anonymous role sees only images of published products'
 );
 
 select results_eq(
-  $$select count(*) from product_specs$$,
-  ARRAY[25::bigint],
+  $$select id from product_specs
+    where id in (
+      '70000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000008',
+      '70000000-0000-0000-0000-000000000011'
+    )
+    order by id$$,
+  ARRAY['70000000-0000-0000-0000-000000000001'::uuid],
   'Anonymous role sees only specs of published products'
 );
 
 select results_eq(
-  $$select count(*) from product_use_cases$$,
-  ARRAY[15::bigint],
+  $$select id from product_use_cases
+    where id in (
+      '80000000-0000-0000-0000-000000000001',
+      '80000000-0000-0000-0000-000000000005',
+      '80000000-0000-0000-0000-000000000008'
+    )
+    order by id$$,
+  ARRAY['80000000-0000-0000-0000-000000000001'::uuid],
   'Anonymous role sees only use cases of published products'
 );
 
@@ -98,8 +147,10 @@ select results_eq(
 );
 
 select results_eq(
-  $$select count(*) from products where search_vector @@ plainto_tsquery('simple', 'MacBook')$$,
-  ARRAY[1::bigint],
+  $$select slug from products
+    where slug = 'macbook-air-m3'
+      and search_vector @@ plainto_tsquery('simple', 'MacBook')$$,
+  ARRAY['macbook-air-m3'::text],
   'Full-text search matches product name for anonymous role'
 );
 

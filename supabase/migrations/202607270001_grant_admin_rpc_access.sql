@@ -1,0 +1,10 @@
+grant execute on function public.admin_dashboard_kpis(timestamptz) to service_role;
+grant execute on function public.admin_revenue_by_day(integer, timestamptz) to service_role;
+grant execute on function public.admin_orders_by_status() to service_role;
+grant execute on function public.admin_revenue_by_category(integer, timestamptz) to service_role;
+grant execute on function public.admin_top_products(integer, text, integer, timestamptz) to service_role;
+grant execute on function public.admin_stock_alerts(integer) to service_role;
+grant execute on function public.admin_list_products(text, text, uuid, uuid, text, text, text, integer, integer) to service_role;
+grant execute on function public.admin_adjust_inventory(uuid, integer, text, text, text, integer, integer) to service_role;
+grant execute on function public.admin_list_inventory(text, text, uuid, uuid, text, text, integer, integer) to service_role;
+grant execute on function public.admin_list_inventory_adjustments(uuid, integer) to service_role;
