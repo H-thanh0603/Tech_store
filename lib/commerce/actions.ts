@@ -177,6 +177,29 @@ export async function trackOrder(_: ActionState, formData: FormData): Promise<Ac
 
   const rawAccessToken = createOpaqueToken()
   const requestHeaders = await headers()
+  const ip = getRateLimitIdentity(requestHeaders, '') // fallback just gets IP if no session
+  
+  // Rate limiting with Redis
+  try {
+    const { trackingRateLimit } = await import('@/lib/rate-limit')
+    const orderHash = await sha256Hex(parsed.data.orderCode)
+    const ipIdentifier = `ip:${ip}`
+    const orderIdentifier = `order:${orderHash}`
+    
+    // Check multiple budgets
+    const [ipResult, orderResult] = await Promise.all([
+      trackingRateLimit.limit(ipIdentifier),
+      trackingRateLimit.limit(orderIdentifier)
+    ])
+    
+    if (!ipResult.success || !orderResult.success) {
+      return { ok: false, code: 'ORDER_NOT_FOUND', message: toUserMessage('ORDER_NOT_FOUND') }
+    }
+  } catch (e) {
+    // If Redis fails, gracefully continue or block depending on strictness
+    console.warn('Redis rate limit error:', e)
+  }
+
   const requestIdentity = getRateLimitIdentity(requestHeaders, await getCartTokenHash())
   const { data, error } = await getSupabaseServerClient().rpc('order_track', {
     p_order_code: parsed.data.orderCode,

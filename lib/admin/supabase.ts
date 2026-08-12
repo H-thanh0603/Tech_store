@@ -1,3 +1,4 @@
+import 'server-only'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // Server-only privileged client for admin catalog reads/writes.

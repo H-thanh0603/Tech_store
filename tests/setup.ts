@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
 // jsdom implements no media queries, but components that respect
 // `prefers-reduced-motion` legitimately call matchMedia during mount. The stub
@@ -55,3 +55,17 @@ if (typeof window !== 'undefined' && typeof window.IntersectionObserver !== 'fun
 afterEach(() => {
   cleanup()
 })
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+  useServerInsertedHTML: vi.fn(),
+}))

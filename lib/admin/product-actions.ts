@@ -93,77 +93,48 @@ export async function createProduct(
   const db = getSupabaseAdminClient()
   const brandId = parsed.data.brandId ? parsed.data.brandId : null
 
-  const { data: product, error: productError } = await db
-    .from('products')
-    .insert({
+  const { data: result, error: rpcError } = await db.rpc('admin_create_product', {
+    p_product: {
       name: parsed.data.name,
       slug: parsed.data.slug,
       description: parsed.data.description || null,
       category_id: parsed.data.categoryId,
       brand_id: brandId,
-      is_published: false,
+      is_published: parsed.data.isPublished,
       is_featured: parsed.data.isFeatured,
-      is_archived: false,
-    })
-    .select('id, slug')
-    .single()
-
-  if (productError) {
-    if (productError.code === '23505') return fail('SLUG_TAKEN')
-    return fail('INTERNAL_ERROR')
-  }
-
-  const { data: variant, error: variantError } = await db
-    .from('product_variants')
-    .insert({
-      product_id: product.id,
+    },
+    p_variant: {
       sku: parsed.data.sku,
-      attributes,
       regular_price: parsed.data.regularPrice,
       sale_price: salePrice,
-      is_active: true,
-    })
-    .select('id')
-    .single()
-
-  if (variantError) {
-    await db.from('products').delete().eq('id', product.id)
-    if (variantError.code === '23505') return fail('SKU_TAKEN')
-    return fail('INTERNAL_ERROR')
-  }
-
-  const { error: invError } = await db.from('inventory').insert({
-    variant_id: variant.id,
-    quantity: parsed.data.quantity,
-    reserved_quantity: 0,
-    low_stock_threshold: parsed.data.lowStockThreshold,
-  })
-  if (invError) {
-    await db.from('products').delete().eq('id', product.id)
-    return fail('INTERNAL_ERROR')
-  }
-
-  if (parsed.data.imageUrl) {
-    await db.from('product_images').insert({
-      product_id: product.id,
+      attributes: attributes,
+    },
+    p_inventory: {
+      quantity: parsed.data.quantity,
+      low_stock_threshold: parsed.data.lowStockThreshold,
+    },
+    p_image: {
       url: parsed.data.imageUrl,
-      alt_text: parsed.data.imageAlt || null,
-      sort_order: 0,
-    })
-  }
-
-  if (parsed.data.isPublished) {
-    const { error: pubError } = await db
-      .from('products')
-      .update({ is_published: true })
-      .eq('id', product.id)
-    if (pubError) {
-      // Keep product as draft if publish trigger rejects
+      alt_text: parsed.data.imageAlt,
     }
+  })
+
+  if (rpcError) {
+    if (rpcError.code === '23505') {
+      if (rpcError.message.includes('slug')) return fail('VALIDATION_ERROR', { slug: ['Slug đã tồn tại.'] })
+      if (rpcError.message.includes('sku')) return fail('VALIDATION_ERROR', { sku: ['SKU đã tồn tại.'] })
+    }
+    return fail('DATABASE_ERROR', { _form: [rpcError.message || 'Lỗi cơ sở dữ liệu khi tạo sản phẩm.'] })
+  }
+  
+  const rpcResult = result as { code: string; productId?: string }
+  if (rpcResult?.code !== 'OK') {
+    return fail('DATABASE_ERROR', { _form: ['Lỗi nội bộ khi tạo sản phẩm.'] })
   }
 
-  revalidateCatalog(product.id, product.slug)
-  redirect(`/admin/products/${product.id}`)
+  const newProductId = rpcResult.productId
+  revalidateCatalog(newProductId, parsed.data.slug)
+  redirect(`/admin/products/${newProductId}`)
 }
 
 export async function updateProduct(

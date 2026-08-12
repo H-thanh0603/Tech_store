@@ -21,10 +21,13 @@
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.110.8",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.2",
     "next": "^16.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "recharts": "^3.10.0",
+    "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -36,6 +39,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.1.1",
     "jsdom": "^29.1.1",
