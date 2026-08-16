@@ -25,6 +25,7 @@ function readCheckoutDefaults(): Record<string, string> {
 type CheckoutFormProps = {
   cart: CartData
   initialState: ActionState
+  vnpayEnabled?: boolean
 }
 
 const FIELDS: Array<{ name: string; label: string; type?: string; required?: boolean }> = [
@@ -38,7 +39,7 @@ const FIELDS: Array<{ name: string; label: string; type?: string; required?: boo
   { name: 'note', label: 'Ghi chú giao hàng' },
 ]
 
-export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
+export function CheckoutForm({ cart, initialState, vnpayEnabled = false }: CheckoutFormProps) {
   const { toast } = useOptionalToast()
   const [state, formAction, isPending] = useActionState(checkoutAction, initialState)
   const [idempotencyKey] = useState(() => crypto.randomUUID())
@@ -95,6 +96,11 @@ export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
           {state.message}
         </p>
       ) : null}
+    </aside>
+  )
+
+  const submitBlock = (
+    <>
       <Button
         type="submit"
         className="mt-5 w-full"
@@ -105,7 +111,7 @@ export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
       <p className="mt-3 text-center text-(length:--text-xs) text-fg-subtle">
         Guest checkout · Không ép đăng ký · Dữ liệu giữ khi lỗi validation
       </p>
-    </aside>
+    </>
   )
 
   return (
@@ -179,6 +185,14 @@ export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
                 <strong>Chuyển khoản</strong> — giữ hàng có thời hạn
               </span>
             </label>
+            {vnpayEnabled ? (
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+                <input type="radio" name="paymentMethod" value="vnpay" className="size-4" />
+                <span className="text-(length:--text-sm)">
+                  <strong>VNPay</strong> — thanh toán online qua cổng VNPay
+                </span>
+              </label>
+            ) : null}
           </fieldset>
         </section>
 
@@ -194,10 +208,14 @@ export function CheckoutForm({ cart, initialState }: CheckoutFormProps) {
             <span className="text-fg-muted">{summaryOpen ? 'Ẩn' : 'Xem tóm tắt'}</span>
           </button>
           {summaryOpen ? <div className="mt-3">{summary}</div> : null}
+          {submitBlock}
         </div>
       </div>
 
-      <div className="hidden lg:sticky lg:top-28 lg:block lg:self-start">{summary}</div>
+      <div className="hidden lg:sticky lg:top-28 lg:block lg:self-start">
+        {summary}
+        {submitBlock}
+      </div>
     </form>
   )
 }

@@ -29,6 +29,7 @@ export type FlashOfferCard = {
     minPrice: number
     compareAt: number | null
     imageUrl: string | null
+    availableStock: number
   }
 }
 
@@ -83,7 +84,7 @@ export async function getActiveFlashOffers(limit = 6): Promise<FlashOfferCard[]>
   const productIds = offers.map((o) => o.product_id as string)
   const { data: products } = await supabase
     .from('catalog_products')
-    .select('id, slug, name, min_price, has_discount, image_url')
+    .select('id, slug, name, min_price, has_discount, image_url, available_stock')
     .in('id', productIds)
 
   const byId = new Map((products ?? []).map((p) => [p.id as string, p]))
@@ -124,6 +125,7 @@ export async function getActiveFlashOffers(limit = 6): Promise<FlashOfferCard[]>
           minPrice,
           compareAt: compareAt != null && compareAt > minPrice ? compareAt : null,
           imageUrl: (p.image_url as string | null) ?? null,
+          availableStock: Number(p.available_stock ?? 0),
         },
       } satisfies FlashOfferCard
     })

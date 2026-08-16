@@ -146,7 +146,7 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     return state
   }
 
-  const result = data as { orderCode?: string }
+  const result = data as { orderCode?: string; totals?: { total?: number } }
   if (!result.orderCode) {
     return { ok: false, code: 'INTERNAL_ERROR', message: toUserMessage('INTERNAL_ERROR') }
   }
@@ -163,6 +163,24 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   })
   revalidatePath('/', 'layout')
   revalidatePath('/cart')
+
+  if (parsed.data.paymentMethod === 'vnpay') {
+    const { buildVnpayUrl } = await import('@/lib/commerce/vnpay')
+    const { getSiteUrl } = await import('@/lib/site')
+    const requestHeaders = await headers()
+    const vnpayUrl = buildVnpayUrl({
+      orderCode: result.orderCode,
+      amountVnd: Number(result.totals?.total ?? 0),
+      ipAddr:
+        requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1',
+      returnUrl: `${getSiteUrl()}/api/vnpay/return`,
+    })
+    if (!vnpayUrl) {
+      return { ok: false, code: 'CONFIGURATION_ERROR', message: toUserMessage('CONFIGURATION_ERROR') }
+    }
+    redirect(vnpayUrl)
+  }
+
   redirect(`/orders/${encodeURIComponent(result.orderCode)}/confirmation`)
 }
 

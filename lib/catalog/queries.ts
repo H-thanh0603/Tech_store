@@ -16,6 +16,25 @@ import {
   type ProductVariantData,
 } from '@/lib/catalog/types'
 
+// Mirrors the SQL normalize_vietnamese() used to build search_vector_nd so a
+// diacritic query ("điện thoại") and a no-diacritic one ("dien thoai") hit the
+// same normalized vector.
+const VIETNAMESE_DIACRITICS =
+  'àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ'
+const VIETNAMESE_ASCII =
+  'aaaaaaaaaaaaaaaaadeeeeeeeeeeeiiiiioooooooooooooooooouuuuuuuuuuuyyyyy'
+
+function normalizeVietnamese(text: string): string {
+  return text
+    .toLowerCase()
+    .split('')
+    .map((ch) => {
+      const index = VIETNAMESE_DIACRITICS.indexOf(ch)
+      return index >= 0 ? VIETNAMESE_ASCII[index] : ch
+    })
+    .join('')
+}
+
 // Raw shape of a catalog_products view row. Numeric columns arrive as strings
 // from PostgREST (numeric) or numbers; both are handled by toNumber.
 interface CatalogRow {
@@ -251,10 +270,11 @@ export async function getProducts(
   let builder = supabase.from('catalog_products').select(CATALOG_SELECT, { count: 'exact' })
 
   if (normalized.query) {
-    builder = builder.textSearch('search_vector', normalized.query, {
-      type: 'plain',
-      config: 'simple',
-    })
+    builder = builder.textSearch(
+      'search_vector_nd',
+      normalizeVietnamese(normalized.query),
+      { type: 'plain', config: 'simple' },
+    )
   }
   if (normalized.category) {
     builder = builder.eq('category_slug', normalized.category)

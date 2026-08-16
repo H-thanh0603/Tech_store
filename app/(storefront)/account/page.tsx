@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
 import { AccountDashboardClient } from '@/components/account/account-client'
+import { deleteMyDataAction } from '@/lib/customer/data-actions'
 import { getCompare, getWishlist } from '@/lib/customer/local-lists'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
@@ -71,6 +72,35 @@ export default async function AccountPage() {
         wishCount={0}
         compareCount={0}
       />
+
+      <section
+        aria-labelledby="gdpr-heading"
+        className="mx-auto mt-10 max-w-3xl rounded-(--radius-lg) border border-border bg-surface-raised p-5"
+      >
+        <h2 id="gdpr-heading" className="text-(length:--text-base) font-semibold text-fg">
+          Dữ liệu của bạn
+        </h2>
+        <p className="mt-1 text-(length:--text-sm) text-fg-muted">
+          Tải xuống toàn bộ dữ liệu tài khoản, hoặc yêu cầu xóa. Đơn hàng đã đặt được giữ
+          ẩn danh cho mục đích bảo hành/thuế.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <a
+            href="/api/account/export"
+            className="inline-flex min-h-11 items-center rounded-(--radius-md) border border-border bg-bg-elevated px-4 text-(length:--text-sm) font-semibold text-fg hover:border-brand/50"
+          >
+            Tải dữ liệu (JSON)
+          </a>
+          <form action={deleteMyDataAction}>
+            <button
+              type="submit"
+              className="inline-flex min-h-11 items-center rounded-(--radius-md) border border-danger/40 bg-danger-subtle px-4 text-(length:--text-sm) font-semibold text-danger hover:border-danger"
+            >
+              Xóa dữ liệu tài khoản
+            </button>
+          </form>
+        </div>
+      </section>
     </div>
   )
 }

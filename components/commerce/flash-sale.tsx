@@ -80,7 +80,9 @@ export function FlashSaleSection({ offers }: { offers: FlashOfferCard[] }) {
                 <div className="flex flex-1 flex-col gap-2 p-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-(length:--text-xs) font-semibold uppercase tracking-wide text-fg-subtle">
-                      Còn
+                      {offer.product.availableStock > 0
+                        ? `Còn ${offer.product.availableStock} sản phẩm`
+                        : 'Hết hàng'}
                     </p>
                     <CountdownBadge endsAt={offer.endsAt} />
                   </div>

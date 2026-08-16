@@ -11,9 +11,11 @@ const OPTIONS: Array<{ value: DashboardChartRange; label: string }> = [
 export function RangeTabs({
   range,
   metric,
+  basePath = '/admin',
 }: {
   range: DashboardChartRange
   metric?: 'revenue' | 'quantity'
+  basePath?: string
 }) {
   const metricQs = metric ? `&metric=${metric}` : ''
   return (
@@ -23,7 +25,7 @@ export function RangeTabs({
         return (
           <Link
             key={opt.value}
-            href={`/admin?range=${opt.value}${metricQs}`}
+            href={`${basePath}?range=${opt.value}${metricQs}`}
             aria-current={active ? 'page' : undefined}
             className={`inline-flex min-h-10 items-center rounded-full px-3 text-(length:--text-sm) font-medium ${
               active
