@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { requireAdminSession } from '@/lib/admin/auth'
+import { requireAdminSession, type AdminSession } from '@/lib/admin/auth'
 import { adminUserMessage } from '@/lib/admin/errors'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
@@ -35,12 +35,30 @@ function revalidateCatalog(productId?: string, slug?: string) {
   if (slug) revalidatePath(`/products/${slug}`)
 }
 
-async function assertAdmin(): Promise<AdminActionState | null> {
+async function assertAdmin(): Promise<AdminSession | AdminActionState> {
   try {
-    await requireAdminSession('products')
-    return null
+    return await requireAdminSession('products')
   } catch (error) {
     return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
+}
+
+async function writeAudit(
+  action: string,
+  entityId: string | null,
+  payload: Record<string, unknown>,
+  actorLabel: string,
+) {
+  try {
+    await getSupabaseAdminClient().from('admin_audit_logs').insert({
+      action,
+      entity_type: 'product',
+      entity_id: entityId,
+      payload,
+      actor_label: actorLabel,
+    })
+  } catch {
+    // Audit table may not exist until migration applied; don't fail business action.
   }
 }
 
@@ -53,8 +71,8 @@ export async function createProduct(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = createProductSchema.safeParse({
     name: formData.get('name'),
@@ -162,6 +180,12 @@ export async function createProduct(
     }
   }
 
+  await writeAudit(
+    'product_create',
+    product.id,
+    { name: parsed.data.name, slug: parsed.data.slug, sku: parsed.data.sku },
+    admin.actorLabel,
+  )
   revalidateCatalog(product.id, product.slug)
   redirect(`/admin/products/${product.id}`)
 }
@@ -171,8 +195,8 @@ export async function updateProduct(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = productUpsertSchema.safeParse({
     name: formData.get('name'),
@@ -211,6 +235,18 @@ export async function updateProduct(
     return fail('INTERNAL_ERROR')
   }
 
+  await writeAudit(
+    'product_update',
+    productId,
+    {
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      is_published: parsed.data.isPublished,
+      is_featured: parsed.data.isFeatured,
+      is_archived: parsed.data.isArchived,
+    },
+    admin.actorLabel,
+  )
   revalidateCatalog(productId, parsed.data.slug)
   return { ok: true, message: 'Đã lưu sản phẩm.' }
 }
@@ -220,8 +256,8 @@ export async function upsertVariant(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = variantUpsertSchema.safeParse({
     variantId: formData.get('variantId') ?? '',
@@ -311,6 +347,12 @@ export async function upsertVariant(
     if (iErr) return fail('INTERNAL_ERROR')
   }
 
+  await writeAudit(
+    parsed.data.variantId ? 'variant_update' : 'variant_create',
+    parsed.data.variantId || productId,
+    { sku: parsed.data.sku, regular_price: parsed.data.regularPrice, sale_price: salePrice, quantity: parsed.data.quantity },
+    admin.actorLabel,
+  )
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã lưu biến thể.' }
 }
@@ -320,8 +362,8 @@ export async function upsertImage(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = imageUpsertSchema.safeParse({
     imageId: formData.get('imageId') ?? '',
@@ -360,8 +402,8 @@ export async function deleteImage(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = imageDeleteSchema.safeParse({ imageId: formData.get('imageId') })
   if (!parsed.success) return fail('VALIDATION_ERROR')
@@ -373,6 +415,7 @@ export async function deleteImage(
     .eq('product_id', productId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeAudit('image_delete', productId, { image_id: parsed.data.imageId }, admin.actorLabel)
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã xóa ảnh.' }
 }
@@ -382,8 +425,8 @@ export async function upsertSpec(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = specUpsertSchema.safeParse({
     specId: formData.get('specId') ?? '',
@@ -413,6 +456,12 @@ export async function upsertSpec(
     if (error) return fail('INTERNAL_ERROR')
   }
 
+  await writeAudit(
+    parsed.data.specId ? 'spec_update' : 'spec_create',
+    productId,
+    { group_name: parsed.data.groupName, label: parsed.data.label, value: parsed.data.value },
+    admin.actorLabel,
+  )
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã lưu thông số.' }
 }
@@ -422,8 +471,8 @@ export async function deleteSpec(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = specDeleteSchema.safeParse({ specId: formData.get('specId') })
   if (!parsed.success) return fail('VALIDATION_ERROR')
@@ -435,6 +484,7 @@ export async function deleteSpec(
     .eq('product_id', productId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeAudit('spec_delete', productId, { spec_id: parsed.data.specId }, admin.actorLabel)
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã xóa thông số.' }
 }
@@ -443,8 +493,8 @@ export async function setProductArchiveState(
   productId: string,
   archived: boolean,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const db = getSupabaseAdminClient()
   const { error } = await db
@@ -458,6 +508,7 @@ export async function setProductArchiveState(
 
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeAudit('product_archive', productId, { archived }, admin.actorLabel)
   revalidateCatalog(productId)
   return {
     ok: true,
@@ -469,8 +520,8 @@ export async function bulkUpdateProducts(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const action = String(formData.get('bulkAction') ?? '')
   const ids = formData
@@ -524,6 +575,7 @@ export async function bulkUpdateProducts(
     }
   }
 
+  await writeAudit('product_bulk_update', null, { action, count: ids.length }, admin.actorLabel)
   revalidateCatalog()
   return {
     ok: true,
@@ -541,8 +593,8 @@ export async function replaceUseCases(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin()
-  if (gate) return gate
+  const admin = await assertAdmin()
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = useCasesSchema.safeParse({ useCases: formData.get('useCases') ?? '' })
   if (!parsed.success) return fail('VALIDATION_ERROR')

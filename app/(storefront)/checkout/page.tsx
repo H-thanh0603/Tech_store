@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 
 import { CheckoutForm } from '@/components/commerce/checkout-form'
 import { getCart } from '@/lib/commerce/queries'
+import { getVnpayConfig } from '@/lib/commerce/vnpay'
 
 export default async function CheckoutPage() {
   const cart = await getCart()
@@ -10,7 +11,11 @@ export default async function CheckoutPage() {
   }
   return (
     <div className="container-store py-8 sm:py-10">
-      <CheckoutForm cart={cart} initialState={{ ok: true }} />
+      <CheckoutForm
+        cart={cart}
+        initialState={{ ok: true }}
+        vnpayEnabled={getVnpayConfig() !== null}
+      />
     </div>
   )
 }

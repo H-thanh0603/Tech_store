@@ -50,6 +50,31 @@ if (typeof window !== 'undefined' && typeof window.IntersectionObserver !== 'fun
   globalThis.IntersectionObserver = window.IntersectionObserver
 }
 
+// Node 26 exposes a global localStorage that throws unless --localstorage-file
+// is set, and jsdom 29 leaves window.localStorage undefined in that case. The
+// in-memory stub keeps storage tests runnable without Node flags.
+if (typeof window !== 'undefined' && typeof window.localStorage === 'undefined') {
+  const store = new Map<string, string>()
+  const localStorageStub = {
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value))
+    },
+    removeItem: (key: string) => {
+      store.delete(key)
+    },
+    clear: () => {
+      store.clear()
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size
+    },
+  } as Storage
+  Object.defineProperty(window, 'localStorage', { value: localStorageStub, configurable: true })
+  Object.defineProperty(globalThis, 'localStorage', { value: localStorageStub, configurable: true })
+}
+
 // Vitest does not auto-unmount RTL renders between tests, so without this the
 // jsdom document accumulates every render and role queries match across tests.
 afterEach(() => {

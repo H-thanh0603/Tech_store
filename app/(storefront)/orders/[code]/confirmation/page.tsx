@@ -12,10 +12,13 @@ import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 export default async function OrderConfirmationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ code: string }>
+  searchParams: Promise<{ vnpay?: string }>
 }) {
   const { code } = await params
+  const { vnpay } = await searchParams
   const token = (await cookies()).get(ORDER_ACCESS_COOKIE)?.value
   if (!token) notFound()
   const { data, error } = await getSupabaseServerClient().rpc('order_get_by_access', {
@@ -28,6 +31,15 @@ export default async function OrderConfirmationPage({
   return (
     <div className="container-store grid max-w-3xl gap-8 py-10 sm:py-14">
       <OrderSavedEffect orderCode={order.orderCode} total={order.total} />
+      {vnpay === 'failed' ? (
+        <p
+          role="alert"
+          className="rounded-(--radius-md) border border-danger/30 bg-danger-subtle px-4 py-3 text-(length:--text-sm) text-danger"
+        >
+          Thanh toán VNPay chưa hoàn tất. Đơn vẫn được giữ — bạn có thể thanh toán lại
+          hoặc chọn phương thức khác.
+        </p>
+      ) : null}
       <header className="rounded-(--radius-xl) border border-border bg-brand-soft/40 p-6 sm:p-8">
         <p className="text-(length:--text-xs) font-semibold uppercase tracking-[0.12em] text-brand">
           Đặt hàng thành công

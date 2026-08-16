@@ -30,7 +30,7 @@ export const checkoutSchema = z.object({
   ward: z.string().trim().min(1).max(100),
   streetAddress: z.string().trim().min(5).max(240),
   note: z.string().trim().max(500).optional().or(z.literal('')),
-  paymentMethod: z.enum(['cod', 'bank_transfer']),
+  paymentMethod: z.enum(['cod', 'bank_transfer', 'vnpay']),
   idempotencyKey: postgresUuidSchema,
 })
 

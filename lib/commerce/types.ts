@@ -1,4 +1,4 @@
-export type PaymentMethod = 'cod' | 'bank_transfer'
+export type PaymentMethod = 'cod' | 'bank_transfer' | 'vnpay'
 
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired'
 
