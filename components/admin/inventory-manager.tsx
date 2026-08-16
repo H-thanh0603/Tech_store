@@ -55,6 +55,10 @@ export function InventoryTable({ rows }: { rows: InventoryListRow[] }) {
                     <img
                       src={row.imageUrl}
                       alt=""
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      decoding="async"
                       className="h-10 w-10 rounded border border-border object-cover"
                     />
                   ) : null}
