@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { ListToggles } from '@/components/commerce/list-toggles'
+import { QuickViewButton } from '@/components/commerce/quick-view-button'
 import { Badge } from '@/components/ui/badge'
 import { Price } from '@/components/ui/price'
 import { highlightsForProduct } from '@/lib/catalog/highlights'
@@ -52,6 +53,10 @@ export function ProductCard({ product, imageLoading = 'lazy' }: ProductCardProps
 
         <div className="absolute right-2 top-2 z-10">
           <ListToggles product={product} compact />
+        </div>
+
+        <div className="absolute bottom-2 left-2 z-10 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+          <QuickViewButton slug={product.slug} name={product.name} />
         </div>
       </div>
 

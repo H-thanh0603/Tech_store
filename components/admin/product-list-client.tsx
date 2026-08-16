@@ -164,6 +164,10 @@ export function ProductListTable({ products }: { products: AdminProductListItem[
                         <img
                           src={p.imageUrl}
                           alt=""
+                          width={44}
+                          height={44}
+                          loading="lazy"
+                          decoding="async"
                           className="h-11 w-11 rounded-(--radius-md) border border-border object-cover"
                         />
                       ) : (

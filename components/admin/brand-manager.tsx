@@ -65,6 +65,10 @@ export function BrandManager({ brands }: { brands: AdminBrandRow[] }) {
                       <img
                         src={b.logoUrl}
                         alt=""
+                        width={36}
+                        height={36}
+                        loading="lazy"
+                        decoding="async"
                         className="h-9 w-9 rounded border border-border object-contain"
                       />
                     ) : (
