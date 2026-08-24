@@ -1,7 +1,7 @@
 -- Admin order ops: status transitions and reservation release / stock deduction.
 
 begin;
-select plan(6);
+select plan(12);
 
 -- Seed a dedicated order with one reservation (no place_order dependency).
 -- Insert product unpublished first — publish trigger requires an active variant.
@@ -85,6 +85,34 @@ where not exists (
   where order_id = 'a0000000-0000-0000-0000-000000000021'
 );
 
+-- An admin correction cannot reduce Network Stock below active reservations.
+-- Checkout reservations live in inventory_reservations, not in the legacy
+-- inventory.reserved_quantity column.
+select is(
+  (admin_adjust_inventory(
+    'a0000000-0000-0000-0000-000000000011',
+    -9,
+    'correction'
+  )->>'code'),
+  'STOCK_CONSTRAINT',
+  'inventory adjustment rejects quantity below active reservations'
+);
+
+select is(
+  (select quantity from inventory where variant_id = 'a0000000-0000-0000-0000-000000000011'),
+  10,
+  'rejected inventory adjustment leaves on-hand unchanged'
+);
+
+select throws_ok(
+  $$update inventory
+    set quantity = 1
+    where variant_id = 'a0000000-0000-0000-0000-000000000011'$$,
+  '23514',
+  'inventory quantity cannot be lower than active reservations',
+  'database trigger rejects direct inventory writes below reservations'
+);
+
 -- Illegal jump pending -> shipping
 select is(
   (admin_update_order('TS-ADMIN-001', 'shipping', null)->>'code'),
@@ -125,6 +153,53 @@ select ok(
     limit 1
   ),
   'cancel releases inventory reservation'
+);
+
+-- Legacy/inconsistent data must not be hidden by clamping inventory to zero
+-- when an order is completed.
+insert into orders (
+  id, order_code, idempotency_key, access_token_hash,
+  customer_name, customer_phone, address_snapshot,
+  payment_method, payment_status, order_status,
+  subtotal, discount_total, shipping_total, total
+) values (
+  'a0000000-0000-0000-0000-000000000022',
+  'TS-ADMIN-002',
+  'a0000000-0000-0000-0000-000000000032',
+  repeat('b', 64),
+  'Admin Shortage Fixture',
+  '0901000002',
+  '{"province":"HN","district":"HK","ward":"1","streetAddress":"2 Test"}'::jsonb,
+  'cod',
+  'paid',
+  'shipping',
+  11000000, 0, 0, 11000000
+);
+
+insert into inventory_reservations (order_id, variant_id, quantity, expires_at)
+values (
+  'a0000000-0000-0000-0000-000000000022',
+  'a0000000-0000-0000-0000-000000000011',
+  11,
+  null
+);
+
+select is(
+  (admin_update_order('TS-ADMIN-002', 'completed', null)->>'code'),
+  'STOCK_CONSTRAINT',
+  'completion rejects an order whose reservation exceeds on-hand'
+);
+
+select is(
+  (select order_status from orders where order_code = 'TS-ADMIN-002'),
+  'shipping',
+  'failed completion leaves order status unchanged'
+);
+
+select is(
+  (select quantity from inventory where variant_id = 'a0000000-0000-0000-0000-000000000011'),
+  10,
+  'failed completion leaves inventory unchanged'
 );
 
 select * from finish();
