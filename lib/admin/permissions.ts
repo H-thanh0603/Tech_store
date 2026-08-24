@@ -16,6 +16,7 @@ export type AdminModule =
   | 'orders'
   | 'customers'
   | 'coupons'
+  | 'content'
   | 'reports'
   | 'settings'
 
@@ -30,6 +31,7 @@ const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
     'orders',
     'customers',
     'coupons',
+    'content',
     'reports',
     'settings',
   ],
@@ -41,12 +43,11 @@ const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
     'inventory',
     'orders',
     'coupons',
+    'content',
     'reports',
   ],
   staff: ['dashboard', 'inventory', 'orders'],
 }
-
-export const DEFAULT_ADMIN_ROLE: AdminRole = 'admin'
 
 export function isAdminRole(value: unknown): value is AdminRole {
   return value === 'admin' || value === 'manager' || value === 'staff'

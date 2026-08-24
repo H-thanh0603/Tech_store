@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  mergeStoredLists,
   clearCompare,
   getCompare,
   getWishlist,
@@ -48,5 +49,15 @@ describe('guest local lists', () => {
     clearCompare()
     expect(getCompare()).toHaveLength(0)
     expect(isInCompare('p0')).toBe(false)
+  })
+
+  it('merges device and account lists by product, newest first, within the limit', () => {
+    const local = [{ ...sample, savedAt: 10 }]
+    const server = [
+      { ...sample, savedAt: 5 },
+      { ...sample, id: 'p2', slug: 'phone', name: 'Phone', savedAt: 20 },
+    ]
+
+    expect(mergeStoredLists(local, server, 4).map((item) => item.id)).toEqual(['p2', 'p1'])
   })
 })

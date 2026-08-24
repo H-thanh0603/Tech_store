@@ -13,10 +13,6 @@ const slugSchema = z
 
 const money = z.coerce.number().finite().min(0).max(999_999_999)
 
-export const adminLoginSchema = z.object({
-  secret: z.string().min(1, 'Nhập mật khẩu admin.'),
-})
-
 export const adminAccountLoginSchema = z.object({
   email: z.string().trim().email('Email không hợp lệ.'),
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),

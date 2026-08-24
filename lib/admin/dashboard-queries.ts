@@ -3,6 +3,8 @@ import { clampRangeDays } from '@/lib/admin/dashboard-math'
 import type {
   DashboardChartRange,
   DashboardKpis,
+  FunnelStage,
+  FunnelStageRow,
   OrdersByStatusRow,
   RecentOrderRow,
   RevenueByCategoryRow,
@@ -112,6 +114,24 @@ export async function getTopProducts(
       revenue: num(row.revenue),
     }
   })
+}
+
+const FUNNEL_STAGES: FunnelStage[] = ['search', 'product', 'cart', 'checkout', 'order']
+
+export async function getSalesFunnel(range: DashboardChartRange): Promise<FunnelStageRow[]> {
+  const days = clampRangeDays(range)
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_sales_funnel', {
+    p_days: days,
+  })
+  if (error) throw error
+
+  const byStage = new Map(
+    asArray(data).map((item) => {
+      const row = asRecord(item)
+      return [String(row.stage), num(row.count)] as const
+    }),
+  )
+  return FUNNEL_STAGES.map((stage) => ({ stage, count: byStage.get(stage) ?? 0 }))
 }
 
 export async function getStockAlerts(): Promise<{

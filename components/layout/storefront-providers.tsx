@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 
 import { ToastProvider } from '@/components/ui/toast'
+import { CustomerListSync } from '@/components/account/customer-list-sync'
 
 /**
  * Client providers for the storefront shell.
@@ -13,5 +14,5 @@ import { ToastProvider } from '@/components/ui/toast'
  * hero/campaign slots that content editors control, not in an interstitial.
  */
 export function StorefrontProviders({ children }: { children: ReactNode }) {
-  return <ToastProvider>{children}</ToastProvider>
+  return <ToastProvider><CustomerListSync />{children}</ToastProvider>
 }

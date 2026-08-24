@@ -32,6 +32,8 @@ const transferOrder: OrderConfirmationData = {
   shippingTotal: 0,
   total: 1000000,
   transferExpiresAt: '2026-07-25T12:00:00.000Z',
+  fulfillmentMethod: 'delivery',
+  pickupStore: null,
   items: [],
 }
 

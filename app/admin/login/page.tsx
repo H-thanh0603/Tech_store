@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { AdminLoginForm } from '@/components/admin/login-form'
-import { adminAuthMode, isAdminAuthenticated } from '@/lib/admin/auth'
+import { isAdminAuthenticated } from '@/lib/admin/auth'
 
 export default async function AdminLoginPage() {
   if (await isAdminAuthenticated()) {
@@ -18,12 +18,10 @@ export default async function AdminLoginPage() {
           Đăng nhập
         </h1>
         <p className="mt-2 text-(length:--text-sm) text-fg-muted">
-          {adminAuthMode() === 'supabase'
-            ? 'Dùng tài khoản nhân viên đã được cấp quyền.'
-            : 'Chế độ ADMIN_SECRET chuyển tiếp chỉ dành cho local/test.'}
+          Dùng tài khoản nhân viên đã được cấp quyền.
         </p>
       </div>
-      <AdminLoginForm mode={adminAuthMode()} />
+      <AdminLoginForm />
     </section>
   )
 }

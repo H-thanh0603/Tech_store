@@ -355,22 +355,17 @@ export async function getProductBySlug(
   return mapProductDetail(data as unknown as DetailRow)
 }
 
-export async function getRelatedProducts(
+export async function getRecommendedProducts(
   productId: string,
-  categoryId: string,
   supabase: SupabaseClient = getSupabaseServerClient(),
 ): Promise<ProductCardData[]> {
-  const { data, error } = await supabase
-    .from('catalog_products')
-    .select(CATALOG_SELECT)
-    .eq('category_id', categoryId)
-    .neq('id', productId)
-    .order('is_featured', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(4)
+  const { data, error } = await supabase.rpc('recommend_products', {
+    p_product_id: productId,
+    p_limit: 4,
+  })
 
   if (error) {
-    throw new Error('Failed to load related products')
+    throw new Error('Failed to load product recommendations')
   }
 
   return ((data ?? []) as CatalogRow[]).map(mapCatalogRowToCard)

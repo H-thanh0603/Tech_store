@@ -19,6 +19,8 @@ const COMPARE_KEY = 'techstore_compare_v1'
 const RECENT_KEY = 'techstore_recent_v1'
 const MAX_COMPARE = 4
 const MAX_RECENT = 12
+let accountSyncEnabled = false
+let accountSyncTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Stable empty array for SSR / initial client snapshot. */
 const EMPTY: StoredProductRef[] = []
@@ -59,9 +61,44 @@ function writeList(key: string, list: StoredProductRef[]) {
     window.localStorage.setItem(key, raw)
     snapCache.set(key, { raw, list: list.length === 0 ? EMPTY : list })
     window.dispatchEvent(new CustomEvent('techstore:lists-changed', { detail: { key } }))
+    scheduleAccountSync()
   } catch {
     // quota / private mode
   }
+}
+
+export function mergeStoredLists(
+  local: StoredProductRef[],
+  server: StoredProductRef[],
+  limit = Number.POSITIVE_INFINITY,
+): StoredProductRef[] {
+  const byId = new Map<string, StoredProductRef>()
+  for (const item of [...local, ...server]) {
+    const current = byId.get(item.id)
+    if (!current || item.savedAt > current.savedAt) byId.set(item.id, item)
+  }
+  return [...byId.values()].sort((a, b) => b.savedAt - a.savedAt).slice(0, limit)
+}
+
+export function mergeAccountLists(input: { wishlist: StoredProductRef[]; compare: StoredProductRef[] }) {
+  accountSyncEnabled = false
+  writeList(WISHLIST_KEY, mergeStoredLists(getWishlist(), input.wishlist))
+  writeList(COMPARE_KEY, mergeStoredLists(getCompare(), input.compare, MAX_COMPARE))
+  accountSyncEnabled = true
+  scheduleAccountSync()
+}
+
+function scheduleAccountSync() {
+  if (!accountSyncEnabled || typeof fetch === 'undefined') return
+  if (accountSyncTimer) clearTimeout(accountSyncTimer)
+  accountSyncTimer = setTimeout(() => {
+    accountSyncTimer = null
+    void fetch('/api/account/lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wishlist: getWishlist(), compare: getCompare() }),
+    })
+  }, 250)
 }
 
 function isStoredRef(value: unknown): value is StoredProductRef {

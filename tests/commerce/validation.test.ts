@@ -98,6 +98,19 @@ describe('checkoutSchema', () => {
   it('requires a uuid idempotency key', () => {
     expect(checkoutSchema.safeParse({ ...validCheckout, idempotencyKey: 'x' }).success).toBe(false)
   })
+
+  it('allows pickup without a delivery address but requires a store', () => {
+    const pickup = {
+      ...validCheckout,
+      fulfillmentMethod: 'pickup',
+      province: '', district: '', ward: '', streetAddress: '',
+    }
+    expect(checkoutSchema.safeParse({ ...pickup, pickupStoreId: '' }).success).toBe(false)
+    expect(checkoutSchema.safeParse({
+      ...pickup,
+      pickupStoreId: '92000000-0000-4000-8000-000000000001',
+    }).success).toBe(true)
+  })
 })
 
 describe('trackingSchema', () => {

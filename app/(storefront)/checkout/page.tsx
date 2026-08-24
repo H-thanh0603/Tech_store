@@ -2,10 +2,11 @@ import { redirect } from 'next/navigation'
 
 import { CheckoutForm } from '@/components/commerce/checkout-form'
 import { getCart } from '@/lib/commerce/queries'
+import { getPickupStoresForCart } from '@/lib/commerce/pickup'
 import { getVnpayConfig } from '@/lib/commerce/vnpay'
 
 export default async function CheckoutPage() {
-  const cart = await getCart()
+  const [cart, pickupStores] = await Promise.all([getCart(), getPickupStoresForCart()])
   if (cart.items.length === 0) {
     redirect('/cart')
   }
@@ -15,6 +16,7 @@ export default async function CheckoutPage() {
         cart={cart}
         initialState={{ ok: true }}
         vnpayEnabled={getVnpayConfig() !== null}
+        pickupStores={pickupStores}
       />
     </div>
   )

@@ -10,6 +10,7 @@ import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-s
 import {
   listAdminInventory,
   listInventoryAdjustments,
+  listStoreInventory,
 } from '@/lib/admin/catalog-queries'
 import { listBrands, listCategories } from '@/lib/admin/queries'
 import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
@@ -76,6 +77,7 @@ export default async function AdminInventoryPage({
 
   const focusRow = result?.rows.find((r) => r.variantId === variantFocus) ?? null
   let history = focusRow ? await listInventoryAdjustments(focusRow.variantId).catch(() => []) : []
+  let stores = focusRow ? await listStoreInventory(focusRow.variantId).catch(() => []) : []
 
   // If focusing a variant not on current page, fetch just that list filtered by search sku later — skip for now.
   if (variantFocus && !focusRow && !error) {
@@ -84,6 +86,7 @@ export default async function AdminInventoryPage({
       const found = single.rows.find((r) => r.variantId === variantFocus)
       if (found) {
         history = await listInventoryAdjustments(found.variantId).catch(() => [])
+        stores = await listStoreInventory(found.variantId).catch(() => [])
       }
     } catch {
       // ignore
@@ -212,7 +215,7 @@ export default async function AdminInventoryPage({
               <Link href="/admin/inventory" className="text-(length:--text-sm) text-accent hover:underline">
                 ← Danh sách tồn kho
               </Link>
-              <InventoryAdjustPanel row={row} history={history} />
+              <InventoryAdjustPanel row={row} history={history} stores={stores} />
             </div>
           )
         })()

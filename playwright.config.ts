@@ -27,9 +27,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Always dev mode: `next start` runs with NODE_ENV=production, which
-    // forces ADMIN_AUTH_MODE=supabase (no seeded admin) and blocks E2E login.
-    // Dev keeps legacy-secret so E2E can mint the techstore_admin cookie.
+    // Admin login needs a seeded Supabase account: `npm run admin:seed`
+    // (idempotent) against the local stack before running this suite.
     command: 'npm run dev',
     url: baseURL,
     reuseExistingServer: !process.env.CI,

@@ -10,12 +10,14 @@ import {
 describe('admin permissions', () => {
   it('gives admin full module access', () => {
     expect(modulesForRole('admin')).toContain('settings')
+    expect(canAccessModule('admin', 'content')).toBe(true)
     expect(canAccessModule('admin', 'coupons')).toBe(true)
     expect(canAccessModule('admin', 'reports')).toBe(true)
   })
 
   it('hides manager from settings', () => {
     expect(canAccessModule('manager', 'settings')).toBe(false)
+    expect(canAccessModule('manager', 'content')).toBe(true)
     expect(canAccessModule('manager', 'orders')).toBe(true)
   })
 
@@ -25,6 +27,7 @@ describe('admin permissions', () => {
     expect(canAccessModule('staff', 'orders')).toBe(true)
     expect(canAccessModule('staff', 'inventory')).toBe(true)
     expect(canAccessModule('staff', 'categories')).toBe(false)
+    expect(canAccessModule('staff', 'content')).toBe(false)
   })
 
   it('throws FORBIDDEN when requireModuleAccess fails', () => {

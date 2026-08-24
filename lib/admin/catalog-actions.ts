@@ -8,6 +8,7 @@ import {
   categoryUpsertSchema,
   inventoryAdjustSchema,
   inventoryThresholdSchema,
+  storeInventorySetSchema,
 } from '@/lib/admin/catalog-validation'
 import { adminUserMessage } from '@/lib/admin/errors'
 import type { AdminModule } from '@/lib/admin/permissions'
@@ -302,4 +303,43 @@ export async function updateInventoryThreshold(
 
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã cập nhật ngưỡng cảnh báo.' }
+}
+
+export async function setStoreStock(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const gate = await assertAdmin('inventory')
+  if (gate) return gate
+  const admin = await requireAdminSession('inventory')
+  if (admin.role === 'staff') return fail('FORBIDDEN')
+
+  const parsed = storeInventorySetSchema.safeParse({
+    storeId: formData.get('storeId'),
+    variantId: formData.get('variantId'),
+    quantity: formData.get('quantity'),
+    expectedQuantity: formData.get('expectedQuantity'),
+  })
+  if (!parsed.success) return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_set_store_stock', {
+    p_store_id: parsed.data.storeId,
+    p_variant_id: parsed.data.variantId,
+    p_quantity: parsed.data.quantity,
+    p_expected_quantity: parsed.data.expectedQuantity,
+    p_actor_label: admin.actorLabel,
+  })
+  if (error) return fail('INTERNAL_ERROR')
+  const result = data as { code?: string; quantity?: number } | null
+  if (result?.code !== 'OK') {
+    const message = result?.code === 'EXCEEDS_NETWORK_STOCK'
+      ? 'Phân bổ cửa hàng không được vượt tồn kho toàn hệ thống.'
+      : result?.code === 'CONFLICT'
+        ? 'Tồn kho cửa hàng vừa thay đổi. Tải lại rồi thử lại.'
+        : undefined
+    return fail(result?.code ?? 'INTERNAL_ERROR', undefined, message)
+  }
+
+  revalidateCatalogAdmin()
+  return { ok: true, message: 'Đã cập nhật tồn kho cửa hàng.' }
 }

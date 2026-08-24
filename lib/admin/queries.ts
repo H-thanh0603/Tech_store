@@ -293,6 +293,7 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
       `
       id, order_code, customer_name, customer_phone, customer_email,
       address_snapshot, note, payment_method, payment_status, order_status,
+      fulfillment_method, pickup_store_id,
       subtotal, discount_total, shipping_total, total, transfer_expires_at,
       coupon_snapshot, created_at, updated_at,
       order_items ( product_name, sku, attributes, unit_price, quantity, line_total )
@@ -321,7 +322,7 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
   })
 
   const orderId = String(data.id)
-  const [eventsRes, notesRes] = await Promise.all([
+  const [eventsRes, notesRes, storeRes] = await Promise.all([
     db
       .from('order_status_events')
       .select('id, from_status, to_status, event_type, reason, actor_label, created_at')
@@ -332,7 +333,17 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
       .select('id, body, actor_label, created_at')
       .eq('order_id', orderId)
       .order('created_at', { ascending: false }),
+    data.pickup_store_id
+      ? db
+          .from('stores')
+          .select('id, name, phone, province, district, street_address, opening_hours')
+          .eq('id', data.pickup_store_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ])
+
+  if (storeRes.error) throw storeRes.error
+  const store = storeRes.data
 
   const statusEvents = (eventsRes.data ?? []).map((row) => ({
     id: String(row.id),
@@ -362,6 +373,18 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     paymentMethod: data.payment_method as PaymentMethod,
     paymentStatus: data.payment_status as PaymentStatus,
     orderStatus: data.order_status as OrderStatus,
+    fulfillmentMethod: data.fulfillment_method === 'pickup' ? 'pickup' : 'delivery',
+    pickupStore: store
+      ? {
+          id: String(store.id),
+          name: String(store.name),
+          phone: store.phone == null ? null : String(store.phone),
+          province: String(store.province),
+          district: String(store.district),
+          address: String(store.street_address),
+          openingHours: String(store.opening_hours),
+        }
+      : null,
     total: num(data.total),
     createdAt: String(data.created_at),
     updatedAt: data.updated_at == null ? undefined : String(data.updated_at),

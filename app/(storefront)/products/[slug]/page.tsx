@@ -6,13 +6,15 @@ import { ListToggles } from '@/components/commerce/list-toggles'
 import { ProductGallery } from '@/components/commerce/product-gallery'
 import { ProductGrid } from '@/components/commerce/product-grid'
 import { ProductHotspots } from '@/components/commerce/product-hotspots'
+import { PickupAvailability } from '@/components/commerce/pickup-availability'
 import { ProductReviews } from '@/components/commerce/product-reviews'
+import { ProductReviewForm } from '@/components/commerce/product-review-form'
 import { ProductViewTracker } from '@/components/commerce/product-view-tracker'
 import { VariantSelector } from '@/components/commerce/variant-selector'
 import { SectionHeader } from '@/components/ui/section-header'
 import { JsonLd } from '@/components/seo/json-ld'
 import { highlightsForProduct } from '@/lib/catalog/highlights'
-import { getProductBySlug, getRelatedProducts } from '@/lib/catalog/queries'
+import { getProductBySlug, getRecommendedProducts } from '@/lib/catalog/queries'
 import {
   getProductHotspots,
   getProductReviews,
@@ -22,6 +24,8 @@ import type { ProductDetail, ProductSpecData } from '@/lib/catalog/types'
 import { breadcrumbJsonLd, productJsonLd } from '@/lib/seo/json-ld'
 import { getSiteUrl } from '@/lib/site'
 import { formatPrice } from '@/lib/format'
+import { getAuthUser } from '@/lib/supabase/auth-server'
+import { getProductPickupStores } from '@/lib/commerce/pickup'
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>
@@ -95,11 +99,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound()
   }
 
-  const [related, reviews, reviewSummary, hotspots] = await Promise.all([
-    getRelatedProducts(product.id, product.categoryId),
+  const [related, reviews, reviewSummary, hotspots, user, pickupStores] = await Promise.all([
+    getRecommendedProducts(product.id),
     getProductReviews(product.id),
     getReviewSummary(product.id),
     getProductHotspots(product.id),
+    getAuthUser(),
+    getProductPickupStores(product.id),
   ])
   const specGroups = groupSpecs(product.specs)
   const highlights = highlightsForProduct(product.categorySlug, 3)
@@ -208,6 +214,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
             />
           </div>
 
+          <PickupAvailability stores={pickupStores} />
+
           {product.useCases.length > 0 ? (
             <div>
               <h2 className="text-(length:--text-sm) font-semibold text-fg">Phù hợp với</h2>
@@ -280,6 +288,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         average={reviewSummary.average}
         count={reviewSummary.count}
       />
+      <ProductReviewForm productId={product.id} signedIn={Boolean(user)} />
 
       <section aria-labelledby="faq-heading">
         <SectionHeader eyebrow="FAQ" title="Câu hỏi thường gặp" titleId="faq-heading" />
@@ -304,7 +313,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <section aria-labelledby="related-heading">
           <SectionHeader
             eyebrow="Gợi ý"
-            title="Sản phẩm liên quan"
+            title="Có thể bạn cũng thích"
             titleId="related-heading"
             actionHref={`/products?category=${product.categorySlug}`}
             actionLabel="Cùng danh mục"

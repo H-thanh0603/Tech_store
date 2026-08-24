@@ -54,13 +54,17 @@ export default async function AdminOrderDetailPage({
                 <dd>{order.customerEmail}</dd>
               </div>
             ) : null}
-            <div>
-              <dt className="text-fg-muted">Địa chỉ</dt>
-              <dd>
-                {order.address.streetAddress}, {order.address.ward}, {order.address.district},{' '}
-                {order.address.province}
-              </dd>
-            </div>
+            {order.fulfillmentMethod === 'pickup' && order.pickupStore ? (
+              <div>
+                <dt className="text-fg-muted">Nhận tại cửa hàng</dt>
+                <dd>{order.pickupStore.name} · {order.pickupStore.address}, {order.pickupStore.district}, {order.pickupStore.province}</dd>
+              </div>
+            ) : (
+              <div>
+                <dt className="text-fg-muted">Địa chỉ giao</dt>
+                <dd>{order.address.streetAddress}, {order.address.ward}, {order.address.district}, {order.address.province}</dd>
+              </div>
+            )}
             {order.note ? (
               <div>
                 <dt className="text-fg-muted">Ghi chú khách</dt>

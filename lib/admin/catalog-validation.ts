@@ -44,6 +44,13 @@ export const inventoryThresholdSchema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000),
 })
 
+export const storeInventorySetSchema = z.object({
+  storeId: uuid,
+  variantId: uuid,
+  quantity: z.coerce.number().int().min(0).max(1_000_000),
+  expectedQuantity: z.coerce.number().int().min(0).max(1_000_000),
+})
+
 export type CategoryUpsertInput = z.infer<typeof categoryUpsertSchema>
 export type BrandUpsertInput = z.infer<typeof brandUpsertSchema>
 export type InventoryAdjustInput = z.infer<typeof inventoryAdjustSchema>

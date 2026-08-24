@@ -25,13 +25,29 @@ export const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
   customerPhone: vietnameseMobileSchema,
   customerEmail: z.string().trim().email().max(254).optional().or(z.literal('')),
-  province: z.string().trim().min(1).max(100),
-  district: z.string().trim().min(1).max(100),
-  ward: z.string().trim().min(1).max(100),
-  streetAddress: z.string().trim().min(5).max(240),
+  province: z.string().trim().max(100).optional().or(z.literal('')),
+  district: z.string().trim().max(100).optional().or(z.literal('')),
+  ward: z.string().trim().max(100).optional().or(z.literal('')),
+  streetAddress: z.string().trim().max(240).optional().or(z.literal('')),
   note: z.string().trim().max(500).optional().or(z.literal('')),
   paymentMethod: z.enum(['cod', 'bank_transfer', 'vnpay']),
   idempotencyKey: postgresUuidSchema,
+  fulfillmentMethod: z.enum(['delivery', 'pickup']).default('delivery'),
+  pickupStoreId: postgresUuidSchema.optional().or(z.literal('')),
+}).superRefine((value, context) => {
+  if (value.fulfillmentMethod === 'pickup') {
+    if (!value.pickupStoreId) {
+      context.addIssue({ code: 'custom', path: ['pickupStoreId'], message: 'Chọn cửa hàng nhận.' })
+    }
+    return
+  }
+  for (const [field, minimum] of [
+    ['province', 1], ['district', 1], ['ward', 1], ['streetAddress', 5],
+  ] as const) {
+    if ((value[field] ?? '').length < minimum) {
+      context.addIssue({ code: 'custom', path: [field], message: 'Thông tin giao hàng chưa đầy đủ.' })
+    }
+  }
 })
 
 export const trackingSchema = z.object({

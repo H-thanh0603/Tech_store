@@ -1,4 +1,19 @@
 export type PaymentMethod = 'cod' | 'bank_transfer' | 'vnpay'
+export type FulfillmentMethod = 'delivery' | 'pickup'
+
+export interface PickupStore {
+  id: string
+  name: string
+  phone: string | null
+  province: string
+  district: string
+  address: string
+  openingHours: string
+}
+
+export interface ProductPickupStore extends PickupStore {
+  variants: Array<{ variantId: string; available: number }>
+}
 
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired'
 
@@ -95,5 +110,7 @@ export interface OrderConfirmationData {
   shippingTotal: 0
   total: number
   transferExpiresAt: string | null
+  fulfillmentMethod: FulfillmentMethod
+  pickupStore: PickupStore | null
   items: OrderItemData[]
 }

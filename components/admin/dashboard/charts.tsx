@@ -16,11 +16,46 @@ import {
 
 import { formatPrice } from '@/lib/format'
 import type {
+  FunnelStageRow,
   OrdersByStatusRow,
   RevenueByCategoryRow,
   RevenueDayRow,
   TopProductRow,
 } from '@/lib/admin/types'
+
+const FUNNEL_LABELS: Record<FunnelStageRow['stage'], string> = {
+  search: 'Tìm kiếm',
+  product: 'Xem sản phẩm',
+  cart: 'Thêm giỏ',
+  checkout: 'Checkout',
+  order: 'Đặt hàng',
+}
+
+export function SalesFunnel({ data }: { data: FunnelStageRow[] }) {
+  return (
+    <ol className="grid gap-2 md:grid-cols-5" aria-label="Phễu bán hàng">
+      {data.map((row, index) => {
+        const previous = data[index - 1]?.count
+        const conversion = index === 0 ? null : previous ? Math.round((row.count / previous) * 100) : 0
+        return (
+          <li key={row.stage} className="rounded-(--radius-md) border border-border bg-bg-secondary/40 p-3">
+            <p className="text-(length:--text-xs) font-semibold uppercase tracking-wide text-fg-muted">
+              {index + 1}. {FUNNEL_LABELS[row.stage]}
+            </p>
+            <p className="mt-1 text-(length:--text-2xl) font-semibold tabular-nums text-fg">
+              {row.count}
+            </p>
+            {conversion === null ? (
+              <p className="text-(length:--text-xs) text-fg-subtle">phiên bắt đầu</p>
+            ) : (
+              <p className="text-(length:--text-xs) text-fg-subtle">{conversion}% từ bước trước</p>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#c4a35a',

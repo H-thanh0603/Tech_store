@@ -4,6 +4,7 @@ import {
   CategoryRevenueChart,
   OrdersStatusChart,
   RevenueTrendChart,
+  SalesFunnel,
   TopProductsChart,
 } from '@/components/admin/dashboard/charts'
 import { DashboardBlock } from '@/components/admin/dashboard/dashboard-block'
@@ -15,6 +16,7 @@ import {
   getOrdersByStatus,
   getRevenueByCategory,
   getRevenueByDay,
+  getSalesFunnel,
   getTopProducts,
 } from '@/lib/admin/dashboard-queries'
 import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
@@ -35,7 +37,8 @@ export default async function AdminReportsPage({
   const range = clampRangeDays(Number(params.range ?? 30)) as DashboardChartRange
   const metric = params.metric === 'quantity' ? 'quantity' : 'revenue'
 
-  const [revenueTrend, ordersStatus, categoryRevenue, topProducts] = await Promise.all([
+  const [funnel, revenueTrend, ordersStatus, categoryRevenue, topProducts] = await Promise.all([
+    safe(getSalesFunnel(range)),
     safe(getRevenueByDay(range)),
     safe(getOrdersByStatus()),
     safe(getRevenueByCategory(range)),
@@ -49,6 +52,16 @@ export default async function AdminReportsPage({
         description={`Doanh thu ${range} ngày gần nhất · loại đơn cancelled/expired. Audit log ở tab riêng.`}
         actions={<RangeTabs range={range} metric={metric} basePath="/admin/reports" />}
       />
+
+      <DashboardBlock
+        title="Phễu bán hàng"
+        description={`${range} ngày · phiên đi tuần tự search → product → cart → checkout → order`}
+        error={funnel.error}
+        empty={!funnel.error && (funnel.data?.[0]?.count ?? 0) === 0}
+        emptyDescription="Chưa có phiên tìm kiếm nào trong khoảng thời gian này."
+      >
+        {funnel.data ? <SalesFunnel data={funnel.data} /> : null}
+      </DashboardBlock>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <DashboardBlock

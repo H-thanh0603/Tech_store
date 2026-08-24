@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "catalog:images": "node scripts/import-cellphones-catalog.mjs",
+    "admin:seed": "node scripts/seed-admin-user.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

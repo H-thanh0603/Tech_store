@@ -10,11 +10,12 @@ import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { useToast } from '@/components/admin/ui/toast-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { adjustInventory } from '@/lib/admin/catalog-actions'
+import { adjustInventory, setStoreStock } from '@/lib/admin/catalog-actions'
 import type {
   AdminActionState,
   InventoryAdjustmentRow,
   InventoryListRow,
+  StoreInventoryRow,
 } from '@/lib/admin/types'
 
 const initial: AdminActionState = { ok: true }
@@ -111,9 +112,11 @@ export function InventoryTable({ rows }: { rows: InventoryListRow[] }) {
 export function InventoryAdjustPanel({
   row,
   history,
+  stores,
 }: {
   row: InventoryListRow
   history: InventoryAdjustmentRow[]
+  stores: StoreInventoryRow[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -244,6 +247,44 @@ export function InventoryAdjustPanel({
           </ul>
         )}
       </FormSection>
+      <FormSection title="Phân bổ theo cửa hàng" description="Số lượng dành cho nhận tại cửa hàng; không vượt on-hand toàn hệ thống.">
+        <div className="grid gap-3">
+          {stores.map((store) => <StoreStockForm key={store.storeId} variantId={row.variantId} store={store} />)}
+        </div>
+      </FormSection>
     </div>
+  )
+}
+
+function StoreStockForm({ variantId, store }: { variantId: string; store: StoreInventoryRow }) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [state, action, pending] = useActionState(
+    async (prev: AdminActionState, formData: FormData) => {
+      const result = await setStoreStock(prev, formData)
+      toast({
+        title: result.ok ? 'Thành công' : 'Thất bại',
+        description: result.message,
+        tone: result.ok ? 'success' : 'error',
+      })
+      if (result.ok) router.refresh()
+      return result
+    },
+    initial,
+  )
+
+  return (
+    <form action={action} className="grid gap-2 rounded-(--radius-md) border border-border p-3 sm:grid-cols-[1fr_7rem_auto] sm:items-end">
+      <input type="hidden" name="storeId" value={store.storeId} />
+      <input type="hidden" name="variantId" value={variantId} />
+      <input type="hidden" name="expectedQuantity" value={store.quantity} />
+      <div>
+        <p className="text-(length:--text-sm) font-medium">{store.storeName}</p>
+        <p className="text-(length:--text-xs) text-fg-muted">{store.address} · khả dụng {store.available}</p>
+      </div>
+      <Input id={`store-${store.storeId}`} name="quantity" type="number" min={0} label="Phân bổ" defaultValue={store.quantity} required />
+      <Button type="submit" disabled={pending}>{pending ? 'Đang lưu…' : 'Lưu'}</Button>
+      {!state.ok ? <p className="text-(length:--text-xs) text-danger sm:col-span-3">{state.message}</p> : null}
+    </form>
   )
 }

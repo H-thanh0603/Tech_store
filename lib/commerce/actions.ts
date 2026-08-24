@@ -117,13 +117,15 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
     customerEmail: formData.get('customerEmail'),
-    province: formData.get('province'),
-    district: formData.get('district'),
-    ward: formData.get('ward'),
-    streetAddress: formData.get('streetAddress'),
+    province: formData.get('province') ?? '',
+    district: formData.get('district') ?? '',
+    ward: formData.get('ward') ?? '',
+    streetAddress: formData.get('streetAddress') ?? '',
     note: formData.get('note'),
     paymentMethod: formData.get('paymentMethod'),
     idempotencyKey: formData.get('idempotencyKey'),
+    fulfillmentMethod: formData.get('fulfillmentMethod'),
+    pickupStoreId: formData.get('pickupStoreId') ?? '',
   })
   if (!parsed.success) {
     return validationError(parsed.error.flatten().fieldErrors)

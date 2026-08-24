@@ -60,23 +60,12 @@ export default async function AdminSettingsPage() {
   const access = await requireAdminModule('settings')
   if (isForbidden(access)) return <PermissionDeniedState />
 
-  const adminAuthMode = process.env.ADMIN_AUTH_MODE || 'legacy-secret'
-
   return (
     <section className="space-y-6">
       <PageHeader
         title="Cài đặt"
         description="Trạng thái cấu hình tích hợp. Giá trị biến môi trường không hiển thị — chỉ có/thiếu."
       />
-
-      <DashboardBlock
-        title="Admin auth"
-        description="Chế độ đăng nhập admin. Prod bắt buộc supabase."
-      >
-        <p className="text-(length:--text-sm) text-fg">
-          Chế độ hiện tại: <code className="font-semibold">{adminAuthMode}</code>
-        </p>
-      </DashboardBlock>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {INTEGRATIONS.map((item) => (

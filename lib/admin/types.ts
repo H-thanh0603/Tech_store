@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod, PaymentStatus } from '@/lib/commerce/types'
+import type { FulfillmentMethod, OrderStatus, PaymentMethod, PaymentStatus, PickupStore } from '@/lib/commerce/types'
 
 export type AdminActionState<T = undefined> =
   | { ok: true; data?: T; message?: string }
@@ -57,6 +57,13 @@ export interface TopProductRow {
   sku: string
   quantity: number
   revenue: number
+}
+
+export type FunnelStage = 'search' | 'product' | 'cart' | 'checkout' | 'order'
+
+export interface FunnelStageRow {
+  stage: FunnelStage
+  count: number
 }
 
 export interface StockAlertRow {
@@ -135,6 +142,14 @@ export interface InventoryAdjustmentRow {
   note: string | null
   actorLabel: string
   createdAt: string
+}
+
+export interface StoreInventoryRow {
+  storeId: string
+  storeName: string
+  address: string
+  quantity: number
+  available: number
 }
 
 export interface AdminProductListItem {
@@ -258,6 +273,8 @@ export interface OrderInternalNote {
 }
 
 export interface AdminOrderDetail extends AdminOrderListItem {
+  fulfillmentMethod: FulfillmentMethod
+  pickupStore: PickupStore | null
   customerEmail: string | null
   address: {
     province: string

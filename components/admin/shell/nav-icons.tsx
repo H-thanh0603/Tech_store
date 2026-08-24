@@ -89,6 +89,12 @@ const ICONS: Record<AdminModule, (props: IconProps) => ReactNode> = {
       <path d="M12 5v14" strokeDasharray="2 3" />
     </Svg>
   ),
+  content: ({ className }) => (
+    <Svg className={className} title="">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 8h10M7 12h6M7 16h8" />
+    </Svg>
+  ),
   reports: ({ className }) => (
     <Svg className={className} title="">
       <path d="M4 19V5" />

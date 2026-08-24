@@ -117,7 +117,7 @@ export function SearchSuggest({
         setEmpty(Boolean(data.empty))
         setActiveIndex(-1)
         if (data.empty) {
-          track('search_no_result', { query: trimmed })
+          track('search_no_result', { searchLength: trimmed.length })
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -166,7 +166,7 @@ export function SearchSuggest({
     if (value) {
       pushRecentSearch(value)
     }
-    track('search_performed', { query: value || null, source: 'header' })
+    track('search_performed', { hasSearch: Boolean(value), searchLength: value.length, source: 'header' })
     router.push(value ? `/products?q=${encodeURIComponent(value)}` : '/products')
     setOpen(false)
     onNavigate?.()
@@ -174,6 +174,11 @@ export function SearchSuggest({
 
   function goProduct(item: SuggestItem) {
     pushRecentSearch(item.name)
+    track('search_performed', {
+      hasSearch: true,
+      searchLength: query.trim().length,
+      source: 'suggestion',
+    })
     router.push(`/products/${item.slug}`)
     setOpen(false)
     onNavigate?.()

@@ -4,8 +4,9 @@ import { useActionState, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useOptionalToast } from '@/components/ui/toast'
+import { track } from '@/lib/analytics'
 import { checkoutAction } from '@/lib/commerce/actions'
-import type { ActionState, CartData } from '@/lib/commerce/types'
+import type { ActionState, CartData, FulfillmentMethod, PickupStore } from '@/lib/commerce/types'
 import { getProfile } from '@/lib/customer/profile'
 import { formatPrice } from '@/lib/format'
 
@@ -25,33 +26,40 @@ function readCheckoutDefaults(): Record<string, string> {
 type CheckoutFormProps = {
   cart: CartData
   initialState: ActionState
+  pickupStores?: PickupStore[]
   vnpayEnabled?: boolean
 }
 
-const FIELDS: Array<{ name: string; label: string; type?: string; required?: boolean }> = [
+const FIELDS: Array<{ name: string; label: string; type?: string; required?: boolean; deliveryOnly?: boolean }> = [
   { name: 'customerName', label: 'Họ và tên', required: true },
   { name: 'customerPhone', label: 'Số điện thoại', required: true },
   { name: 'customerEmail', label: 'Email (không bắt buộc)', type: 'email' },
-  { name: 'province', label: 'Tỉnh/thành phố', required: true },
-  { name: 'district', label: 'Quận/huyện', required: true },
-  { name: 'ward', label: 'Phường/xã', required: true },
-  { name: 'streetAddress', label: 'Địa chỉ cụ thể', required: true },
+  { name: 'province', label: 'Tỉnh/thành phố', required: true, deliveryOnly: true },
+  { name: 'district', label: 'Quận/huyện', required: true, deliveryOnly: true },
+  { name: 'ward', label: 'Phường/xã', required: true, deliveryOnly: true },
+  { name: 'streetAddress', label: 'Địa chỉ cụ thể', required: true, deliveryOnly: true },
   { name: 'note', label: 'Ghi chú giao hàng' },
 ]
 
-export function CheckoutForm({ cart, initialState, vnpayEnabled = false }: CheckoutFormProps) {
+export function CheckoutForm({ cart, initialState, pickupStores = [], vnpayEnabled = false }: CheckoutFormProps) {
   const { toast } = useOptionalToast()
   const [state, formAction, isPending] = useActionState(checkoutAction, initialState)
   const [idempotencyKey] = useState(() => crypto.randomUUID())
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [fulfillment, setFulfillment] = useState<FulfillmentMethod>('delivery')
   const [defaults] = useState(readCheckoutDefaults)
   const fieldError = (name: string) => (!state.ok ? state.fieldErrors?.[name]?.[0] : undefined)
 
   useEffect(() => {
     if (!state.ok && state.message) {
+      track('checkout_error', { code: state.code })
       toast({ title: 'Không đặt được hàng', description: state.message, tone: 'error' })
     }
   }, [state, toast])
+
+  useEffect(() => {
+    track('begin_checkout', { itemCount: cart.itemCount, total: cart.total })
+  }, [cart.itemCount, cart.total])
 
   const summary = (
     <aside
@@ -129,6 +137,54 @@ export function CheckoutForm({ cart, initialState, vnpayEnabled = false }: Check
           </p>
         </header>
 
+        <fieldset className="grid gap-3 rounded-(--radius-lg) border border-border bg-surface-raised p-5 shadow-(--shadow-sm)">
+          <legend className="px-1 text-(length:--text-lg) font-semibold">Cách nhận hàng</legend>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+            <input
+              type="radio"
+              name="fulfillmentMethod"
+              value="delivery"
+              checked={fulfillment === 'delivery'}
+              onChange={() => setFulfillment('delivery')}
+              className="size-4"
+            />
+            <span className="text-(length:--text-sm)"><strong>Giao hàng</strong> — miễn phí vận chuyển</span>
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+            <input
+              type="radio"
+              name="fulfillmentMethod"
+              value="pickup"
+              checked={fulfillment === 'pickup'}
+              disabled={pickupStores.length === 0}
+              onChange={() => setFulfillment('pickup')}
+              className="size-4"
+            />
+            <span className="text-(length:--text-sm)"><strong>Nhận tại cửa hàng</strong> — giữ hàng tại chi nhánh</span>
+          </label>
+          {fulfillment === 'pickup' ? (
+            <div className="grid gap-1.5">
+              <label htmlFor="pickupStoreId" className="text-(length:--text-sm) font-medium">Cửa hàng nhận *</label>
+              <select
+                id="pickupStoreId"
+                name="pickupStoreId"
+                required
+                defaultValue=""
+                className="min-h-11 rounded-(--radius-md) border border-border bg-bg-primary px-3 text-(length:--text-sm)"
+              >
+                <option value="" disabled>Chọn cửa hàng còn đủ sản phẩm</option>
+                {pickupStores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name} — {store.address}</option>
+                ))}
+              </select>
+              {fieldError('pickupStoreId') ? <span className="text-(length:--text-xs) text-danger">{fieldError('pickupStoreId')}</span> : null}
+            </div>
+          ) : null}
+          {pickupStores.length === 0 ? (
+            <p className="text-(length:--text-xs) text-fg-muted">Giỏ hiện chưa có cửa hàng nào đủ toàn bộ sản phẩm.</p>
+          ) : null}
+        </fieldset>
+
         <section
           aria-labelledby="customer-heading"
           className="grid gap-4 rounded-(--radius-lg) border border-border bg-surface-raised p-5 shadow-(--shadow-sm)"
@@ -137,6 +193,7 @@ export function CheckoutForm({ cart, initialState, vnpayEnabled = false }: Check
             Người nhận
           </h2>
           {FIELDS.map((field) => {
+            if (field.deliveryOnly && fulfillment === 'pickup') return null
             const error = fieldError(field.name)
             return (
               <div key={field.name} className="grid gap-1.5">
@@ -153,7 +210,7 @@ export function CheckoutForm({ cart, initialState, vnpayEnabled = false }: Check
                   id={field.name}
                   name={field.name}
                   type={field.type ?? 'text'}
-                  required={field.required}
+                  required={field.required && fulfillment === 'delivery'}
                   defaultValue={defaults[field.name] ?? ''}
                   key={`${field.name}-${defaults[field.name] ?? ''}`}
                   aria-invalid={error ? true : undefined}

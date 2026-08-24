@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 
 import { useOptionalToast } from '@/components/ui/toast'
+import { track } from '@/lib/analytics'
 import { pushSavedOrder } from '@/lib/customer/profile'
 
 export function OrderSavedEffect({
@@ -16,6 +17,7 @@ export function OrderSavedEffect({
 
   useEffect(() => {
     pushSavedOrder(orderCode, total)
+    track('order_completed', { total: total ?? null })
     toast({
       title: 'Đặt hàng thành công',
       description: `Mã đơn ${orderCode} đã được lưu trên thiết bị.`,

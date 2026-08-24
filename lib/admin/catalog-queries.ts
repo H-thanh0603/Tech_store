@@ -5,6 +5,7 @@ import type {
   InventoryAdjustmentRow,
   InventoryListResult,
   InventoryListRow,
+  StoreInventoryRow,
 } from '@/lib/admin/types'
 
 function num(value: unknown): number {
@@ -171,4 +172,30 @@ export async function listInventoryAdjustments(
       createdAt: String(row.createdAt),
     }
   })
+}
+
+export async function listStoreInventory(variantId: string): Promise<StoreInventoryRow[]> {
+  const db = getSupabaseAdminClient()
+  const [storesRes, inventoryRes] = await Promise.all([
+    db.from('stores').select('id, name, district, province, street_address').eq('is_active', true).order('name'),
+    db.from('store_inventory').select('store_id, quantity').eq('variant_id', variantId),
+  ])
+  if (storesRes.error) throw storesRes.error
+  if (inventoryRes.error) throw inventoryRes.error
+
+  const quantities = new Map((inventoryRes.data ?? []).map((row) => [String(row.store_id), num(row.quantity)]))
+  return Promise.all((storesRes.data ?? []).map(async (store) => {
+    const { data, error } = await db.rpc('available_store_stock', {
+      p_store_id: store.id,
+      p_variant_id: variantId,
+    })
+    if (error) throw error
+    return {
+      storeId: String(store.id),
+      storeName: String(store.name),
+      address: `${store.street_address}, ${store.district}, ${store.province}`,
+      quantity: quantities.get(String(store.id)) ?? 0,
+      available: num(data),
+    }
+  }))
 }

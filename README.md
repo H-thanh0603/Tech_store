@@ -22,7 +22,7 @@ Browser → Vercel (Next.js)
 1. `npm ci`
 2. `cp .env.example .env.local`
 3. Start Docker Desktop → `supabase start` → paste API URL / anon / service_role into `.env.local`
-4. Set `ADMIN_SECRET` (≥ 16 chars)
+4. `npm run admin:seed` — tạo tài khoản admin local (Supabase Auth + `admin_users`)
 5. `npm run dev` → http://localhost:3000
 
 ## Scripts
@@ -39,8 +39,8 @@ Browser → Vercel (Next.js)
 
 ## Admin
 
-- URL: `/admin/login`
-- Password: `ADMIN_SECRET` (server env only)
+- URL: `/admin/login` — đăng nhập bằng tài khoản Supabase Auth có dòng active trong `admin_users`
+- Local: `npm run admin:seed` (mặc định `admin@techstore.local` / `techstore-admin-e2e`, override qua `ADMIN_E2E_EMAIL` / `ADMIN_E2E_PASSWORD`)
 - Service role key never goes to the browser
 
 ## Quality gate

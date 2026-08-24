@@ -24,6 +24,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: '/admin/orders', label: 'Đơn hàng', module: 'orders' },
   { href: '/admin/customers', label: 'Khách hàng', module: 'customers' },
   { href: '/admin/coupons', label: 'Khuyến mãi', module: 'coupons' },
+  { href: '/admin/content', label: 'Nội dung', module: 'content' },
   { href: '/admin/reports', label: 'Báo cáo', module: 'reports', placeholder: true },
   { href: '/admin/settings', label: 'Cài đặt', module: 'settings', placeholder: true },
 ] as const
