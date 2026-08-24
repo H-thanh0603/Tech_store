@@ -2,8 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 /** Refresh customer auth cookies on each matched request. */
-export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request })
+export async function updateSession(request: NextRequest, requestHeaders?: Headers) {
+  const nextRequest = requestHeaders ? { headers: requestHeaders } : undefined
+  let response = NextResponse.next({ request: nextRequest })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -18,7 +19,7 @@ export async function updateSession(request: NextRequest) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value)
         }
-        response = NextResponse.next({ request })
+        response = NextResponse.next({ request: nextRequest })
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options)
         }

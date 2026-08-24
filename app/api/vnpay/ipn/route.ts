@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   const result = await handleVnpayCallback(params)
   return NextResponse.json(
-    { RspCode: result.ok ? '00' : '99', Message: result.message },
+    { RspCode: result.ipnResponseCode, Message: result.message },
     { status: 200 },
   )
 }

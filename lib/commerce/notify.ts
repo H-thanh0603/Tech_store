@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { getSiteUrl } from '@/lib/site'
 
@@ -18,15 +20,24 @@ function formatVnd(value: unknown): string {
   return Number.isFinite(n) ? n.toLocaleString('vi-VN') + '₫' : ''
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function emailFor(type: string, payload: Record<string, unknown>): {
   subject: string
   html: string
 } | null {
-  const site = getSiteUrl()
-  const name = String(payload.customerName ?? 'bạn')
+  const site = escapeHtml(getSiteUrl())
+  const name = escapeHtml(payload.customerName ?? 'bạn')
   switch (type) {
     case 'order_confirmation': {
-      const code = String(payload.orderCode ?? '')
+      const code = escapeHtml(payload.orderCode ?? '')
       return {
         subject: `Xác nhận đơn hàng ${code} — TechStore`,
         html:
@@ -38,7 +49,7 @@ function emailFor(type: string, payload: Record<string, unknown>): {
       }
     }
     case 'order_transfer_paid': {
-      const code = String(payload.orderCode ?? '')
+      const code = escapeHtml(payload.orderCode ?? '')
       return {
         subject: `Đã nhận thanh toán đơn ${code} — TechStore`,
         html:
@@ -56,7 +67,7 @@ function emailFor(type: string, payload: Record<string, unknown>): {
           `<p><a href="${site}/products">Xem ngay tại TechStore</a></p>`,
       }
     case 'review_request': {
-      const code = String(payload.orderCode ?? '')
+      const code = escapeHtml(payload.orderCode ?? '')
       return {
         subject: `Bạn thấy đơn ${code} thế nào? — TechStore`,
         html:
@@ -78,27 +89,29 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
   const apiKey = process.env.RESEND_API_KEY
   const from = process.env.EMAIL_FROM ?? 'TechStore <onboarding@resend.dev>'
   const admin = getSupabaseAdminClient()
-
-  const { data: rows } = await admin
-    .from('notification_outbox')
-    .select('id, type, payload, retry_count')
-    .eq('status', 'pending')
-    .or('next_retry_at.is.null,next_retry_at.lte.now()')
-    .order('queued_at', { ascending: true })
-    .limit(batchSize)
-
   const result = { sent: 0, failed: 0, skipped: 0 }
+
+  // Do not claim work that cannot be sent; it should remain immediately eligible.
+  if (!apiKey) return result
+
+  const claimToken = randomUUID()
+  const { data: rows, error: claimError } = await admin.rpc('claim_notification_outbox', {
+    p_limit: batchSize,
+    p_claim_token: claimToken,
+  })
+  if (claimError) throw claimError
+
   for (const row of (rows ?? []) as unknown as OutboxRow[]) {
     const email = emailFor(row.type, row.payload)
     const to = String(row.payload.email ?? '')
     if (!email || !to) {
-      await admin.from('notification_outbox').update({ status: 'skipped' }).eq('id', row.id)
+      await admin
+        .from('notification_outbox')
+        .update({ status: 'skipped', claim_token: null, claimed_at: null })
+        .eq('id', row.id)
+        .eq('claim_token', claimToken)
       result.skipped += 1
       continue
-    }
-    if (!apiKey) {
-      // No key configured: leave pending, stop here — nothing can be sent.
-      break
     }
 
     try {
@@ -107,16 +120,25 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'Idempotency-Key': `notification/${row.id}`,
         },
         body: JSON.stringify({ from, to, subject: email.subject, html: email.html }),
       })
       if (!response.ok) {
         throw new Error(`Resend ${response.status}: ${await response.text()}`)
       }
-      await admin
+      const { error: updateError } = await admin
         .from('notification_outbox')
-        .update({ status: 'sent', sent_at: new Date().toISOString(), error: null })
+        .update({
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          error: null,
+          claim_token: null,
+          claimed_at: null,
+        })
         .eq('id', row.id)
+        .eq('claim_token', claimToken)
+      if (updateError) throw updateError
       result.sent += 1
     } catch (error) {
       const retries = row.retry_count + 1
@@ -129,11 +151,14 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
           status: exhausted ? 'failed' : 'pending',
           retry_count: retries,
           error: error instanceof Error ? error.message.slice(0, 500) : 'unknown',
+          claim_token: null,
+          claimed_at: null,
           next_retry_at: exhausted
             ? null
             : new Date(Date.now() + backoffMs).toISOString(),
         })
         .eq('id', row.id)
+        .eq('claim_token', claimToken)
       result.failed += 1
     }
   }

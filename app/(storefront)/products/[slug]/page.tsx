@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -109,6 +110,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   ])
   const specGroups = groupSpecs(product.specs)
   const highlights = highlightsForProduct(product.categorySlug, 3)
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
   return (
     <div className="container-store flex flex-col gap-12 py-8 pb-44 sm:gap-14 sm:py-10 lg:pb-10">
@@ -123,8 +125,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           categorySlug: product.categorySlug,
         }}
       />
-      <JsonLd data={productJsonLd(product)} />
+      <JsonLd data={productJsonLd(product)} nonce={nonce} />
       <JsonLd
+        nonce={nonce}
         data={breadcrumbJsonLd([
           { name: 'Trang chủ', path: '/' },
           { name: 'Sản phẩm', path: '/products' },

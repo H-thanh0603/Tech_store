@@ -1,8 +1,16 @@
-export function JsonLd({ data }: { data: Record<string, unknown> | Record<string, unknown>[] }) {
+export function JsonLd({
+  data,
+  nonce,
+}: {
+  data: Record<string, unknown> | Record<string, unknown>[]
+  nonce?: string
+}) {
+  const json = JSON.stringify(data).replace(/</g, '\\u003c')
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      nonce={nonce}
+      dangerouslySetInnerHTML={{ __html: json }}
     />
   )
 }
