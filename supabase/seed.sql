@@ -447,6 +447,23 @@ insert into inventory (id, variant_id, quantity, reserved_quantity, low_stock_th
   ('50000000-0000-0000-0000-000000000014', '40000000-0000-0000-0000-000000000014', 3, 0, 5)
 on conflict (id) do nothing;
 
+-- Store allocations depend on the inventory rows seeded above. Migrations run
+-- before this file on a clean reset, so seed these allocations here as well.
+insert into store_inventory (store_id, variant_id, quantity)
+select store_id, variant_id, allocated
+from (
+  select '92000000-0000-4000-8000-000000000001'::uuid as store_id,
+    variant_id, least(quantity, 3) as allocated from inventory
+  union all
+  select '92000000-0000-4000-8000-000000000002'::uuid,
+    variant_id, least(greatest(quantity - 3, 0), 2) from inventory
+  union all
+  select '92000000-0000-4000-8000-000000000003'::uuid,
+    variant_id, least(greatest(quantity - 5, 0), 1) from inventory
+) seed
+where allocated > 0
+on conflict (store_id, variant_id) do nothing;
+
 -- Images (Dell XPS 13 intentionally has none: missing-image edge case)
 
 insert into product_images (id, product_id, variant_id, url, alt_text, sort_order) values
