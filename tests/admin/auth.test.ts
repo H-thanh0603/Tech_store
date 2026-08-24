@@ -10,7 +10,11 @@ vi.mock('@/lib/supabase/auth-server', () => ({
   createSupabaseAuthClient: vi.fn(async () => ({ auth: { getUser }, from })),
 }))
 
-import { getAdminSession, requireAdminSession } from '@/lib/admin/auth'
+import {
+  getAdminSession,
+  requireAdminPermission,
+  requireAdminSession,
+} from '@/lib/admin/auth'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -49,7 +53,9 @@ describe('getAdminSession', () => {
     expect(await getAdminSession()).toEqual({
       userId: 'u1',
       role: 'manager',
-      actorLabel: 'Nhân Viên',
+      displayName: 'Nhân Viên',
+      email: 'x@y.z',
+      actorLabel: 'Nhân Viên <x@y.z> [u1]',
     })
   })
 })
@@ -67,5 +73,24 @@ describe('requireAdminSession', () => {
       error: null,
     })
     await expect(requireAdminSession('settings')).rejects.toThrow('FORBIDDEN')
+  })
+
+  it('rejects privilege escalation through a server mutation permission', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'x@y.z' } } })
+    maybeSingle.mockResolvedValue({
+      data: { display_name: 'Manager', role: 'manager' },
+      error: null,
+    })
+    await expect(requireAdminPermission('staff.manage')).rejects.toThrow('FORBIDDEN')
+  })
+
+  it('allows staff to update orders but not mark payment paid', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'x@y.z' } } })
+    maybeSingle.mockResolvedValue({
+      data: { display_name: 'Staff', role: 'staff' },
+      error: null,
+    })
+    await expect(requireAdminPermission('orders.update')).resolves.toMatchObject({ role: 'staff' })
+    await expect(requireAdminPermission('orders.mark_paid')).rejects.toThrow('FORBIDDEN')
   })
 })

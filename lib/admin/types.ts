@@ -9,6 +9,18 @@ export type AdminActionState<T = undefined> =
       fieldErrors?: Record<string, string[] | undefined>
     }
 
+export interface AdminStaffAccountRow {
+  userId: string
+  email: string
+  displayName: string
+  role: 'admin' | 'manager' | 'staff'
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  disabledAt: string | null
+  lastSignInAt: string | null
+}
+
 export interface DashboardStats {
   newOrders7d: number
   pendingOrders: number

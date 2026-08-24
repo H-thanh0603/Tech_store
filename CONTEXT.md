@@ -19,3 +19,7 @@ _Avoid_: Store stock, branch inventory
 **Fulfillment Method**:
 How an Order reaches the customer: `delivery` to an address or `pickup` at a Store.
 _Avoid_: Shipping type, delivery mode
+
+**Staff Account**:
+An individual workforce identity with one server-authoritative role: Admin, Manager, or Staff.
+_Avoid_: Shared admin, admin secret, employee login

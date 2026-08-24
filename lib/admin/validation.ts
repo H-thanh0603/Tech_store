@@ -18,6 +18,23 @@ export const adminAccountLoginSchema = z.object({
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),
 })
 
+export const staffInviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Email không hợp lệ.').max(254),
+  displayName: z.string().trim().min(2).max(120),
+  role: z.enum(['admin', 'manager', 'staff']),
+})
+
+export const staffUpdateSchema = z.object({
+  userId: uuid,
+  displayName: z.string().trim().min(2).max(120),
+  role: z.enum(['admin', 'manager', 'staff']),
+  isActive: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .transform((value) => value === true || value === 'true'),
+})
+
+export const staffTargetSchema = z.object({ userId: uuid })
+
 export const productUpsertSchema = z.object({
   name: z.string().trim().min(2).max(200),
   slug: slugSchema,

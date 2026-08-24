@@ -47,10 +47,11 @@ export async function GET(request: Request) {
     entityType: string
     entityId: string | null
     actorLabel: string
+    actorUserId: string | null
     payload: unknown
   }>
 
-  const header = 'created_at,action,entity_type,entity_id,actor_label,payload'
+  const header = 'created_at,action,entity_type,entity_id,actor_label,actor_user_id,payload'
   const lines = rows.map((row) =>
     [
       row.createdAt,
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
       row.entityType,
       row.entityId ?? '',
       row.actorLabel,
+      row.actorUserId ?? '',
       JSON.stringify(row.payload ?? {}),
     ]
       .map((cell) => csvCell(String(cell)))

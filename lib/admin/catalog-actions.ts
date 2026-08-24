@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { requireAdminSession } from '@/lib/admin/auth'
+import {
+  requireAdminPermission,
+  requireAdminSession,
+  type AdminSession,
+} from '@/lib/admin/auth'
 import {
   brandUpsertSchema,
   categoryUpsertSchema,
@@ -11,7 +15,7 @@ import {
   storeInventorySetSchema,
 } from '@/lib/admin/catalog-validation'
 import { adminUserMessage } from '@/lib/admin/errors'
-import type { AdminModule } from '@/lib/admin/permissions'
+import type { AdminModule, AdminPermission } from '@/lib/admin/permissions'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
 
@@ -32,6 +36,16 @@ async function assertAdmin(module: AdminModule): Promise<AdminActionState | null
   try {
     await requireAdminSession(module)
     return null
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
+}
+
+async function assertPermission(
+  permission: AdminPermission,
+): Promise<AdminSession | AdminActionState> {
+  try {
+    return await requireAdminPermission(permission)
   } catch (error) {
     return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
@@ -225,10 +239,8 @@ export async function adjustInventory(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('inventory')
-  if (gate) return gate
-  const admin = await requireAdminSession('inventory')
-  if (admin.role === 'staff') return fail('FORBIDDEN')
+  const admin = await assertPermission('inventory.adjust')
+  if (!('actorLabel' in admin)) return admin
 
   const expectedRaw = formData.get('expectedQuantity')
   const thresholdRaw = formData.get('lowStockThreshold')
@@ -284,10 +296,8 @@ export async function updateInventoryThreshold(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('inventory')
-  if (gate) return gate
-  const admin = await requireAdminSession('inventory')
-  if (admin.role === 'staff') return fail('FORBIDDEN')
+  const admin = await assertPermission('inventory.adjust')
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = inventoryThresholdSchema.safeParse({
     variantId: formData.get('variantId'),
@@ -309,10 +319,8 @@ export async function setStoreStock(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('inventory')
-  if (gate) return gate
-  const admin = await requireAdminSession('inventory')
-  if (admin.role === 'staff') return fail('FORBIDDEN')
+  const admin = await assertPermission('inventory.adjust')
+  if (!('actorLabel' in admin)) return admin
 
   const parsed = storeInventorySetSchema.safeParse({
     storeId: formData.get('storeId'),

@@ -33,7 +33,7 @@ async function writeAudit(
   action: string,
   entityId: string,
   payload: Record<string, unknown>,
-  actorLabel: string,
+  actor: AdminSession,
 ) {
   try {
     await getSupabaseAdminClient().from('admin_audit_logs').insert({
@@ -41,7 +41,8 @@ async function writeAudit(
       entity_type: 'coupon',
       entity_id: entityId,
       payload,
-      actor_label: actorLabel,
+      actor_label: actor.actorLabel,
+      actor_user_id: actor.userId,
     })
   } catch {
     // Audit table may not exist until migration applied; don't fail business action.
@@ -99,14 +100,14 @@ export async function upsertCoupon(
       if (error.code === '23505') return fail('SLUG_TAKEN')
       return fail('INTERNAL_ERROR')
     }
-    await writeAudit('coupon_update', parsed.data.code, payload, admin.actorLabel)
+    await writeAudit('coupon_update', parsed.data.code, payload, admin)
   } else {
     const { error } = await db.from('coupons').insert(payload)
     if (error) {
       if (error.code === '23505') return fail('SLUG_TAKEN')
       return fail('INTERNAL_ERROR')
     }
-    await writeAudit('coupon_create', parsed.data.code, payload, admin.actorLabel)
+    await writeAudit('coupon_create', parsed.data.code, payload, admin)
   }
 
   revalidateCoupons()
@@ -132,7 +133,7 @@ export async function setCouponActive(
     isActive ? 'coupon_activate' : 'coupon_deactivate',
     data?.code ?? couponId,
     { isActive },
-    admin.actorLabel,
+    admin,
   )
   revalidateCoupons()
   return {

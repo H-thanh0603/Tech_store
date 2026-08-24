@@ -1,9 +1,18 @@
-import { canAccessModule, isAdminRole, type AdminModule, type AdminRole } from '@/lib/admin/permissions'
+import {
+  canAccessModule,
+  canPerform,
+  isAdminRole,
+  type AdminModule,
+  type AdminPermission,
+  type AdminRole,
+} from '@/lib/admin/permissions'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export type AdminSession = {
   userId: string
   role: AdminRole
+  displayName: string
+  email: string
   actorLabel: string
 }
 
@@ -31,10 +40,14 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     .maybeSingle()
   if (error || !data || !isAdminRole(data.role)) return null
 
+  const displayName = data.display_name || user.email || user.id
+  const email = user.email || ''
   return {
     userId: user.id,
     role: data.role,
-    actorLabel: data.display_name || user.email || user.id,
+    displayName,
+    email,
+    actorLabel: `${displayName}${email ? ` <${email}>` : ''} [${user.id}]`,
   }
 }
 
@@ -42,5 +55,12 @@ export async function requireAdminSession(module?: AdminModule): Promise<AdminSe
   const session = await getAdminSession()
   if (!session) throw new Error('UNAUTHORIZED')
   if (module && !canAccessModule(session.role, module)) throw new Error('FORBIDDEN')
+  return session
+}
+
+export async function requireAdminPermission(permission: AdminPermission): Promise<AdminSession> {
+  const session = await getAdminSession()
+  if (!session) throw new Error('UNAUTHORIZED')
+  if (!canPerform(session.role, permission)) throw new Error('FORBIDDEN')
   return session
 }

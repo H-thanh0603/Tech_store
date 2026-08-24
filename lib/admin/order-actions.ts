@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { requireAdminSession, type AdminSession } from '@/lib/admin/auth'
+import { requireAdminPermission, type AdminSession } from '@/lib/admin/auth'
 import { adminUserMessage } from '@/lib/admin/errors'
 import { canMarkPaymentPaid, canTransitionOrderStatus } from '@/lib/admin/status-rules'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
@@ -17,9 +17,11 @@ function fail(
   return { ok: false, code, message: adminUserMessage(code), fieldErrors }
 }
 
-async function assertAdmin(): Promise<AdminSession | AdminActionState> {
+async function assertAdmin(
+  permission: 'orders.update' | 'orders.mark_paid' | 'orders.note',
+): Promise<AdminSession | AdminActionState> {
   try {
-    return await requireAdminSession('orders')
+    return await requireAdminPermission(permission)
   } catch (error) {
     return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
   }
@@ -36,7 +38,7 @@ export async function updateOrderStatus(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const admin = await assertAdmin()
+  const admin = await assertAdmin('orders.update')
   if (!('actorLabel' in admin)) return admin
 
   const parsed = orderStatusSchema.safeParse({
@@ -82,7 +84,7 @@ export async function markOrderPaid(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const admin = await assertAdmin()
+  const admin = await assertAdmin('orders.mark_paid')
   if (!('actorLabel' in admin)) return admin
 
   const parsed = orderPaymentSchema.safeParse({
@@ -135,7 +137,7 @@ export async function addOrderInternalNote(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const admin = await assertAdmin()
+  const admin = await assertAdmin('orders.note')
   if (!('actorLabel' in admin)) return admin
 
   const parsed = orderNoteSchema.safeParse({

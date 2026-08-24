@@ -1,7 +1,9 @@
 import { DashboardBlock } from '@/components/admin/dashboard/dashboard-block'
+import { StaffAccountManager } from '@/components/admin/staff-account-manager'
 import { PageHeader } from '@/components/admin/ui/page-header'
 import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-state'
 import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
+import { listStaffAccounts } from '@/lib/admin/staff-queries'
 
 // Settings status page: shows which integrations are configured. Values are
 // never displayed — only present/missing — so the page is safe for any
@@ -59,6 +61,7 @@ function EnvStatus({ name, required }: { name: string; required: boolean }) {
 export default async function AdminSettingsPage() {
   const access = await requireAdminModule('settings')
   if (isForbidden(access)) return <PermissionDeniedState />
+  const staffAccounts = await listStaffAccounts()
 
   return (
     <section className="space-y-6">
@@ -77,6 +80,14 @@ export default async function AdminSettingsPage() {
             </ul>
           </DashboardBlock>
         ))}
+      </div>
+
+      <div className="space-y-4">
+        <PageHeader
+          title="Tài khoản nhân viên"
+          description="Quản lý identity, role, trạng thái khóa và phiên đăng nhập từ server."
+        />
+        <StaffAccountManager accounts={staffAccounts} currentUserId={access.userId} />
       </div>
     </section>
   )

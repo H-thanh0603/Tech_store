@@ -7,7 +7,7 @@ import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 // Audit log listing with entity-type filter + CSV export.
 
-const ENTITY_TYPES = ['all', 'coupon', 'product', 'order'] as const
+const ENTITY_TYPES = ['all', 'coupon', 'product', 'order', 'staff_account'] as const
 const PAGE_SIZE = 50
 
 interface AuditRow {
@@ -17,6 +17,7 @@ interface AuditRow {
   entityId: string | null
   payload: Record<string, unknown>
   actorLabel: string
+  actorUserId: string | null
   createdAt: string
 }
 
@@ -81,7 +82,13 @@ export default async function AdminAuditPage({
         </span>
       ),
     },
-    { id: 'actorLabel', header: 'Người thực hiện', cell: (row) => row.actorLabel },
+    {
+      id: 'actorLabel',
+      header: 'Người thực hiện',
+      cell: (row) => (
+        <span title={row.actorUserId ?? undefined}>{row.actorLabel}</span>
+      ),
+    },
   ]
 
   return (

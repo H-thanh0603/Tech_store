@@ -33,6 +33,15 @@ test.describe.serial('admin CRUD: create product → storefront → adjust inven
     await expect(page.getByRole('link', { name: /\+ Sản phẩm mới/i })).toBeVisible()
   })
 
+  test('admin settings exposes server-backed staff account management', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/admin/settings')
+
+    await expect(page.getByRole('heading', { name: 'Tài khoản nhân viên' })).toBeVisible()
+    await expect(page.getByText(ADMIN_EMAIL)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Gửi lời mời' })).toBeVisible()
+  })
+
   test('create product form creates it and lands on the edit page', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/admin/products/new')

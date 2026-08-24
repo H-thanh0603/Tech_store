@@ -47,7 +47,7 @@ async function writeAudit(
   action: string,
   entityId: string | null,
   payload: Record<string, unknown>,
-  actorLabel: string,
+  actor: AdminSession,
 ) {
   try {
     await getSupabaseAdminClient().from('admin_audit_logs').insert({
@@ -55,7 +55,8 @@ async function writeAudit(
       entity_type: 'product',
       entity_id: entityId,
       payload,
-      actor_label: actorLabel,
+      actor_label: actor.actorLabel,
+      actor_user_id: actor.userId,
     })
   } catch {
     // Audit table may not exist until migration applied; don't fail business action.
@@ -184,7 +185,7 @@ export async function createProduct(
     'product_create',
     product.id,
     { name: parsed.data.name, slug: parsed.data.slug, sku: parsed.data.sku },
-    admin.actorLabel,
+    admin,
   )
   revalidateCatalog(product.id, product.slug)
   redirect(`/admin/products/${product.id}`)
@@ -245,7 +246,7 @@ export async function updateProduct(
       is_featured: parsed.data.isFeatured,
       is_archived: parsed.data.isArchived,
     },
-    admin.actorLabel,
+    admin,
   )
   revalidateCatalog(productId, parsed.data.slug)
   return { ok: true, message: 'Đã lưu sản phẩm.' }
@@ -351,7 +352,7 @@ export async function upsertVariant(
     parsed.data.variantId ? 'variant_update' : 'variant_create',
     parsed.data.variantId || productId,
     { sku: parsed.data.sku, regular_price: parsed.data.regularPrice, sale_price: salePrice, quantity: parsed.data.quantity },
-    admin.actorLabel,
+    admin,
   )
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã lưu biến thể.' }
@@ -415,7 +416,7 @@ export async function deleteImage(
     .eq('product_id', productId)
   if (error) return fail('INTERNAL_ERROR')
 
-  await writeAudit('image_delete', productId, { image_id: parsed.data.imageId }, admin.actorLabel)
+  await writeAudit('image_delete', productId, { image_id: parsed.data.imageId }, admin)
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã xóa ảnh.' }
 }
@@ -460,7 +461,7 @@ export async function upsertSpec(
     parsed.data.specId ? 'spec_update' : 'spec_create',
     productId,
     { group_name: parsed.data.groupName, label: parsed.data.label, value: parsed.data.value },
-    admin.actorLabel,
+    admin,
   )
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã lưu thông số.' }
@@ -484,7 +485,7 @@ export async function deleteSpec(
     .eq('product_id', productId)
   if (error) return fail('INTERNAL_ERROR')
 
-  await writeAudit('spec_delete', productId, { spec_id: parsed.data.specId }, admin.actorLabel)
+  await writeAudit('spec_delete', productId, { spec_id: parsed.data.specId }, admin)
   revalidateCatalog(productId)
   return { ok: true, message: 'Đã xóa thông số.' }
 }
@@ -508,7 +509,7 @@ export async function setProductArchiveState(
 
   if (error) return fail('INTERNAL_ERROR')
 
-  await writeAudit('product_archive', productId, { archived }, admin.actorLabel)
+  await writeAudit('product_archive', productId, { archived }, admin)
   revalidateCatalog(productId)
   return {
     ok: true,
@@ -575,7 +576,7 @@ export async function bulkUpdateProducts(
     }
   }
 
-  await writeAudit('product_bulk_update', null, { action, count: ids.length }, admin.actorLabel)
+  await writeAudit('product_bulk_update', null, { action, count: ids.length }, admin)
   revalidateCatalog()
   return {
     ok: true,

@@ -12,6 +12,9 @@ const MESSAGES: Record<string, string> = {
   PUBLISH_NEEDS_VARIANT: 'Cần ít nhất một biến thể đang bán trước khi xuất bản.',
   CONFLICT: 'Dữ liệu đã thay đổi. Tải lại trang và thử lại.',
   REASON_REQUIRED: 'Thao tác này bắt buộc nhập lý do.',
+  SELF_MANAGEMENT_FORBIDDEN: 'Không thể tự khóa, hạ quyền hoặc thu hồi phiên của chính mình.',
+  LAST_ADMIN: 'Phải giữ lại ít nhất một tài khoản admin đang hoạt động.',
+  AUTH_SYNC_ERROR: 'Quyền đã được khóa an toàn nhưng trạng thái Supabase Auth chưa đồng bộ. Hãy thử lại.',
   CONFIGURATION_ERROR: 'Thiếu cấu hình server admin.',
   INTERNAL_ERROR: 'Có lỗi hệ thống. Thử lại sau.',
 }

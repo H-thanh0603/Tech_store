@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { navItemsForRole } from '@/lib/admin/nav-config'
 import {
   canAccessModule,
+  canPerform,
   modulesForRole,
   requireModuleAccess,
 } from '@/lib/admin/permissions'
@@ -28,6 +29,16 @@ describe('admin permissions', () => {
     expect(canAccessModule('staff', 'inventory')).toBe(true)
     expect(canAccessModule('staff', 'categories')).toBe(false)
     expect(canAccessModule('staff', 'content')).toBe(false)
+  })
+
+  it('enforces mutation permissions independently from visible modules', () => {
+    expect(canAccessModule('staff', 'inventory')).toBe(true)
+    expect(canPerform('staff', 'inventory.adjust')).toBe(false)
+    expect(canPerform('staff', 'orders.update')).toBe(true)
+    expect(canPerform('staff', 'orders.mark_paid')).toBe(false)
+    expect(canPerform('manager', 'orders.mark_paid')).toBe(true)
+    expect(canPerform('admin', 'staff.manage')).toBe(true)
+    expect(canPerform('manager', 'staff.manage')).toBe(false)
   })
 
   it('throws FORBIDDEN when requireModuleAccess fails', () => {

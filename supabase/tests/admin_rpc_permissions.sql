@@ -18,7 +18,9 @@ select is(
         ('public.admin_list_products(text, text, uuid, uuid, text, text, text, integer, integer)'),
         ('public.admin_adjust_inventory(uuid, integer, text, text, text, integer, integer)'),
         ('public.admin_list_inventory(text, text, uuid, uuid, text, text, integer, integer)'),
-        ('public.admin_list_inventory_adjustments(uuid, integer)')
+        ('public.admin_list_inventory_adjustments(uuid, integer)'),
+        ('public.admin_manage_staff_account(uuid, uuid, text, text, boolean)'),
+        ('public.admin_revoke_staff_sessions(uuid, uuid)')
     ) as admin_rpcs(signature)
     where to_regprocedure(signature) is null
        or not has_function_privilege('service_role', to_regprocedure(signature), 'execute')
