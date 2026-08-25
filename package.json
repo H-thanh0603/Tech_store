@@ -17,7 +17,8 @@
     "schema:check": "node scripts/check-schema-contract.mjs",
     "security:check": "node scripts/check-secret-hygiene.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "perf:audit": "node scripts/perf-audit.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -29,6 +30,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
