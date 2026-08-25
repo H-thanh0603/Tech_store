@@ -29,6 +29,7 @@ TechStore is Next.js App Router (Server Components, Middleware, `next/image`). V
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` `public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` `secret` key → `SUPABASE_SERVICE_ROLE_KEY` (**server only**)
+5. Auth configuration → **MFA** → bật TOTP enrollment và verification.
 
 ### Apply migrations + seed
 
@@ -72,21 +73,16 @@ supabase db reset --linked
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL | Public |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key | Public; RLS protects data |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role key | **Secret**, server only |
-| `ADMIN_SECRET` | long random ≥ 16 chars | Staff `/admin` login |
 | `NEXT_PUBLIC_SITE_URL` | `https://<your-app>.vercel.app` | Update after first deploy if needed |
 | `VIETQR_BANK_ID` | demo bank BIN | Optional demo |
 | `VIETQR_ACCOUNT_NO` | demo account | Optional demo |
 | `VIETQR_ACCOUNT_NAME` | `TECHSTORE` | Optional demo |
 
-Generate a strong admin secret (PowerShell):
-
-```powershell
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
-```
-
-4. Deploy → wait for build green.
-5. Set `NEXT_PUBLIC_SITE_URL` to the production URL and **redeploy** so sitemap/OG use the correct origin.
-6. Health check: open `https://<your-app>.vercel.app/api/health` → `{ "ok": true, ... }`.
+4. Tạo user đầu tiên trong Supabase Auth, rồi thêm UUID đó vào `admin_users` với role `admin` và `is_active = true`.
+5. Deploy → wait for build green.
+6. Set `NEXT_PUBLIC_SITE_URL` to the production URL and **redeploy** so sitemap/OG use the correct origin.
+7. Đăng nhập `/admin/login`, đăng ký TOTP và xác minh MFA trước khi kiểm tra dashboard.
+8. Health check: open `https://<your-app>.vercel.app/api/health` → `{ "ok": true, ... }`.
 
 ### Custom domain (optional)
 
@@ -101,7 +97,7 @@ Vercel Project → Domains → add domain → update `NEXT_PUBLIC_SITE_URL` → 
 - [ ] Product detail + add to cart
 - [ ] Checkout COD creates order
 - [ ] `/track-order` finds order by code + phone
-- [ ] `/admin/login` with `ADMIN_SECRET` → dashboard
+- [ ] `/admin/login` với Staff Account + TOTP → dashboard
 - [ ] `/robots.txt` and `/sitemap.xml` reachable
 - [ ] `/api/health` returns 200
 
@@ -115,7 +111,7 @@ Every PR gets a Vercel Preview URL. Use Preview env vars pointing at a **staging
 
 ## 5. What not to commit
 
-- `.env`, `.env.local`, service role keys, real `ADMIN_SECRET`
+- `.env`, `.env.local`, service role keys, mật khẩu hoặc TOTP secret
 - Docker Desktop / local Supabase volumes
 
 See also: [RUNBOOK.md](./RUNBOOK.md), [DEMO.md](./DEMO.md).

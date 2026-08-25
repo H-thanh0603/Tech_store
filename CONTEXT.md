@@ -23,3 +23,7 @@ _Avoid_: Shipping type, delivery mode
 **Staff Account**:
 An individual workforce identity with one server-authoritative role: Admin, Manager, or Staff.
 _Avoid_: Shared admin, admin secret, employee login
+
+**Verified Staff Session**:
+A Staff Account session whose holder has proven both a primary credential and a second factor; only this session may perform workforce operations.
+_Avoid_: Logged-in admin, password-only admin session

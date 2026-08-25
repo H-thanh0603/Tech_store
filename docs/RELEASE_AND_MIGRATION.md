@@ -20,6 +20,7 @@
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` chỉ ở server/CI, không được đưa vào client bundle.
-- `ADMIN_SECRET` chỉ dùng trong giai đoạn chuyển tiếp của cơ chế admin cũ.
+
+Supabase Auth phải bật TOTP enrollment và verification; admin dashboard yêu cầu AAL2.
 
 Không ghi giá trị secret vào log, tài liệu, artifact deploy hoặc repository.

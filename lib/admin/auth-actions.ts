@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 
-import { getAdminSession } from '@/lib/admin/auth'
+import { getAdminAuthState } from '@/lib/admin/auth'
 import { adminUserMessage } from '@/lib/admin/errors'
 import type { AdminActionState } from '@/lib/admin/types'
 import { adminAccountLoginSchema } from '@/lib/admin/validation'
@@ -27,7 +27,8 @@ export async function adminLogin(
 
   const supabase = await createSupabaseAuthClient()
   const { error } = await supabase.auth.signInWithPassword(parsed.data)
-  if (error || !(await getAdminSession())) {
+  const state = error ? null : await getAdminAuthState()
+  if (!state) {
     await supabase.auth.signOut()
     return {
       ok: false,
@@ -35,6 +36,8 @@ export async function adminLogin(
       message: 'Email, mật khẩu hoặc quyền admin không hợp lệ.',
     }
   }
+  if (state.mfaStatus === 'setup_required') redirect('/admin/mfa/setup')
+  if (state.mfaStatus === 'challenge_required') redirect('/admin/mfa/verify')
   redirect('/admin')
 }
 

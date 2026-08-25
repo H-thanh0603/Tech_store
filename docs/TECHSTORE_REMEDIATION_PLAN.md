@@ -339,7 +339,7 @@ tests/integration/checkout-auth-boundary.test.ts
 
 ## 6.1 Vấn đề
 
-Admin hiện dùng một shared `ADMIN_SECRET`.
+Trước phase này, Admin dùng một shared `ADMIN_SECRET`.
 
 Rủi ro:
 
@@ -420,14 +420,14 @@ Không dùng `user_metadata` làm nguồn role tin cậy.
 
 ## 6.6 Acceptance criteria
 
-- [ ] Mỗi admin có identity riêng.
-- [ ] Role lấy server-side.
-- [ ] Shared secret bị loại khỏi production.
-- [ ] Disable user hoạt động.
-- [ ] Revoke session hoạt động.
-- [ ] Audit actor chính xác.
-- [ ] MFA policy được quyết định.
-- [ ] Permission tests pass.
+- [x] Mỗi admin có identity riêng.
+- [x] Role lấy server-side.
+- [x] Shared secret bị loại khỏi production.
+- [x] Disable user hoạt động.
+- [x] Revoke session hoạt động.
+- [x] Audit actor chính xác.
+- [x] MFA bắt buộc AAL2 cho mọi Staff Account active.
+- [x] Permission tests pass.
 
 ---
 

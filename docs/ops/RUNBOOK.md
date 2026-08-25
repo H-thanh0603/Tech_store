@@ -5,10 +5,10 @@
 | Role | Access |
 |------|--------|
 | Customer / guest | Storefront only |
-| Staff (demo) | `/admin` via `ADMIN_SECRET` |
+| Admin / Manager / Staff | `/admin` qua Supabase Auth + TOTP MFA |
 | Platform admin | Vercel + Supabase dashboard |
 
-There is no multi-user auth yet (M4/M6 demo secret). Rotate `ADMIN_SECRET` if leaked.
+Mỗi nhân viên có Staff Account riêng; role lấy từ `admin_users`, không lấy từ metadata hoặc client.
 
 ---
 
@@ -33,9 +33,14 @@ Free Supabase projects **pause** after inactivity. Unpause in dashboard before d
 
 ### Admin login fails
 
-- `ADMIN_SECRET` env present on Vercel, min 16 characters.
-- Cookie blocked? Test non-private window; `secure` cookies need HTTPS (Vercel is HTTPS).
-- Middleware + page both require valid signed cookie.
+- Kiểm tra user còn active trong `admin_users` và không bị ban trong Supabase Auth.
+- Kiểm tra TOTP enrollment/verification đang bật trong cấu hình Supabase Auth.
+- Phiên password-only chỉ được vào `/admin/mfa/setup` hoặc `/admin/mfa/verify`; dashboard yêu cầu `AAL2`.
+
+### Lost MFA device
+
+- Admin khác vào `/admin/settings` → **Đặt lại MFA**; factor và mọi session của tài khoản đích bị thu hồi, audit được ghi lại.
+- Nếu mất MFA của admin duy nhất, xóa factor trong Supabase Dashboard → Authentication → Users, ghi incident thủ công, rồi đăng nhập và setup lại ngay.
 
 ### Cannot place order / cart errors
 
@@ -55,9 +60,9 @@ Free Supabase projects **pause** after inactivity. Unpause in dashboard before d
 
 ## Secrets rotation
 
-1. Generate new `ADMIN_SECRET` → Vercel env → Redeploy → all staff re-login.
-2. Supabase: rotate service_role only if leaked → update Vercel → Redeploy. Anon key rotation requires client redeploy too.
-3. Never put service_role in `NEXT_PUBLIC_*`.
+1. Mật khẩu nhân viên bị lộ → reset password, revoke session và kiểm tra audit log.
+2. TOTP bị lộ/mất → Admin khác đặt lại MFA trong `/admin/settings`.
+3. Supabase service role bị lộ → rotate key, update Vercel và redeploy. Không đặt service role trong `NEXT_PUBLIC_*`.
 
 ---
 
@@ -94,7 +99,7 @@ Then redeploy app if env project ref changed.
 - [ ] Free Supabase project awake
 - [ ] Latest `main` deployed on Vercel Production
 - [ ] `NEXT_PUBLIC_SITE_URL` matches production URL
-- [ ] Admin secret known only to presenters
+- [ ] Staff Account thử nghiệm đăng nhập được bằng password + TOTP
 - [ ] One test order placed end-to-end in the last hour
 
 ---

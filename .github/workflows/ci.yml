@@ -50,7 +50,6 @@ jobs:
         run: npm run test:e2e -- --project=chromium
         env:
           CI: true
-          ADMIN_SECRET: ci-admin-secret-min-16-chars
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
       - name: Upload E2E diagnostics
         if: failure()

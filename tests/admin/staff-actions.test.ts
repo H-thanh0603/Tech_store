@@ -11,6 +11,7 @@ vi.mock('@/lib/admin/supabase', () => ({ getSupabaseAdminClient }))
 
 import {
   inviteStaffAccount,
+  resetStaffMfa,
   revokeStaffSessions,
   updateStaffAccount,
 } from '@/lib/admin/staff-actions'
@@ -121,5 +122,37 @@ describe('staff account actions', () => {
       { ban_duration: '876000h' },
     )
     expect(rpc.mock.invocationCallOrder[0]).toBeLessThan(updateUserById.mock.invocationCallOrder[0])
+  })
+
+  it('deletes another staff factor, revokes sessions, and records the reset actor', async () => {
+    requireAdminPermission.mockResolvedValue(actor)
+    const deleteFactor = vi.fn().mockResolvedValue({ data: { id: 'factor-1' }, error: null })
+    const rpc = vi.fn().mockResolvedValue({ data: { code: 'OK', revokedSessions: 1 }, error: null })
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    getSupabaseAdminClient.mockReturnValue({
+      auth: { admin: { mfa: {
+        listFactors: vi.fn().mockResolvedValue({
+          data: { factors: [{ id: 'factor-1' }] }, error: null,
+        }),
+        deleteFactor,
+      } } },
+      rpc,
+      from: vi.fn(() => ({ insert })),
+    })
+
+    await expect(resetStaffMfa('91000000-0000-4000-8000-000000000002')).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(deleteFactor).toHaveBeenCalledWith({
+      userId: '91000000-0000-4000-8000-000000000002',
+      id: 'factor-1',
+    })
+    expect(rpc).toHaveBeenCalledWith('admin_revoke_staff_sessions', expect.objectContaining({
+      p_actor_user_id: actor.userId,
+    }))
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'staff_mfa_reset',
+      actor_user_id: actor.userId,
+    }))
   })
 })

@@ -15,6 +15,11 @@ const MESSAGES: Record<string, string> = {
   SELF_MANAGEMENT_FORBIDDEN: 'Không thể tự khóa, hạ quyền hoặc thu hồi phiên của chính mình.',
   LAST_ADMIN: 'Phải giữ lại ít nhất một tài khoản admin đang hoạt động.',
   AUTH_SYNC_ERROR: 'Quyền đã được khóa an toàn nhưng trạng thái Supabase Auth chưa đồng bộ. Hãy thử lại.',
+  MFA_STATE_CHANGED: 'Trạng thái MFA đã thay đổi. Tải lại trang để tiếp tục.',
+  MFA_ENROLL_FAILED: 'Không thể tạo mã MFA. Kiểm tra cấu hình TOTP của Supabase.',
+  MFA_CODE_INVALID: 'Mã xác minh không đúng hoặc đã hết hạn.',
+  MFA_NOT_ENROLLED: 'Tài khoản chưa đăng ký MFA.',
+  MFA_RESET_PARTIAL: 'MFA đã được xóa nhưng không thể ghi đủ audit. Kiểm tra log hệ thống.',
   CONFIGURATION_ERROR: 'Thiếu cấu hình server admin.',
   INTERNAL_ERROR: 'Có lỗi hệ thống. Thử lại sau.',
 }

@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 
 import { AdminLoginForm } from '@/components/admin/login-form'
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { getAdminAuthState } from '@/lib/admin/auth'
 
 export default async function AdminLoginPage() {
-  if (await isAdminAuthenticated()) {
-    redirect('/admin')
-  }
+  const state = await getAdminAuthState()
+  if (state?.mfaStatus === 'setup_required') redirect('/admin/mfa/setup')
+  if (state?.mfaStatus === 'challenge_required') redirect('/admin/mfa/verify')
+  if (state?.mfaStatus === 'verified') redirect('/admin')
 
   return (
     <section className="space-y-6">

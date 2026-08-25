@@ -137,3 +137,43 @@ export async function revokeStaffSessions(userId: string): Promise<AdminActionSt
   refreshStaff()
   return { ok: true, message: `Đã thu hồi ${result.revokedSessions ?? 0} phiên đăng nhập.` }
 }
+
+export async function resetStaffMfa(userId: string): Promise<AdminActionState> {
+  const actor = await gate()
+  if (!('actorLabel' in actor)) return actor
+  const parsed = staffTargetSchema.safeParse({ userId })
+  if (!parsed.success) return fail('VALIDATION_ERROR')
+  if (parsed.data.userId === actor.userId) return fail('SELF_MANAGEMENT_FORBIDDEN')
+
+  const db = getSupabaseAdminClient()
+  const listed = await db.auth.admin.mfa.listFactors({ userId: parsed.data.userId })
+  if (listed.error) return fail('INTERNAL_ERROR')
+  if (listed.data.factors.length === 0) return fail('MFA_NOT_ENROLLED')
+
+  for (const factor of listed.data.factors) {
+    const { error } = await db.auth.admin.mfa.deleteFactor({
+      userId: parsed.data.userId,
+      id: factor.id,
+    })
+    if (error) return fail('MFA_RESET_PARTIAL')
+  }
+
+  const revoked = await db.rpc('admin_revoke_staff_sessions', {
+    p_actor_user_id: actor.userId,
+    p_target_user_id: parsed.data.userId,
+  })
+  if (revoked.error || (revoked.data as RpcResult)?.code !== 'OK') return fail('MFA_RESET_PARTIAL')
+
+  const audit = await db.from('admin_audit_logs').insert({
+    action: 'staff_mfa_reset',
+    entity_type: 'staff_account',
+    entity_id: parsed.data.userId,
+    payload: { removedFactors: listed.data.factors.length },
+    actor_label: actor.actorLabel,
+    actor_user_id: actor.userId,
+  })
+  if (audit.error) return fail('MFA_RESET_PARTIAL')
+
+  refreshStaff()
+  return { ok: true, message: 'Đã đặt lại MFA và thu hồi toàn bộ phiên đăng nhập.' }
+}

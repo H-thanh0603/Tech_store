@@ -18,6 +18,13 @@ export const adminAccountLoginSchema = z.object({
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),
 })
 
+export const adminMfaCodeSchema = z.string().trim().regex(/^\d{6}$/, 'Nhập mã 6 chữ số.')
+
+export const adminMfaEnrollmentSchema = z.object({
+  factorId: uuid,
+  code: adminMfaCodeSchema,
+})
+
 export const staffInviteSchema = z.object({
   email: z.string().trim().toLowerCase().email('Email không hợp lệ.').max(254),
   displayName: z.string().trim().min(2).max(120),

@@ -16,6 +16,19 @@ export type AdminSession = {
   actorLabel: string
 }
 
+export type AdminMfaStatus = 'setup_required' | 'challenge_required' | 'verified'
+export type AdminAuthState = AdminSession & { mfaStatus: AdminMfaStatus }
+
+export function adminSessionFromState(state: AdminAuthState): AdminSession {
+  return {
+    userId: state.userId,
+    role: state.role,
+    displayName: state.displayName,
+    email: state.email,
+    actorLabel: state.actorLabel,
+  }
+}
+
 export async function isAdminAuthenticated(): Promise<boolean> {
   return Boolean(await getAdminSession())
 }
@@ -25,7 +38,7 @@ export async function isAdminAuthenticated(): Promise<boolean> {
  * Authorization (module access) is enforced by require-admin.ts guards on
  * every page and server action; the edge proxy only refreshes sessions.
  */
-export async function getAdminSession(): Promise<AdminSession | null> {
+export async function getAdminAuthState(): Promise<AdminAuthState | null> {
   const supabase = await createSupabaseAuthClient()
   const {
     data: { user },
@@ -40,6 +53,16 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     .maybeSingle()
   if (error || !data || !isAdminRole(data.role)) return null
 
+  const { data: assurance, error: assuranceError } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (assuranceError || !assurance?.currentLevel || !assurance.nextLevel) return null
+
+  const mfaStatus: AdminMfaStatus = assurance.currentLevel === 'aal2'
+    ? 'verified'
+    : assurance.nextLevel === 'aal2'
+      ? 'challenge_required'
+      : 'setup_required'
+
   const displayName = data.display_name || user.email || user.id
   const email = user.email || ''
   return {
@@ -48,7 +71,14 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     displayName,
     email,
     actorLabel: `${displayName}${email ? ` <${email}>` : ''} [${user.id}]`,
+    mfaStatus,
   }
+}
+
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const state = await getAdminAuthState()
+  if (!state || state.mfaStatus !== 'verified') return null
+  return adminSessionFromState(state)
 }
 
 export async function requireAdminSession(module?: AdminModule): Promise<AdminSession> {

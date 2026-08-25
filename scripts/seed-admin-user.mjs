@@ -7,7 +7,8 @@
 // ADMIN_E2E_EMAIL (default admin@techstore.local),
 // ADMIN_E2E_PASSWORD (default techstore-admin-e2e).
 
-import { readFileSync, existsSync } from 'node:fs'
+import { createHmac } from 'node:crypto'
+import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -25,8 +26,9 @@ function loadDotEnv() {
 const env = loadDotEnv()
 const url = env.NEXT_PUBLIC_SUPABASE_URL
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY
-if (!url || !serviceKey) {
-  console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+if (!url || !serviceKey || !anonKey) {
+  console.error('Missing Supabase URL, anon key, or service role key')
   process.exit(1)
 }
 
@@ -69,4 +71,64 @@ if (upsertError) {
   process.exit(1)
 }
 
-console.log(`Admin ready: ${email} / ${password} (user ${created.user.id})`)
+const { data: factorData, error: factorListError } = await supabase.auth.admin.mfa.listFactors({
+  userId: created.user.id,
+})
+if (factorListError) {
+  console.error(`MFA factor list failed: ${factorListError.message}`)
+  process.exit(1)
+}
+for (const factor of factorData.factors) {
+  const { error: deleteError } = await supabase.auth.admin.mfa.deleteFactor({
+    userId: created.user.id,
+    id: factor.id,
+  })
+  if (deleteError) {
+    console.error(`MFA factor reset failed: ${deleteError.message}`)
+    process.exit(1)
+  }
+}
+
+const userClient = createClient(url, anonKey, { auth: { persistSession: false } })
+const { error: signInError } = await userClient.auth.signInWithPassword({ email, password })
+if (signInError) {
+  console.error(`MFA seed sign-in failed: ${signInError.message}`)
+  process.exit(1)
+}
+const { data: enrolled, error: enrollError } = await userClient.auth.mfa.enroll({
+  factorType: 'totp',
+  friendlyName: 'TechStore E2E',
+  issuer: 'TechStore',
+})
+if (enrollError) {
+  console.error(`MFA enrollment failed: ${enrollError.message}`)
+  process.exit(1)
+}
+
+function totp(secret) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = ''
+  for (const char of secret.replace(/=+$/u, '').toUpperCase()) {
+    bits += alphabet.indexOf(char).toString(2).padStart(5, '0')
+  }
+  const key = Buffer.from(bits.match(/.{8}/gu)?.map((byte) => Number.parseInt(byte, 2)) ?? [])
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)))
+  const digest = createHmac('sha1', key).update(counter).digest()
+  const offset = digest[digest.length - 1] & 0x0f
+  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000
+  return value.toString().padStart(6, '0')
+}
+
+const { error: verifyError } = await userClient.auth.mfa.challengeAndVerify({
+  factorId: enrolled.id,
+  code: totp(enrolled.totp.secret),
+})
+if (verifyError) {
+  console.error(`MFA verification failed: ${verifyError.message}`)
+  process.exit(1)
+}
+await userClient.auth.signOut()
+writeFileSync('.admin-e2e-mfa-secret', enrolled.totp.secret, { mode: 0o600 })
+
+console.log(`Admin ready with MFA: ${email} / ${password} (user ${created.user.id})`)

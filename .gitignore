@@ -14,6 +14,7 @@ npm-debug.log*
 test-results/
 playwright-report/
 blob-report/
+.admin-e2e-mfa-secret
 
 .deploy-secrets.txt
 _deploy_*.json

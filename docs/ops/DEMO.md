@@ -6,11 +6,11 @@ Use this for teacher/client walkthroughs after Vercel + Supabase deploy.
 
 | What | Where |
 |------|--------|
-| Staff admin | `/admin/login` — password = Vercel env `ADMIN_SECRET` |
+| Staff admin | `/admin/login` — Staff Account riêng + ứng dụng TOTP |
 | Guest shopper | No account — cart/checkout cookies |
 | Supabase Studio | dashboard for “back office” data proof |
 
-Share **admin secret only** with evaluators; rotate after public demos.
+Không chia sẻ một tài khoản chung; mỗi evaluator cần Staff Account riêng hoặc người vận hành tự nhập TOTP.
 
 ## Seed highlights (`supabase/seed.sql`)
 
@@ -38,7 +38,7 @@ select code, discount_type, discount_value, is_active from coupons order by code
 7. **Admin catalog** — edit stock or publish a draft → refresh storefront.  
 8. **SEO proof** — open `/sitemap.xml`, `/robots.txt`, view-source PDP for `application/ld+json`.  
 9. **Health** — `/api/health`.  
-10. **Security note** — guest cannot open `/admin` without secret (middleware redirect).
+10. **Security note** — password-only session không thể mở dashboard hoặc gọi admin mutation; server yêu cầu MFA `AAL2`.
 
 ## Talking points (architecture)
 

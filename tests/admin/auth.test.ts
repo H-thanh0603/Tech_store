@@ -1,17 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getUser = vi.fn()
+const getAuthenticatorAssuranceLevel = vi.fn()
 const maybeSingle = vi.fn()
 const eq = vi.fn(() => ({ eq, maybeSingle }))
 const select = vi.fn(() => ({ eq }))
 const from = vi.fn(() => ({ select }))
 
 vi.mock('@/lib/supabase/auth-server', () => ({
-  createSupabaseAuthClient: vi.fn(async () => ({ auth: { getUser }, from })),
+  createSupabaseAuthClient: vi.fn(async () => ({
+    auth: { getUser, mfa: { getAuthenticatorAssuranceLevel } },
+    from,
+  })),
 }))
 
 import {
   getAdminSession,
+  getAdminAuthState,
   requireAdminPermission,
   requireAdminSession,
 } from '@/lib/admin/auth'
@@ -21,6 +26,10 @@ beforeEach(() => {
   eq.mockReturnValue({ eq, maybeSingle })
   select.mockReturnValue({ eq })
   from.mockReturnValue({ select })
+  getAuthenticatorAssuranceLevel.mockResolvedValue({
+    data: { currentLevel: 'aal2', nextLevel: 'aal2' },
+    error: null,
+  })
 })
 
 describe('getAdminSession', () => {
@@ -57,6 +66,30 @@ describe('getAdminSession', () => {
       email: 'x@y.z',
       actorLabel: 'Nhân Viên <x@y.z> [u1]',
     })
+  })
+
+  it('requires setup when the account has no verified factor', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'x@y.z' } } })
+    maybeSingle.mockResolvedValue({ data: { display_name: 'X', role: 'admin' }, error: null })
+    getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal1', nextLevel: 'aal1' },
+      error: null,
+    })
+
+    await expect(getAdminAuthState()).resolves.toMatchObject({ mfaStatus: 'setup_required' })
+    await expect(getAdminSession()).resolves.toBeNull()
+  })
+
+  it('requires a TOTP challenge for a password-only session with MFA enrolled', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'x@y.z' } } })
+    maybeSingle.mockResolvedValue({ data: { display_name: 'X', role: 'admin' }, error: null })
+    getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
+    })
+
+    await expect(getAdminAuthState()).resolves.toMatchObject({ mfaStatus: 'challenge_required' })
+    await expect(requireAdminPermission('staff.manage')).rejects.toThrow('UNAUTHORIZED')
   })
 })
 

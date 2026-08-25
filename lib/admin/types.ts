@@ -19,6 +19,13 @@ export interface AdminStaffAccountRow {
   updatedAt: string
   disabledAt: string | null
   lastSignInAt: string | null
+  mfaVerified: boolean
+}
+
+export interface AdminMfaEnrollment {
+  factorId: string
+  qrCode: string
+  secret: string
 }
 
 export interface DashboardStats {

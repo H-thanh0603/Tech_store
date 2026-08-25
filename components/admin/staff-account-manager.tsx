@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   inviteStaffAccount,
+  resetStaffMfa,
   revokeStaffSessions,
   updateStaffAccount,
 } from '@/lib/admin/staff-actions'
@@ -32,6 +33,7 @@ export function StaffAccountManager({
   const { toast } = useToast()
   const [pending, startTransition] = useTransition()
   const [confirmChange, setConfirmChange] = useState<PendingChange>(null)
+  const [confirmMfaReset, setConfirmMfaReset] = useState<AdminStaffAccountRow | null>(null)
   const [state, inviteAction, invitePending] = useActionState(
     async (prev: AdminActionState, formData: FormData) => {
       const result = await inviteStaffAccount(prev, formData)
@@ -80,6 +82,19 @@ export function StaffAccountManager({
     })
   }
 
+  function resetMfa(account: AdminStaffAccountRow) {
+    startTransition(async () => {
+      const result = await resetStaffMfa(account.userId)
+      toast({
+        title: result.ok ? 'Đã đặt lại MFA' : 'Không thể đặt lại MFA',
+        description: result.message,
+        tone: result.ok ? 'success' : 'error',
+      })
+      setConfirmMfaReset(null)
+      if (result.ok) router.refresh()
+    })
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="overflow-x-auto rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm)">
@@ -89,6 +104,7 @@ export function StaffAccountManager({
               <th className="px-4 py-3 font-medium">Nhân viên</th>
               <th className="px-4 py-3 font-medium">Vai trò</th>
               <th className="px-4 py-3 font-medium">Trạng thái</th>
+              <th className="px-4 py-3 font-medium">MFA</th>
               <th className="px-4 py-3 font-medium">Đăng nhập cuối</th>
               <th className="px-4 py-3 font-medium"><span className="sr-only">Hành động</span></th>
             </tr>
@@ -136,6 +152,12 @@ export function StaffAccountManager({
                       label={account.isActive ? 'Hoạt động' : 'Đã khóa'}
                     />
                   </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge
+                      status={account.mfaVerified ? 'active' : 'pending'}
+                      label={account.mfaVerified ? 'Đã bật' : 'Chưa bật'}
+                    />
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-fg-muted">
                     {account.lastSignInAt ? new Date(account.lastSignInAt).toLocaleString('vi-VN') : 'Chưa đăng nhập'}
                   </td>
@@ -155,6 +177,14 @@ export function StaffAccountManager({
                         })}
                       >
                         Thu hồi phiên
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSelf || pending || !account.mfaVerified}
+                        className="min-h-10 rounded px-2 text-fg-muted hover:bg-warm-subtle disabled:opacity-50"
+                        onClick={() => setConfirmMfaReset(account)}
+                      >
+                        Đặt lại MFA
                       </button>
                       <button
                         type="button"
@@ -214,6 +244,19 @@ export function StaffAccountManager({
         confirmLabel={confirmChange?.isActive ? 'Mở khóa' : 'Khóa và thu hồi phiên'}
         onCancel={() => setConfirmChange(null)}
         onConfirm={() => { if (confirmChange) toggleAccount(confirmChange) }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmMfaReset)}
+        title="Đặt lại MFA?"
+        description={confirmMfaReset
+          ? `${confirmMfaReset.displayName} sẽ bị đăng xuất và phải đăng ký ứng dụng xác thực lại.`
+          : undefined}
+        tone="danger"
+        loading={pending}
+        confirmLabel="Đặt lại MFA"
+        onCancel={() => setConfirmMfaReset(null)}
+        onConfirm={() => { if (confirmMfaReset) resetMfa(confirmMfaReset) }}
       />
     </div>
   )

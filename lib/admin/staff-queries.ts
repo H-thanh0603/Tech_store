@@ -30,6 +30,7 @@ export async function listStaffAccounts(): Promise<AdminStaffAccountRow[]> {
       updatedAt: String(profile.updated_at),
       disabledAt: profile.disabled_at ? String(profile.disabled_at) : null,
       lastSignInAt: user?.last_sign_in_at ?? null,
+      mfaVerified: Boolean(user?.factors?.some((factor) => factor.status === 'verified')),
     }
   })
 }

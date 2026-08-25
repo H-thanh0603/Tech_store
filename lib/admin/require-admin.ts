@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation'
 
-import { getAdminSession, type AdminSession } from '@/lib/admin/auth'
+import {
+  adminSessionFromState,
+  getAdminAuthState,
+  type AdminAuthState,
+  type AdminMfaStatus,
+  type AdminSession,
+} from '@/lib/admin/auth'
 import {
   canAccessModule,
   type AdminModule,
@@ -14,11 +20,21 @@ export type { AdminSession } from '@/lib/admin/auth'
  * Redirects unauthenticated users to login; returns role for permission checks.
  */
 export async function requireAdminPage(): Promise<AdminSession> {
-  const session = await getAdminSession()
-  if (!session) {
-    redirect('/admin/login')
+  const state = await getAdminAuthState()
+  if (!state) redirect('/admin/login')
+  if (state.mfaStatus === 'setup_required') redirect('/admin/mfa/setup')
+  if (state.mfaStatus === 'challenge_required') redirect('/admin/mfa/verify')
+  return adminSessionFromState(state)
+}
+
+export async function requireAdminMfaPage(status: Exclude<AdminMfaStatus, 'verified'>): Promise<AdminAuthState> {
+  const state = await getAdminAuthState()
+  if (!state) redirect('/admin/login')
+  if (state.mfaStatus === 'verified') redirect('/admin')
+  if (state.mfaStatus !== status) {
+    redirect(state.mfaStatus === 'setup_required' ? '/admin/mfa/setup' : '/admin/mfa/verify')
   }
-  return session
+  return state
 }
 
 /**
