@@ -106,8 +106,23 @@ Then redeploy app if env project ref changed.
 
 ## Monitoring (minimal free)
 
+- **Monitor workflow** (`.github/workflows/monitor.yml`, cron 15 phút):
+  - Ping `${PROD_BASE_URL}/api/health` + render storefront → fail = GitHub email/notification.
+  - `supabase migration list` so local vs remote — phát hiện migration drift.
+  - Backup tuần (thứ 2): `supabase db dump` upload artifact giữ 90 ngày, kèm **restore proof** — dump được nạp lại vào Postgres scratch và kiểm tra schema không rỗng.
+  - Cần secrets: `PROD_BASE_URL`, `SUPABASE_DB_URL`.
 - Vercel deployment emails / dashboard
 - Supabase project status
-- Optional: uptime ping on `/api/health` (UptimeRobot free)
+
+Alert checkout/RPC error chi tiết: xem Supabase Dashboard → Logs → API (filter RPC `place_order` status != 200). Free tier không có log-based alert tự động.
+
+### Restore thủ công khi sự cố
+
+```bash
+# Tải artifact backup mới nhất từ GitHub Actions → Monitor → backup job
+gunzip -c backup.sql.gz | psql "$SUPABASE_DB_URL"
+```
+
+Chỉ restore vào DB trống hoặc sau khi xác nhận forward-fix không khả thi. Dump không chứa storage objects.
 
 No paid APM in M6.

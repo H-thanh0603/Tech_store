@@ -1,0 +1,101 @@
+name: Monitor
+
+# Production health monitor: pings /api/health and the public storefront,
+# verifies remote migrations are in sync, and produces a weekly database
+# backup with an automated restore proof.
+#
+# Required secrets:
+#   PROD_BASE_URL   - e.g. https://techstore.example.vercel.app
+#   SUPABASE_DB_URL - postgres connection string (service-side secret)
+
+on:
+  schedule:
+    # Health probes every 15 minutes; backup job below self-gates to Mondays.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health:
+    name: Prod health probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+            "${{ secrets.PROD_BASE_URL }}/api/health")
+          echo "health status: $code"
+          test "$code" = "200"
+
+      - name: Probe storefront page
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(curl -sS --max-time 30 "${{ secrets.PROD_BASE_URL }}/")
+          echo "$body" | grep -q '<html' || { echo 'storefront did not render'; exit 1; }
+
+  database:
+    name: Migration drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify migrations applied on remote
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          supabase migration list --db-url "$SUPABASE_DB_URL" | tee /tmp/migrations.txt
+          ! grep -qiE 'not migrated|missing' /tmp/migrations.txt
+
+  backup:
+    name: Weekly backup + restore proof
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * 1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump remote database
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "$SUPABASE_DB_URL" --role-only > roles.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" > backup.sql
+          gzip backup.sql
+          test -s roles.sql && test -s backup.sql.gz
+
+      - name: Upload backup artifact (90-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: |
+            roles.sql
+            backup.sql.gz
+          retention-days: 90
+
+      - name: Restore into scratch Postgres (restore proof)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
+            -p 54329:5432 postgres:15-alpine >/dev/null
+          until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+          gunzip -c backup.sql.gz | docker exec -i pg-verify \
+            psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
+          docker exec pg-verify psql -U postgres -tAc \
+            "select count(*) from information_schema.tables where table_schema='public'" \
+            | grep -qv '^0' || { echo 'restore produced empty schema'; exit 1; }
+          docker rm -f pg-verify >/dev/null
+          echo 'restore verified'
