@@ -579,6 +579,34 @@ Khi mở drawer:
 
 ---
 
+## 10.4 Bổ sung Phase — Database lint (P2D)
+
+Supabase CLI `db lint` báo 3 finding sau khi apply migrations 20260724–20260824:
+
+- **Error 42P01** (`admin_list_orders`): relation `filtered` not exist — CTE `WITH filtered AS (...)`
+  được khai báo trong statement `SELECT count(*) INTO v_total FROM filtered`, nhưng dùng lại
+  `FROM filtered f` ở statement `SELECT ... INTO v_rows` khác. PL/pgSQL CTE không cross-statement.
+  **Fix** (migration mới `202608250010_fix_admin_list_cte_scope.sql`): gộp `filtered`/`paged`
+  thành `WITH ... MATERIALIZED` single-statement, đếm bằng `count(*) OVER ()` window.
+- **Error 42P01** (`admin_list_customers`): tương tự, CTE `agg` không visible cross-statement.
+  **Fix** cùng migration.
+- **Warning** (`place_order`): variable `v_inventory` declared + `SELECT ... INTO v_inventory`
+  nhưng never read — chỉ dùng để giữ lock `FOR UPDATE`. **Fix** (migration mới
+  `202608250011_fix_place_order_unused_var.sql`): bỏ `v_inventory`, dùng `PERFORM 1 ... FOR UPDATE`.
+
+### Test
+- `npx supabase db reset --yes && npx supabase db lint` trả về 0 finding.
+- pgTAP test `admin_list_orders(1)` trả về structure `{total, page, pageSize, pageCount, rows}`.
+- pgTAP test `admin_list_customers(1)` trả về structure `{total, page, pageSize, pageCount, rows, source}`.
+
+### Acceptance criteria
+- [x] Migration mới apply mà không sửa migration cũ.
+- [ ] `supabase db lint` clean (0 error, 0 warning).
+- [ ] pgTAP unit test pass.
+- [ ] CI `database` job chạm lint step nếu thêm.
+
+---
+
 # 11. OBSERVABILITY VÀ VẬN HÀNH
 
 Theo dõi tối thiểu:

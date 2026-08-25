@@ -85,5 +85,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
           node scripts/check-schema-contract.mjs
 
+      - name: Lint database
+        run: supabase db lint
+
       - name: Run pgTAP tests
         run: supabase test db
