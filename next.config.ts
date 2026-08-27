@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withSentryConfig } from '@sentry/nextjs'
 
 // Pin the workspace root to this project. A stray lockfile higher up the drive
 // (D:\pnpm-lock.yaml) otherwise makes Next infer the wrong root and mis-trace files.
@@ -41,4 +42,21 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  // For all available options, see: https://www.npmjs.com/package/@sentry/nextjs-webpack-plugin
+
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Only print logs for uploading source maps in CI.
+  silent: !process.env.CI,
+
+  // Upload a larger set of source maps for prettier stack traces (increases build time).
+  widenClientFileUpload: true,
+
+  // Automatically tree-shake Sentry logger statements to reduce bundle size.
+  disableLogger: true,
+
+  // Enables automatic instrumentation of Vercel Cron Monitors.
+  automaticVercelMonitors: true,
+})
