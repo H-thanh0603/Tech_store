@@ -92,8 +92,15 @@ export function CheckoutForm({ cart, initialState, pickupStores = [], vnpayEnabl
         </div>
         <div className="flex justify-between">
           <dt className="text-fg-muted">Vận chuyển</dt>
-          <dd className="text-success">Miễn phí</dd>
+          <dd className={cart.shippingInfo?.isFree ? 'text-success' : 'tabular-nums'}>
+            {cart.shippingInfo?.isFree ? 'Miễn phí' : formatPrice(cart.shippingTotal)}
+          </dd>
         </div>
+        {!cart.shippingInfo?.isFree && (cart.shippingInfo?.freeThreshold ?? 0) > 0 && (
+          <p className="text-(length:--text-xs) text-accent">
+            Mua thêm {formatPrice(Math.max(0, (cart.shippingInfo?.freeThreshold ?? 0) - cart.subtotal))} để miễn phí vận chuyển
+          </p>
+        )}
         <div className="flex justify-between border-t border-border pt-2 text-(length:--text-base) font-semibold">
           <dt>Tổng cộng</dt>
           <dd className="tabular-nums">{formatPrice(cart.total)}</dd>
@@ -148,7 +155,7 @@ export function CheckoutForm({ cart, initialState, pickupStores = [], vnpayEnabl
               onChange={() => setFulfillment('delivery')}
               className="size-4"
             />
-            <span className="text-(length:--text-sm)"><strong>Giao hàng</strong> — miễn phí vận chuyển</span>
+            <span className="text-(length:--text-sm)"><strong>Giao hàng</strong> — phí vận chuyển sẽ được tính</span>
           </label>
           <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
             <input

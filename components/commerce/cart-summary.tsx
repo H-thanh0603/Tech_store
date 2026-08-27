@@ -10,6 +10,9 @@ type CartSummaryProps = {
 export function CartSummary({ cart }: CartSummaryProps) {
   const hasCartWarning = cart.items.some((item) => item.priceChanged || item.outOfStock)
   const isCheckoutDisabled = !cart.canCheckout || hasCartWarning
+  const isFreeShipping = cart.shippingInfo?.isFree ?? true
+  const freeThreshold = cart.shippingInfo?.freeThreshold ?? 0
+  const remainingForFree = isFreeShipping ? 0 : Math.max(0, freeThreshold - cart.subtotal)
 
   return (
     <aside
@@ -34,9 +37,16 @@ export function CartSummary({ cart }: CartSummaryProps) {
           </dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt className="text-fg-muted">Vận chuyển (dự kiến)</dt>
-          <dd className="font-medium text-success">Miễn phí</dd>
+          <dt className="text-fg-muted">Vận chuyển</dt>
+          <dd className={`font-medium ${isFreeShipping ? 'text-success' : 'text-fg'}`}>
+            {isFreeShipping ? 'Miễn phí' : formatPrice(cart.shippingTotal)}
+          </dd>
         </div>
+        {!isFreeShipping && remainingForFree > 0 && (
+          <p className="text-(length:--text-xs) text-accent">
+            Mua thêm {formatPrice(remainingForFree)} để được miễn phí vận chuyển
+          </p>
+        )}
         <div className="flex justify-between gap-4 border-t border-border pt-3 text-(length:--text-base)">
           <dt className="font-semibold text-fg">Tổng cộng</dt>
           <dd className="font-semibold tabular-nums text-fg">{formatPrice(cart.total)}</dd>

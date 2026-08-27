@@ -85,10 +85,20 @@ export interface CartData {
   itemCount: number
   subtotal: number
   discountTotal: number
-  shippingTotal: 0
+  shippingTotal: number
   total: number
   appliedCouponCode: string | null
   canCheckout: boolean
+  shippingInfo?: ShippingInfo | null
+}
+
+export interface ShippingInfo {
+  shippingTotal: number
+  rateName: string
+  freeThreshold: number
+  baseRate: number
+  perItemRate: number
+  isFree: boolean
 }
 
 export interface OrderItemData {
@@ -107,7 +117,7 @@ export interface OrderConfirmationData {
   orderStatus: OrderStatus
   subtotal: number
   discountTotal: number
-  shippingTotal: 0
+  shippingTotal: number
   total: number
   transferExpiresAt: string | null
   fulfillmentMethod: FulfillmentMethod

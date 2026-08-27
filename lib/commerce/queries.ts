@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 
 import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
 import { sha256Hex } from '@/lib/commerce/tokens'
-import type { CartData, CartItemData, OrderConfirmationData } from '@/lib/commerce/types'
+import type { CartData, CartItemData, OrderConfirmationData, ShippingInfo } from '@/lib/commerce/types'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 interface CartRpcItem {
@@ -24,7 +24,7 @@ interface CartRpcItem {
   imageAlt: string | null
 }
 
-interface CartRpcData extends Omit<CartData, 'items'> {
+interface CartRpcData extends Omit<CartData, 'items' | 'shippingInfo'> {
   items: CartRpcItem[]
 }
 
@@ -58,6 +58,7 @@ function emptyCart(): CartData {
     total: 0,
     appliedCouponCode: null,
     canCheckout: false,
+    shippingInfo: null,
   }
 }
 
@@ -75,15 +76,41 @@ export async function getCart(): Promise<CartData> {
   }
 
   const cart = data as CartRpcData
+  const itemCount = numberValue(cart.itemCount)
+  const subtotal = numberValue(cart.subtotal)
+
+  // Fetch shipping calculation
+  let shippingInfo: ShippingInfo | null = null
+  let shippingTotal = 0
+
+  if (itemCount > 0) {
+    const { data: shipData } = await getSupabaseServerClient().rpc('calculate_shipping', {
+      p_subtotal: subtotal,
+      p_item_count: itemCount,
+    })
+    if (shipData) {
+      shippingInfo = {
+        shippingTotal: numberValue(shipData.shippingTotal),
+        rateName: String(shipData.rateName || ''),
+        freeThreshold: numberValue(shipData.freeThreshold),
+        baseRate: numberValue(shipData.baseRate),
+        perItemRate: numberValue(shipData.perItemRate),
+        isFree: Boolean(shipData.isFree),
+      }
+      shippingTotal = shippingInfo.shippingTotal
+    }
+  }
+
   return {
     ...emptyCart(),
     ...cart,
     items: (cart.items ?? []).map(mapItem),
-    itemCount: numberValue(cart.itemCount),
-    subtotal: numberValue(cart.subtotal),
+    itemCount,
+    subtotal,
     discountTotal: numberValue(cart.discountTotal),
-    shippingTotal: 0,
-    total: numberValue(cart.total),
+    shippingTotal,
+    total: numberValue(cart.total) + shippingTotal,
+    shippingInfo,
   }
 }
 
