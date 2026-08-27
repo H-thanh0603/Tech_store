@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import {
   EditProductForm,
   ImageForm,
+  ImageUploadForm,
   SpecForm,
   UseCasesForm,
   VariantForm,
@@ -56,6 +57,7 @@ export default async function AdminProductDetailPage({
 
       <div className="space-y-3">
         <h2 className="text-(length:--text-lg) font-semibold">Ảnh</h2>
+        <ImageUploadForm />
         {product.images.map((img) => (
           <ImageForm key={img.id} productId={product.id} image={img} />
         ))}

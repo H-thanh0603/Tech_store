@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import {
   upsertSpec,
   upsertVariant,
 } from '@/lib/admin/product-actions'
+import { uploadProductImage } from '@/lib/admin/image-upload-actions'
 import type {
   AdminImageRow,
   AdminProductDetail,
@@ -83,6 +84,28 @@ export function CreateProductForm({
   brands: BrandOption[]
 }) {
   const [state, action, pending] = useActionState(createProduct, initial)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  async function handleUploadAndAttach() {
+    const file = fileInputRef.current?.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setUploadError(null)
+
+    const result = await uploadProductImage(file)
+
+    setUploading(false)
+
+    if (result.ok && result.url) {
+      setImageUrl(result.url)
+    } else {
+      setUploadError(result.error || 'Upload thất bại')
+    }
+  }
 
   return (
     <form action={action} className="grid gap-4 md:grid-cols-2">
@@ -159,8 +182,29 @@ export function CreateProductForm({
         label='Thuộc tính JSON (vd {"ram":"16GB"})'
         defaultValue="{}"
       />
-      <Input id="imageUrl" name="imageUrl" label="URL ảnh (tuỳ chọn)" />
-      <Input id="imageAlt" name="imageAlt" label="Alt ảnh" />
+      <div className="md:col-span-2 space-y-3">
+        <div className="rounded-(--radius-lg) border border-dashed border-border p-4">
+          <p className="mb-2 text-(length:--text-sm) font-medium">Upload ảnh từ máy tính</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="mb-3 block w-full text-(length:--text-sm) file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-(length:--text-sm) file:font-medium file:text-primary-fg hover:file:bg-primary/90"
+          />
+          {uploadError && <p className="mb-2 text-(length:--text-sm) text-danger">{uploadError}</p>}
+          <Button type="button" variant="secondary" disabled={uploading} onClick={handleUploadAndAttach}>
+            {uploading ? 'Đang upload…' : 'Upload và điền URL'}
+          </Button>
+        </div>
+        <Input
+          id="imageUrl"
+          name="imageUrl"
+          label="URL ảnh (từ upload hoặc nhập tay)"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+        />
+        <Input id="imageAlt" name="imageAlt" label="Alt ảnh" />
+      </div>
       <div className="flex flex-wrap gap-4 md:col-span-2">
         <Checkbox id="isPublished" name="isPublished" label="Xuất bản ngay" />
         <Checkbox id="isFeatured" name="isFeatured" label="Nổi bật" />
@@ -376,6 +420,76 @@ export function ImageForm({
           </Button>
         </form>
       ) : null}
+    </div>
+  )
+}
+
+export function ImageUploadForm() {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+
+  async function handleUpload() {
+    const file = fileInputRef.current?.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setUploadError(null)
+    setUploadedUrl(null)
+
+    const result = await uploadProductImage(file)
+
+    setUploading(false)
+
+    if (result.ok && result.url) {
+      setUploadedUrl(result.url)
+      setPreview(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } else {
+      setUploadError(result.error || 'Upload thất bại')
+    }
+  }
+
+  function handleFileChange() {
+    const file = fileInputRef.current?.files?.[0]
+    if (file) {
+      const url = URL.createObjectURL(file)
+      setPreview(url)
+      setUploadedUrl(null)
+      setUploadError(null)
+    }
+  }
+
+  return (
+    <div className="rounded-(--radius-lg) border border-dashed border-border p-4">
+      <p className="mb-2 text-(length:--text-sm) font-medium">Upload ảnh từ máy tính</p>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={handleFileChange}
+        className="mb-3 block w-full text-(length:--text-sm) file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-(length:--text-sm) file:font-medium file:text-primary-fg hover:file:bg-primary/90"
+      />
+      {preview && (
+        <div className="mb-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="Preview" className="h-32 w-32 rounded-md object-cover" />
+        </div>
+      )}
+      {uploadError && <p className="mb-2 text-(length:--text-sm) text-danger">{uploadError}</p>}
+      {uploadedUrl && (
+        <div className="mb-2">
+          <p className="text-(length:--text-sm) text-success">Upload thành công!</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={uploadedUrl} alt="Uploaded" className="mt-1 h-32 w-32 rounded-md object-cover" />
+          <p className="mt-1 break-all text-(length:--text-xs) text-fg-muted">{uploadedUrl}</p>
+        </div>
+      )}
+      <Button type="button" variant="secondary" disabled={uploading || !preview} onClick={handleUpload}>
+        {uploading ? 'Đang upload…' : 'Upload ảnh'}
+      </Button>
     </div>
   )
 }
