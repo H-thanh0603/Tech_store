@@ -31,4 +31,16 @@ describe('Content Security Policy', () => {
     expect(nonceB).toBeTruthy()
     expect(nonceA).not.toBe(nonceB)
   })
+
+  it('restricts connect-src to Supabase and Sentry (no open https:)', async () => {
+    const response = await proxy(new NextRequest('https://techstore.test/products'))
+    const csp = response.headers.get('content-security-policy') ?? ''
+    const connectSrc = csp.match(/connect-src ([^;]+)/)?.[1] ?? ''
+
+    expect(connectSrc).toContain("'self'")
+    expect(connectSrc).toContain('https://*.supabase.co')
+    expect(connectSrc).toContain('https://*.sentry.io')
+    expect(connectSrc).not.toMatch(/(^|\s)https:(\s|$)/)
+    expect(connectSrc).not.toMatch(/(^|\s)wss:(\s|$)/)
+  })
 })

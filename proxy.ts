@@ -7,6 +7,22 @@ import { updateSession } from '@/lib/supabase/middleware'
 export async function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID()
   const development = process.env.NODE_ENV === 'development'
+
+  // connect-src is the exfiltration channel for a compromised dependency:
+  // if a rogue script ever runs, this is the allowlist it can phone home
+  // through. Supabase (project REST) and Sentry (error ingest) are the
+  // only third-party origins the browser talks to.
+  const connectSources = [
+    "'self'",
+    'https://*.supabase.co',
+    'wss://*.supabase.co',
+    'https://*.sentry.io',
+    'https://sentry.io',
+    ...(development
+      ? ['http://127.0.0.1:54321', 'http://localhost:54321', 'ws://127.0.0.1:54321', 'ws://localhost:54321']
+      : []),
+  ]
+
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${development ? " 'unsafe-eval'" : ''}`,
@@ -14,7 +30,7 @@ export async function proxy(request: NextRequest) {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    `connect-src 'self' https: wss:${development ? ' http://127.0.0.1:54321 http://localhost:54321' : ''}`,
+    `connect-src ${connectSources.join(' ')}`,
     "object-src 'none'",
     "frame-ancestors 'self'",
     "base-uri 'self'",
