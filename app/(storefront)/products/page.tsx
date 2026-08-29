@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   description: 'Danh sách sản phẩm công nghệ chọn lọc: laptop, điện thoại và phụ kiện.',
 }
 
+// Catalog changes slowly (price/stock adjust, new products are not added
+// every minute). Caching the rendered HTML for 60 s removes most of the
+// DB load on shared Supabase free-tier without making the storefront
+// feel stale.
+export const revalidate = 60
+
 interface ProductsPageProps {
   searchParams: Promise<RawSearchParams>
 }

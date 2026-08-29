@@ -16,6 +16,8 @@ import { BANNER_SLOTS, type Banner, type BannerSlot } from '@/lib/content/types'
  * bands — only with the number of distinct banner slots in use.
  */
 
+export const revalidate = 60
+
 /** Banner slots a section might reference through its config. */
 function bannerSlotsOf(config: Record<string, unknown>): BannerSlot[] {
   const candidates = [config.bannerSlot, config.sideBannerSlot]

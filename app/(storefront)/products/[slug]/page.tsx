@@ -1,3 +1,9 @@
+// Product detail changes when price or stock moves; 60 s of stale
+// window is acceptable on a free-tier shared Supabase and lets Vercel
+// serve the same HTML to many visitors without re-running the join
+// query for variants, inventory, hotspots, and reviews.
+export const revalidate = 60
+
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import Link from 'next/link'
