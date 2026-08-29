@@ -117,12 +117,11 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Uncomment to configure local storage buckets
-[storage.buckets.product-images]
-public = true
-file_size_limit = "10MiB"
-allowed_mime_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
-objects_path = "./product-images"
+# The product-images bucket is created by migration
+# 202608270001_product_images_storage.sql, so no [storage.buckets.*]
+# seed entry is needed here. A previous objects_path pointed at a
+# folder that does not exist in the repo, which broke `supabase start`
+# in CI with NotFound: FileSystem.stat(supabase/product-images).
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
