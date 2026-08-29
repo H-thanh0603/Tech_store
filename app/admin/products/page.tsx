@@ -61,9 +61,16 @@ export default async function AdminProductsPage({
             : 'Quản lý catalog'
         }
         actions={
-          <Link href="/admin/products/new">
-            <Button type="button">+ Sản phẩm mới</Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/admin/products/import">
+              <Button type="button" variant="secondary">
+                Import CSV
+              </Button>
+            </Link>
+            <Link href="/admin/products/new">
+              <Button type="button">+ Sản phẩm mới</Button>
+            </Link>
+          </div>
         }
       />
 
