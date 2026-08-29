@@ -3,12 +3,35 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export type AuthFormState = {
   ok: boolean
   message?: string
   mode?: 'magic' | 'password' | 'signup'
+}
+
+// Auth endpoints are anonymous by design, so the only usable identity
+// for a rate-limit bucket is the submitted email plus the caller IP
+// (server actions expose headers()). Limit is 5 attempts / 15 minutes
+// per identity — enough for a forgetful human, hostile to enumeration.
+async function authRateLimited(
+  action: 'auth_magic' | 'auth_password' | 'auth_signup',
+  email: string,
+): Promise<boolean> {
+  try {
+    const { data } = await getSupabaseServerClient().rpc('check_rate_limit', {
+      p_action: action,
+      p_identity: email,
+      p_limit: 5,
+      p_window_minutes: 15,
+    })
+    return data === true
+  } catch {
+    // Rate-limit infra failure must not lock customers out.
+    return false
+  }
 }
 
 function siteUrl() {
@@ -30,6 +53,14 @@ export async function signInWithMagicLink(
     .toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, message: 'Email không hợp lệ', mode: 'magic' }
+  }
+
+  if (await authRateLimited('auth_magic', email)) {
+    return {
+      ok: false,
+      message: 'Bạn đã thử quá nhiều lần. Thử lại sau 15 phút.',
+      mode: 'magic',
+    }
   }
 
   const supabase = await createSupabaseAuthClient()
@@ -68,6 +99,14 @@ export async function signInWithPassword(
     return { ok: false, message: 'Email và mật khẩu (tối thiểu 6 ký tự) là bắt buộc', mode: 'password' }
   }
 
+  if (await authRateLimited('auth_password', email)) {
+    return {
+      ok: false,
+      message: 'Bạn đã thử quá nhiều lần. Thử lại sau 15 phút.',
+      mode: 'password',
+    }
+  }
+
   const supabase = await createSupabaseAuthClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) {
@@ -88,6 +127,14 @@ export async function signUpWithPassword(
   const fullName = String(formData.get('fullName') ?? '').trim()
   if (!email || password.length < 6) {
     return { ok: false, message: 'Email và mật khẩu (tối thiểu 6 ký tự) là bắt buộc', mode: 'signup' }
+  }
+
+  if (await authRateLimited('auth_signup', email)) {
+    return {
+      ok: false,
+      message: 'Bạn đã thử quá nhiều lần. Thử lại sau 15 phút.',
+      mode: 'signup',
+    }
   }
 
   const supabase = await createSupabaseAuthClient()
