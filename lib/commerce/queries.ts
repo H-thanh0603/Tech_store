@@ -114,10 +114,6 @@ export async function getCart(): Promise<CartData> {
   }
 }
 
-export async function getCartItemCount(): Promise<number> {
-  return (await getCart()).itemCount
-}
-
 export async function getOrderByAccess(orderCode: string): Promise<OrderConfirmationData | null> {
   const token = (await cookies()).get(ORDER_ACCESS_COOKIE)?.value
   if (!token) return null

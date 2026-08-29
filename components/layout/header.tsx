@@ -4,15 +4,15 @@ import Link from 'next/link'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { useListCounts } from '@/components/commerce/list-toggles'
-import { MiniCart } from '@/components/commerce/mini-cart'
+import { MiniCartContainer } from '@/components/commerce/mini-cart-container'
 import { SearchSuggest } from '@/components/commerce/search-suggest'
 import { BottomNav } from '@/components/layout/bottom-nav'
+import { AccountBadge } from '@/components/layout/account-badge'
 import { CommitmentBar } from '@/components/layout/commitment-bar'
 import { MegaMenuBar } from '@/components/layout/mega-menu'
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { RegionSelect } from '@/components/layout/region-select'
-import { IconCompare, IconHeart, IconMenu, IconReceipt, IconUser } from '@/components/ui/icons'
-import type { CartData } from '@/lib/commerce/types'
+import { IconCompare, IconHeart, IconMenu, IconReceipt } from '@/components/ui/icons'
 import type { HeaderNavView, MenuLink } from '@/lib/content/nav-view'
 
 /**
@@ -28,25 +28,22 @@ import type { HeaderNavView, MenuLink } from '@/lib/content/nav-view'
  * layout jumping (the outer element keeps a fixed footprint in flow).
  *
  * Navigation data is passed in from the server layout; this component never
- * fetches, so the mega menu costs no extra client round-trip.
+ * fetches, so the mega menu costs no extra client round-trip. Cart and identity
+ * are fetched by their own client containers after hydration so the server
+ * layout stays free of cookie reads (keeps catalog pages ISR-cacheable).
  */
 
 const SCROLL_COMPACT_AT = 80
 
 type HeaderProps = {
   children?: ReactNode
-  cart: CartData
   nav: HeaderNavView
-  userEmail?: string | null
-  userName?: string | null
 }
 
-export function Header({ children, cart, nav, userEmail, userName }: HeaderProps) {
+export function Header({ children, nav }: HeaderProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const { wishCount, compareCount } = useListCounts()
-  const signedIn = Boolean(userEmail)
-  const accountLabel = userName || userEmail?.split('@')[0] || 'Đăng nhập'
 
   useEffect(() => {
     function onScroll() {
@@ -132,16 +129,9 @@ export function Header({ children, cart, nav, userEmail, userName }: HeaderProps
               {compareCount > 0 ? <CountBadge value={compareCount} /> : null}
             </Link>
 
-            <Link
-              href={signedIn ? '/account' : '/account/login'}
-              className="hidden min-h-11 items-center gap-1.5 rounded-(--radius-md) px-2.5 text-(length:--text-sm) font-medium text-fg-muted hover:bg-surface-muted hover:text-fg sm:inline-flex"
-              aria-label={signedIn ? `Tài khoản ${accountLabel}` : 'Đăng nhập'}
-            >
-              <IconUser size={18} />
-              <span className="hidden max-w-24 truncate lg:inline">{accountLabel}</span>
-            </Link>
+            <AccountBadge />
 
-            <MiniCart cart={cart} />
+            <MiniCartContainer />
           </div>
         </div>
 

@@ -6,26 +6,24 @@ import { Header } from '@/components/layout/header'
 import { StorefrontProviders } from '@/components/layout/storefront-providers'
 import { PromoPopup } from '@/components/ui/promo-popup'
 import { getCatalogFacets } from '@/lib/catalog/queries'
-import { getCart } from '@/lib/commerce/queries'
 import { buildHeaderNav, navigationFallback } from '@/lib/content/nav-view'
 import { getMegaMenuHighlights, getNavigationTree } from '@/lib/content/queries'
-import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export default async function StorefrontLayout({ children }: { children: ReactNode }) {
   // One parallel batch per request. `getNavigationTree`, `getCatalogFacets` and
   // `getMegaMenuHighlights` are the only extra queries the header needs, and all
   // three are cached, so a page that also renders filters or the homepage does
   // not pay for any of them twice.
-  const [cart, supabase, navigation, facets, highlights] = await Promise.all([
-    getCart(),
-    createSupabaseAuthClient(),
+  //
+  // Cart and identity are deliberately NOT read here: their cookie reads would
+  // opt every storefront page out of static rendering. Header fetches them
+  // client-side after hydration, which keeps /, /products, and product
+  // detail ISR-cacheable via the revalidate exports on those pages.
+  const [navigation, facets, highlights] = await Promise.all([
     getNavigationTree(),
     getCatalogFacets(),
     getMegaMenuHighlights(),
   ])
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
   // An empty `navigation_items` table (fresh DB, failed query) must not leave the
   // storefront without a menu.
@@ -43,12 +41,7 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
       >
         Bỏ qua đến nội dung chính
       </a>
-      <Header
-        cart={cart}
-        nav={nav}
-        userEmail={user?.email ?? null}
-        userName={(user?.user_metadata?.full_name as string | undefined) ?? null}
-      />
+      <Header nav={nav} />
       <main id="main-content" className="flex-1">
         {children}
       </main>

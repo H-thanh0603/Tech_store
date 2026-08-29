@@ -67,21 +67,10 @@ describe('Badge', () => {
   })
 })
 
-const emptyCart = {
-  items: [],
-  itemCount: 0,
-  subtotal: 0,
-  discountTotal: 0,
-  shippingTotal: 0 as const,
-  total: 0,
-  appliedCouponCode: null,
-  canCheckout: false,
-}
-
 describe('Header', () => {
   it('renders a banner landmark with category navigation and search', () => {
     const nav = buildHeaderNav(navigationFallback(), [{ name: 'Apple', slug: 'apple' }])
-    render(<Header cart={emptyCart} nav={nav} />)
+    render(<Header nav={nav} />)
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: /danh mục sản phẩm$/i })).toBeInTheDocument()
     expect(screen.getAllByRole('search').length).toBeGreaterThan(0)

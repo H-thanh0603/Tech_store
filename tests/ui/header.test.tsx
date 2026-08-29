@@ -23,17 +23,6 @@ const nav = buildHeaderNav(navigationFallback(), [
   { name: 'ASUS', slug: 'asus' },
 ])
 
-const emptyCart = {
-  items: [],
-  itemCount: 0,
-  subtotal: 0,
-  discountTotal: 0,
-  shippingTotal: 0 as const,
-  total: 0,
-  appliedCouponCode: null,
-  canCheckout: false,
-}
-
 beforeEach(() => {
   push.mockReset()
   window.localStorage.clear()
@@ -45,7 +34,7 @@ afterEach(() => {
 
 describe('Header', () => {
   it('renders the three tiers: commitments, search and the category bar', () => {
-    render(<Header cart={emptyCart} nav={nav} />)
+    render(<Header nav={nav} />)
 
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getAllByRole('search').length).toBeGreaterThan(0)
@@ -55,7 +44,7 @@ describe('Header', () => {
 
   it('opens a mega panel with brand, need and price columns from a category trigger', async () => {
     const user = userEvent.setup()
-    render(<Header cart={emptyCart} nav={nav} />)
+    render(<Header nav={nav} />)
 
     const bar = screen.getByRole('navigation', { name: /danh mục sản phẩm$/i })
     const trigger = within(bar).getByRole('button', { name: /^Laptop/ })
@@ -75,7 +64,7 @@ describe('Header', () => {
 
   it('closes the open panel on Escape', async () => {
     const user = userEvent.setup()
-    render(<Header cart={emptyCart} nav={nav} />)
+    render(<Header nav={nav} />)
 
     const bar = screen.getByRole('navigation', { name: /danh mục sản phẩm$/i })
     const trigger = within(bar).getByRole('button', { name: /^Laptop/ })
@@ -88,7 +77,7 @@ describe('Header', () => {
 
   it('opens the mobile category drawer as a modal dialog', async () => {
     const user = userEvent.setup()
-    render(<Header cart={emptyCart} nav={nav} />)
+    render(<Header nav={nav} />)
 
     await user.click(screen.getByRole('button', { name: 'Mở menu danh mục' }))
 
