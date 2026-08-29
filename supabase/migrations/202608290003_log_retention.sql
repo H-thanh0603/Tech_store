@@ -35,7 +35,7 @@ begin
   get diagnostics v_audit_deleted = row_count;
 
   delete from analytics_events
-  where created_at < now() - (p_analytics_days || ' days')::interval;
+  where received_at < now() - (p_analytics_days || ' days')::interval;
   get diagnostics v_analytics_deleted = row_count;
 
   delete from request_rate_limits

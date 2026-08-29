@@ -248,7 +248,12 @@ AS $$
     AND o.access_token_hash = p_access_token_hash;
 $$;
 
--- Fix order_track to read actual shipping_total
+-- Fix order_track to read actual shipping_total (the 202607240006 body
+-- hardcoded shippingTotal to 0). Body matches the original contract:
+-- 15-minute buckets on (action_name, identity_hash, bucket_started_at),
+-- identical ORDER_NOT_FOUND for wrong code/phone/rate-limit, transfer
+-- expiry sweep, access-token rotation, and the same JSON shape the
+-- storefront parser expects.
 CREATE OR REPLACE FUNCTION order_track(
   p_order_code text,
   p_phone text,
@@ -256,56 +261,62 @@ CREATE OR REPLACE FUNCTION order_track(
   p_new_access_token_hash text
 ) RETURNS jsonb
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_order record;
-  v_rl_window interval := interval '5 minutes';
-  v_rl_max int := 10;
+  v_bucket timestamptz;
+  v_attempts integer;
+  v_order orders%rowtype;
+  v_items jsonb;
+  v_not_found constant jsonb := jsonb_build_object('code', 'ORDER_NOT_FOUND');
 BEGIN
-  -- Rate limit check
-  IF EXISTS (
-    SELECT 1 FROM request_rate_limits
-    WHERE identity_hash = p_identity_hash
-      AND window_start > now() - v_rl_window
-      AND count >= v_rl_max
-  ) THEN
-    RETURN jsonb_build_object('code', 'RATE_LIMITED');
+  IF p_identity_hash !~ '^[a-f0-9]{64}$' OR p_new_access_token_hash !~ '^[a-f0-9]{64}$' THEN
+    RETURN v_not_found;
   END IF;
 
-  -- Upsert rate limit
-  INSERT INTO request_rate_limits (identity_hash, window_start, count)
-  VALUES (p_identity_hash, date_trunc('minute', now()), 1)
-  ON CONFLICT (identity_hash, window_start)
-  DO UPDATE SET count = request_rate_limits.count + 1;
+  v_bucket := date_bin(interval '15 minutes', now(), '2000-01-01T00:00:00Z'::timestamptz);
+  INSERT INTO request_rate_limits (action_name, identity_hash, bucket_started_at, attempt_count)
+  VALUES ('order_track', p_identity_hash, v_bucket, 1)
+  ON CONFLICT (action_name, identity_hash, bucket_started_at)
+  DO UPDATE SET attempt_count = request_rate_limits.attempt_count + 1
+  RETURNING attempt_count INTO v_attempts;
+  IF v_attempts > 5 THEN RETURN v_not_found; END IF;
 
-  -- Find order
-  SELECT id, order_code, status, payment_status, payment_method,
-         subtotal, discount_total, shipping_total, total,
-         customer_name, customer_phone, created_at
-  INTO v_order
+  SELECT * INTO v_order
   FROM orders
-  WHERE order_code = p_order_code AND customer_phone = p_phone;
+  WHERE order_code = upper(trim(p_order_code))
+    AND regexp_replace(customer_phone, '\D', '', 'g') = regexp_replace(p_phone, '\D', '', 'g')
+  FOR UPDATE;
+  IF NOT FOUND THEN RETURN v_not_found; END IF;
 
-  IF v_order IS NULL THEN
-    RETURN jsonb_build_object('code', 'ORDER_NOT_FOUND');
+  IF v_order.payment_method = 'bank_transfer'
+     AND v_order.payment_status = 'pending'
+     AND v_order.transfer_expires_at <= now() THEN
+    UPDATE orders SET payment_status = 'expired', order_status = 'expired'
+    WHERE id = v_order.id
+    RETURNING * INTO v_order;
+    UPDATE inventory_reservations SET released_at = now()
+    WHERE order_id = v_order.id AND released_at IS NULL;
+    UPDATE coupon_redemptions SET released_at = now()
+    WHERE order_id = v_order.id AND released_at IS NULL;
   END IF;
 
-  -- Grant access
-  UPDATE orders SET access_token_hash = p_new_access_token_hash
-  WHERE id = v_order.id;
+  UPDATE orders SET access_token_hash = p_new_access_token_hash WHERE id = v_order.id;
+
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'productName', product_name, 'sku', sku, 'attributes', attributes,
+    'unitPrice', unit_price, 'quantity', quantity, 'lineTotal', line_total
+  ) order by id), '[]'::jsonb)
+  INTO v_items FROM order_items WHERE order_id = v_order.id;
 
   RETURN jsonb_build_object(
-    'code', 'OK',
-    'orderCode', v_order.order_code,
-    'status', v_order.status,
-    'paymentStatus', v_order.payment_status,
-    'paymentMethod', v_order.payment_method,
-    'subtotal', v_order.subtotal,
-    'discountTotal', v_order.discount_total,
-    'shippingTotal', v_order.shipping_total,
+    'code', 'OK', 'orderCode', v_order.order_code,
+    'paymentMethod', v_order.payment_method, 'paymentStatus', v_order.payment_status,
+    'orderStatus', v_order.order_status, 'subtotal', v_order.subtotal,
+    'discountTotal', v_order.discount_total, 'shippingTotal', v_order.shipping_total,
     'total', v_order.total,
-    'customerName', v_order.customer_name,
-    'createdAt', v_order.created_at
+    'transferExpiresAt', v_order.transfer_expires_at, 'items', v_items
   );
 END;
 $$;
