@@ -7,6 +7,7 @@ name: Monitor
 # Required secrets:
 #   PROD_BASE_URL   - e.g. https://techstore.example.vercel.app
 #   SUPABASE_DB_URL - postgres connection string (service-side secret)
+#   CRON_SECRET     - shared secret guarding /api/cron/* (Vercel env)
 
 on:
   schedule:
@@ -47,6 +48,26 @@ jobs:
           set -euo pipefail
           body=$(curl -sS --max-time 30 "${{ secrets.PROD_BASE_URL }}/")
           echo "$body" | grep -q '<html' || { echo 'storefront did not render'; exit 1; }
+
+  crons:
+    name: Cron self-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run /api/cron/health
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w '%{http_code}' --max-time 60 \
+            -H "authorization: Bearer ${CRON_SECRET}" \
+            "${{ secrets.PROD_BASE_URL }}/api/cron/health")
+          echo "cron health status: $code"
+          cat "$body"
+          test "$code" = "200" || { echo 'cron self-check failed'; exit 1; }
+          grep -q '"ok":true' "$body" || { echo 'cron self-check did not report ok'; exit 1; }
+          rm -f "$body"
 
   database:
     name: Migration drift check
