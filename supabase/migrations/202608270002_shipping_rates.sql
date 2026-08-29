@@ -225,7 +225,7 @@ AS $$
     'orderCode', o.order_code,
     'paymentMethod', o.payment_method,
     'paymentStatus', o.payment_status,
-    'orderStatus', o.status,
+    'orderStatus', o.order_status,
     'subtotal', o.subtotal,
     'discountTotal', o.discount_total,
     'shippingTotal', o.shipping_total,
