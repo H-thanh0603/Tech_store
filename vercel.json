@@ -4,6 +4,7 @@
   "regions": ["sin1"],
   "crons": [
     { "path": "/api/cron/release-expired-reservations", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/process-notifications", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/process-notifications", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/purge-logs", "schedule": "0 18 * * *" }
   ]
 }
