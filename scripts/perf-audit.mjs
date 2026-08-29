@@ -60,3 +60,6 @@ for (const vp of VIEWPORTS) {
 
 console.table(rows);
 console.log(`Reports: ${outDir}`);
+// Machine-readable line for CI: {"minPerf":78,"viewports":{...}}
+const minPerf = Math.min(...rows.map((r) => r.perfScore));
+console.log(`LH_SUMMARY ${JSON.stringify({ minPerf, viewports: Object.fromEntries(rows.map((r) => [r.viewport, r.perfScore])) })}`);

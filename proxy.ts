@@ -35,6 +35,10 @@ export async function proxy(request: NextRequest) {
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
+    // Violations land in /api/csp-report, which logs them (and therefore
+    // feeds Sentry) so a policy regression or an injection attempt is
+    // observable in production instead of silently breaking a page.
+    "report-uri /api/csp-report",
   ].join('; ')
 
   const requestHeaders = new Headers(request.headers)

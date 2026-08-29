@@ -1,0 +1,75 @@
+name: Lighthouse perf audit
+
+# Weekly production performance audit. Builds the app against a local
+# Supabase, boots `next start`, and runs the 3-viewport Lighthouse pass
+# from scripts/perf-audit.mjs. Fails if performance < 80 so a regression
+# is caught within a week instead of after users complain.
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Mondays 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  lighthouse:
+    name: Lighthouse (3 viewports, perf >= 80)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start
+          supabase db reset --yes
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - name: Install Chrome + Lighthouse deps
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+          node -e "console.log('chrome deps ok')"
+
+      - name: Build production server
+        run: npm run build
+
+      - name: Run audit against next start
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          node scripts/perf-audit.mjs http://127.0.0.1:3000 | tee audit.txt
+
+      - name: Enforce performance floor (80)
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary=$(grep -o 'LH_SUMMARY {"minPerf":[0-9]*' audit.txt | grep -o '[0-9]*$')
+          if [ -z "$summary" ]; then
+            echo 'Could not parse LH_SUMMARY from audit output:'
+            cat audit.txt
+            exit 1
+          fi
+          echo "min performance score: $summary"
+          test "$summary" -ge 80 || { echo 'FAIL: performance below 80'; exit 1; }
