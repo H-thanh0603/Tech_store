@@ -15,6 +15,7 @@ test-results/
 playwright-report/
 blob-report/
 .admin-e2e-mfa-secret
+.lighthouseci/
 
 .deploy-secrets.txt
 _deploy_*.json
