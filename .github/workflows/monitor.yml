@@ -28,6 +28,19 @@ jobs:
           echo "health status: $code"
           test "$code" = "200"
 
+      - name: Probe database through /api/health?check=db
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w '%{http_code}' --max-time 30 \
+            "${{ secrets.PROD_BASE_URL }}/api/health?check=db")
+          echo "db probe status: $code"
+          cat "$body"
+          test "$code" = "200" || { echo 'database probe failed'; exit 1; }
+          grep -q '"db":"ok"' "$body" || { echo 'database probe did not report ok'; exit 1; }
+          rm -f "$body"
+
       - name: Probe storefront page
         shell: bash
         run: |
