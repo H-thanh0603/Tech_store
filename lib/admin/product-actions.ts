@@ -643,12 +643,21 @@ const csvRowSchema = z.object({
     .union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0'), z.literal('')])
     .optional()
     .transform((v) => v === 'true' || v === '1'),
+  // Optional single-variant block: when any of these columns is present
+  // and non-empty, the import also creates/updates one default variant
+  // (upsert by SKU) and its inventory row.
+  variant_sku: z.string().trim().max(120).optional().default(''),
+  variant_attributes: z.string().trim().max(2000).optional().default(''),
+  variant_regular_price: z.string().trim().optional().default(''),
+  variant_sale_price: z.string().trim().optional().default(''),
+  variant_stock: z.string().trim().optional().default(''),
 })
 
 export interface ProductImportSummary {
   total: number
   inserted: number
   updated: number
+  variantsUpserted: number
   rejected: { row: number; reason: string }[]
   durationMs: number
 }
@@ -671,12 +680,13 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
       total: 0,
       inserted: 0,
       updated: 0,
+      variantsUpserted: 0,
       rejected: errors.map((e) => ({ row: 0, reason: e })),
       durationMs: Date.now() - start,
     }
   }
   if (rows.length === 0) {
-    return { total: 0, inserted: 0, updated: 0, rejected: [], durationMs: Date.now() - start }
+    return { total: 0, inserted: 0, updated: 0, variantsUpserted: 0, rejected: [], durationMs: Date.now() - start }
   }
 
   const header = rows[0].map((c) => c.trim().toLowerCase())
@@ -686,6 +696,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
       total: 0,
       inserted: 0,
       updated: 0,
+      variantsUpserted: 0,
       rejected: [
         { row: 1, reason: `Thiếu cột bắt buộc: ${missing.join(', ')}.` },
       ],
@@ -699,6 +710,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
       total: dataRows.length,
       inserted: 0,
       updated: 0,
+      variantsUpserted: 0,
       rejected: [
         {
           row: 0,
@@ -726,7 +738,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
   })
 
   if (validated.length === 0) {
-    return { total: dataRows.length, inserted: 0, updated: 0, rejected, durationMs: Date.now() - start }
+    return { total: dataRows.length, inserted: 0, updated: 0, variantsUpserted: 0, rejected, durationMs: Date.now() - start }
   }
 
   // Resolve category / brand slugs in one round-trip each.
@@ -756,7 +768,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
   }
 
   if (validated.length === 0) {
-    return { total: dataRows.length, inserted: 0, updated: 0, rejected, durationMs: Date.now() - start }
+    return { total: dataRows.length, inserted: 0, updated: 0, variantsUpserted: 0, rejected, durationMs: Date.now() - start }
   }
 
   // Upsert in chunks of 50. Vercel Hobby function timeout is 10 s; this
@@ -799,10 +811,115 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
     }
   }
 
+  // Optional single-variant block: rows that also carry variant_* columns
+  // create or update one default variant (upsert by SKU) plus its inventory
+  // row, so imported products are publishable immediately.
+  const variantRows = validated.filter(
+    (r) => r.variant_sku && r.variant_regular_price !== '',
+  )
+  let variantsUpserted = 0
+  if (variantRows.length > 0) {
+    const { data: idMap } = await db
+      .from('products')
+      .select('id, slug')
+      .in(
+        'slug',
+        variantRows.map((r) => r.slug),
+      )
+    const idBySlug = new Map((idMap ?? []).map((p) => [String(p.slug), String(p.id)]))
+
+    for (const r of variantRows) {
+      const productId = idBySlug.get(r.slug)
+      if (!productId) continue
+
+      const regular = Number(r.variant_regular_price)
+      const saleRaw = r.variant_sale_price === '' ? null : Number(r.variant_sale_price)
+      const stockRaw = r.variant_stock === '' ? 0 : Number(r.variant_stock)
+      if (!Number.isFinite(regular) || regular < 0) {
+        rejected.push({ row: 0, reason: `variant_regular_price không hợp lệ cho ${r.slug}` })
+        continue
+      }
+      if (saleRaw != null && (!Number.isFinite(saleRaw) || saleRaw < 0 || saleRaw > regular)) {
+        rejected.push({
+          row: 0,
+          reason: `variant_sale_price phải >= 0 và <= giá thường cho ${r.slug}`,
+        })
+        continue
+      }
+
+      let attributes: Record<string, string> = {}
+      if (r.variant_attributes) {
+        try {
+          const parsedAttr = JSON.parse(r.variant_attributes)
+          if (parsedAttr && typeof parsedAttr === 'object' && !Array.isArray(parsedAttr)) {
+            attributes = Object.fromEntries(
+              Object.entries(parsedAttr).map(([k, v]) => [k, String(v)]),
+            )
+          }
+        } catch {
+          rejected.push({
+            row: 0,
+            reason: `variant_attributes phải là JSON hợp lệ cho ${r.slug}`,
+          })
+          continue
+        }
+      }
+
+      const { data: upserted, error: varError } = await db
+        .from('product_variants')
+        .upsert(
+          {
+            product_id: productId,
+            sku: r.variant_sku,
+            attributes,
+            regular_price: regular,
+            sale_price: saleRaw,
+            is_active: true,
+          },
+          { onConflict: 'sku' }
+        )
+        .select('id')
+        .single()
+      if (varError || !upserted) {
+        rejected.push({ row: 0, reason: `Lỗi variant upsert cho ${r.slug}: ${varError?.message}` })
+        continue
+      }
+      variantsUpserted += 1
+
+      // Ensure an inventory row exists; set quantity only when the CSV
+      // provides the column (leave existing stock alone otherwise).
+      if (r.variant_stock !== '') {
+        if (!Number.isInteger(stockRaw) || stockRaw < 0) {
+          rejected.push({ row: 0, reason: `variant_stock phải là số nguyên >= 0 cho ${r.slug}` })
+          continue
+        }
+        const { error: invError } = await db.from('inventory').upsert(
+          {
+            variant_id: upserted.id,
+            quantity: stockRaw,
+          },
+          { onConflict: 'variant_id' }
+        )
+        if (invError) {
+          rejected.push({
+            row: 0,
+            reason: `Lỗi inventory upsert cho ${r.slug}: ${invError.message}`,
+          })
+        }
+      }
+    }
+  }
+
   await writeAudit(
     'product_csv_import',
     null,
-    { inserted, updated, rejected: rejected.length, total: dataRows.length },
+    {
+      inserted,
+      updated,
+      variantsUpserted,
+      rejected: rejected.length,
+      total: dataRows.length,
+    },
     admin,
   )
 
@@ -814,6 +931,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
     total: dataRows.length,
     inserted,
     updated,
+    variantsUpserted,
     rejected,
     durationMs: Date.now() - start,
   }

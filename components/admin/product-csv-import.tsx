@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { importProductsCsv } from '@/lib/admin/product-actions'
 import type { ProductImportSummary } from '@/lib/admin/product-actions'
 
-const SAMPLE = `slug,name,category_slug,brand_slug,description,is_published,is_featured,is_archived
-iphone-15-pro-256gb,iPhone 15 Pro 256GB,phone,apple,Pro 2024 flagship,true,true,false
-pixel-9-pro-256gb,Pixel 9 Pro 256GB,phone,google,Google flagship 2024,true,false,false
-galaxy-s24-ultra-512gb,Galaxy S24 Ultra 512GB,phone,samsung,Top-tier Android,true,true,false
+const SAMPLE = `slug,name,category_slug,brand_slug,description,is_published,is_featured,is_archived,variant_sku,variant_attributes,variant_regular_price,variant_sale_price,variant_stock
+iphone-15-pro-256gb,iPhone 15 Pro 256GB,phone,apple,Pro 2024 flagship,true,true,false,IP15P-256,"{""ram"": ""8GB"", ""storage"": ""256GB""}",28990000,25990000,15
+pixel-9-pro-256gb,Pixel 9 Pro 256GB,phone,google,Google flagship 2024,true,false,false,PX9P-256,"{""ram"": ""12GB"", ""storage"": ""256GB""}",21900000,,8
+galaxy-s24-ultra-512gb,Galaxy S24 Ultra 512GB,phone,samsung,Top-tier Android,true,true,false,S24U-512,"{""ram"": ""12GB"", ""storage"": ""512GB""}",31990000,29990000,0
 `
 
 interface Props {
@@ -50,10 +50,17 @@ export function ProductCsvImportForm({ defaultValue = '' }: Props) {
             <code>is_featured</code>, <code>is_archived</code> (true/false).
           </p>
           <p>
-            Tối đa 500 dòng / lần import. Nếu file lớn hơn, hãy chia nhỏ. Import chỉ tạo/cập nhật
-            record sản phẩm; biến thể (variant) và tồn kho cần thêm qua trang chi tiết.
+            <strong>Biến thể mặc định (tùy chọn):</strong> điền thêm{' '}
+            <code>variant_sku</code> (bắt buộc nếu muốn tạo variant),{' '}
+            <code>variant_attributes</code> (JSON), <code>variant_regular_price</code>,{' '}
+            <code>variant_sale_price</code>, <code>variant_stock</code>. Một dòng = một sản phẩm
+            với một biến thể mặc định; sản phẩm nhiều biến thể vẫn cần thêm thủ công sau import.
           </p>
-          <p>Upsert theo <code>slug</code>: chạy lại file sẽ cập nhật sp đã có, không tạo trùng.</p>
+          <p>
+            Tối đa 500 dòng / lần import. Nếu file lớn hơn, hãy chia nhỏ. Upsert theo{' '}
+            <code>slug</code> (sản phẩm) và <code>variant_sku</code> (biến thể): chạy lại file sẽ
+            cập nhật, không tạo trùng.
+          </p>
         </div>
       </details>
 
@@ -108,8 +115,8 @@ function ImportSummaryView({ summary }: { summary: ProductImportSummary }) {
       }`}
     >
       <p>
-        Tổng {summary.total} dòng · tạo mới {summary.inserted} · cập nhật {summary.updated} · bị từ chối{' '}
-        {summary.rejected.length} · {summary.durationMs} ms
+        Tổng {summary.total} dòng · tạo mới {summary.inserted} · cập nhật {summary.updated} · biến thể{' '}
+        {summary.variantsUpserted} · bị từ chối {summary.rejected.length} · {summary.durationMs} ms
       </p>
       {summary.rejected.length > 0 ? (
         <details>
