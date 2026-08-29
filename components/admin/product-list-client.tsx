@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation'
 import { ConfirmDialog } from '@/components/admin/ui/confirm-dialog'
 import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { Button } from '@/components/ui/button'
-import { bulkUpdateProducts, setProductArchiveState } from '@/lib/admin/product-actions'
+import {
+  bulkAdjustPrice,
+  bulkSetStock,
+  bulkUpdateProducts,
+  setProductArchiveState,
+} from '@/lib/admin/product-actions'
 import { formatPrice } from '@/lib/format'
 import type { AdminProductListItem } from '@/lib/admin/types'
 import { useToast } from '@/components/admin/ui/toast-provider'
@@ -76,6 +81,75 @@ export function ProductListTable({ products }: { products: AdminProductListItem[
     })
   }
 
+  function runPriceBulk(mode: 'percent_up' | 'percent_down' | 'set_sale_off') {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    const raw = window.prompt(
+      mode === 'set_sale_off'
+        ? 'Xóa giá khuyến mãi (sale_price = null) cho tất cả biến thể active?'
+        : mode === 'percent_up'
+          ? 'Tăng giá theo % (1–100):'
+          : 'Giảm giá theo % (1–100):',
+      mode === 'set_sale_off' ? '' : '10',
+    )
+    if (raw === null) return
+    const value = Number(raw)
+    if (mode !== 'set_sale_off' && (!Number.isFinite(value) || value <= 0 || value > 100)) {
+      toast({ title: 'Sai giá trị', description: 'Phần trăm phải từ 1 đến 100.', tone: 'error' })
+      return
+    }
+
+    setConfirm({
+      title: `${mode === 'set_sale_off' ? 'Xóa khuyến mãi' : mode === 'percent_up' ? `Tăng giá ${value}%` : `Giảm giá ${value}%`} cho ${ids.length} sản phẩm?`,
+      description:
+        'Áp dụng cho mọi biến thể active của các sản phẩm đã chọn. Thao tác ghi vào audit log.',
+      action: async () => {
+        const form = new FormData()
+        form.set('bulkAction', mode)
+        form.set('bulkValue', String(mode === 'set_sale_off' ? 0 : value))
+        for (const id of ids) form.append('productIds', id)
+        const result = await bulkAdjustPrice({ ok: true }, form)
+        if (!result.ok) {
+          toast({ title: 'Thất bại', description: result.message, tone: 'error' })
+        } else {
+          toast({ title: 'Thành công', description: result.message, tone: 'success' })
+          router.refresh()
+        }
+      },
+    })
+  }
+
+  function runStockBulk() {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    const raw = window.prompt(`Đặt tồn kho (0+) cho mọi biến thể active của ${ids.length} sản phẩm:`, '50')
+    if (raw === null) return
+    const quantity = Number(raw)
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      toast({ title: 'Sai giá trị', description: 'Số lượng phải là số nguyên ≥ 0.', tone: 'error' })
+      return
+    }
+
+    setConfirm({
+      title: `Đặt tồn kho = ${quantity} cho ${ids.length} sản phẩm?`,
+      description:
+        'Áp dụng cho mọi biến thể active. Tồn kho đã reserve không bị giảm xuống dưới số đã giữ. Thao tác ghi vào audit log.',
+      action: async () => {
+        const form = new FormData()
+        form.set('bulkAction', 'set_stock')
+        form.set('bulkValue', String(quantity))
+        for (const id of ids) form.append('productIds', id)
+        const result = await bulkSetStock({ ok: true }, form)
+        if (!result.ok) {
+          toast({ title: 'Thất bại', description: result.message, tone: 'error' })
+        } else {
+          toast({ title: 'Thành công', description: result.message, tone: 'success' })
+          router.refresh()
+        }
+      },
+    })
+  }
+
   function archiveOne(product: AdminProductListItem) {
     setConfirm({
       title: product.isArchived ? 'Bỏ lưu trữ sản phẩm?' : 'Lưu trữ sản phẩm?',
@@ -109,6 +183,34 @@ export function ProductListTable({ products }: { products: AdminProductListItem[
           </Button>
           <Button type="button" variant="secondary" disabled={pending} onClick={() => runBulk('archive')}>
             Lưu trữ
+          </Button>
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => runPriceBulk('percent_up')}
+          >
+            Giá +%
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => runPriceBulk('percent_down')}
+          >
+            Giá −%
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => runPriceBulk('set_sale_off')}
+          >
+            Xóa sale
+          </Button>
+          <Button type="button" variant="secondary" disabled={pending} onClick={runStockBulk}>
+            Đặt tồn kho
           </Button>
         </div>
       ) : null}
