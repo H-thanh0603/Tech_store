@@ -102,7 +102,7 @@ select throws_ok(
   'order total must equal subtotal - discount + shipping'
 );
 
-select throws_ok(
+select lives_ok(
   $$insert into orders (
       order_code, idempotency_key, access_token_hash, customer_name,
       customer_phone, address_snapshot, payment_method, payment_status,
@@ -111,10 +111,10 @@ select throws_ok(
       'TS-BAD-SHIP', gen_random_uuid(), repeat('c', 64), 'X', '0900000000',
       '{}'::jsonb, 'cod', 'pending', 'pending', 100, 105, 5
     )$$,
-  '23514',
-  NULL,
-  'order shipping_total must be zero in M3'
+  'order shipping_total can be non-zero since shipping rates (M6)'
 );
+
+delete from orders where order_code = 'TS-BAD-SHIP';
 
 select throws_ok(
   $$insert into orders (
