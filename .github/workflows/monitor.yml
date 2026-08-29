@@ -133,3 +133,36 @@ jobs:
             | grep -qv '^0' || { echo 'restore produced empty schema'; exit 1; }
           docker rm -f pg-verify >/dev/null
           echo 'restore verified'
+
+      - name: Compare row counts vs production
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
+            -p 54329:5432 postgres:15-alpine >/dev/null
+          until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+          gunzip -c backup.sql.gz | docker exec -i pg-verify \
+            psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
+
+          counts_sql=$(cat <<'SQL'
+            select 'products',  count(*) from products
+            union all select 'orders',   count(*) from orders
+            union all select 'customers',count(*) from customer_profiles
+            union all select 'reviews',  count(*) from product_reviews
+            order by 1;
+          SQL
+          )
+
+          docker exec pg-verify psql -U postgres -tAc "$counts_sql" > /tmp/restored_counts.txt
+          psql "$SUPABASE_DB_URL" -tAc "$counts_sql" > /tmp/prod_counts.txt
+
+          if ! diff -u /tmp/prod_counts.txt /tmp/restored_counts.txt > /tmp/diff.txt; then
+            echo 'row counts diverge between production and restored backup:'
+            cat /tmp/diff.txt
+            docker rm -f pg-verify >/dev/null
+            exit 1
+          fi
+          docker rm -f pg-verify >/dev/null
+          echo 'row counts match production'
