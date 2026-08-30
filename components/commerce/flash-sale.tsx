@@ -8,7 +8,10 @@ import { formatPrice } from '@/lib/format'
 import type { FlashOfferCard } from '@/lib/catalog/social'
 
 function useCountdown(endsAt: string) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()))
+  // Start null so SSR and the first client render agree; the live value only
+  // exists after mount (a Date.now()-seeded initial state hydrafies mismatched
+  // countdown text between server and client).
+  const [left, setLeft] = useState<number | null>(null)
 
   useEffect(() => {
     const tick = () => setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()))
@@ -17,15 +20,19 @@ function useCountdown(endsAt: string) {
     return () => window.clearInterval(id)
   }, [endsAt])
 
+  if (left === null) return { h: 0, m: 0, sec: 0, expired: false, pending: true }
   const s = Math.floor(left / 1000)
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
-  return { h, m, sec, expired: left <= 0 }
+  return { h, m, sec, expired: left <= 0, pending: false }
 }
 
 function CountdownBadge({ endsAt }: { endsAt: string }) {
-  const { h, m, sec, expired } = useCountdown(endsAt)
+  const { h, m, sec, expired, pending } = useCountdown(endsAt)
+  if (pending) {
+    return <span className="tabular-nums text-(length:--text-xs) font-semibold text-fg-muted">--:--:--</span>
+  }
   if (expired) {
     return <span className="text-(length:--text-xs) font-semibold text-fg-muted">Đã hết hạn</span>
   }
