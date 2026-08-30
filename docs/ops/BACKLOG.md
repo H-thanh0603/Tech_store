@@ -4,6 +4,22 @@ Tất cả những gì đã được ghi nhận là "giới hạn" hoặc "chưa
 session 2026-08-29 → 08-30. Mỗi mục: tại sao chưa làm, làm khi nào, và
 chìa khóa mở (nếu có).
 
+## 0. ĐÃ FIX (2026-08-30, audit production readiness)
+
+Hai P0 trong `docs/PRODUCTION_READINESS_AUDIT_2026-08-30.md` đã sửa:
+
+- **P0-1** — migration `202608300004` khôi phục `order_get_by_access` thành
+  SECURITY DEFINER (bản `202608270002` từng ép thành invoker → trang
+  confirmation/chi tiết đơn 404 với guest), drop overload 5-arg hỏng của
+  `place_order_internal`, `calculate_shipping` thành definer + grant
+  `shipping_rates` cho anon. pgTAP mới `order_access_security.sql` chạy RPC
+  dưới `set local role anon`; e2e giờ assert nội dung trang thay vì chỉ URL.
+- **P0-2** — backup tách thành workflow riêng `.github/workflows/backup.yml`
+  cron `0 3 * * 1` + `workflow_dispatch` (job cũ trong monitor.yml gate trên
+  schedule không bao giờ khớp → không bao giờ chạy).
+
+Còn lại thuộc mục A dưới đây: add secrets + deploy vẫn là việc phía owner.
+
 ## A. Secrets chưa add (chặn monitor/alert/backup — làm ngay sau deploy)
 
 Workflow `monitor.yml`, `rls-prod.yml`, `alert-on-failure.yml`, backup
