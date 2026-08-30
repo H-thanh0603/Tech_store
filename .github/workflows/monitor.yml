@@ -1,8 +1,9 @@
 name: Monitor
 
-# Production health monitor: pings /api/health and the public storefront,
-# verifies remote migrations are in sync, and produces a weekly database
-# backup with an automated restore proof.
+# Production health monitor: pings /api/health and the public storefront and
+# verifies remote migrations are in sync. The weekly database backup lives in
+# its own workflow (backup.yml) — its schedule must not depend on this file's
+# cron list.
 #
 # Required secrets:
 #   PROD_BASE_URL   - e.g. https://techstore.example.vercel.app
@@ -11,7 +12,6 @@ name: Monitor
 
 on:
   schedule:
-    # Health probes every 15 minutes; backup job below self-gates to Mondays.
     - cron: '*/15 * * * *'
   workflow_dispatch:
 
@@ -87,165 +87,3 @@ jobs:
           set -euo pipefail
           supabase migration list --db-url "$SUPABASE_DB_URL" | tee /tmp/migrations.txt
           ! grep -qiE 'not migrated|missing' /tmp/migrations.txt
-
-  backup:
-    name: Weekly backup + restore proof
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * 1'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Dump remote database
-        shell: bash
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          set -euo pipefail
-          supabase db dump --db-url "$SUPABASE_DB_URL" --role-only > roles.sql
-          supabase db dump --db-url "$SUPABASE_DB_URL" > backup.sql
-          gzip backup.sql
-          test -s roles.sql && test -s backup.sql.gz
-
-      # Storage push (artifact is the fast copy, Supabase Storage is the
-      # durable one). The `backups` bucket is created on first use via the
-      # Storage API — no dashboard trip needed — and uploads use x-upsert so
-      # a same-day rerun overwrites rather than duplicates.
-      #
-      # Extra required secrets (beyond the header list above):
-      #   SUPABASE_SERVICE_ROLE_KEY - service key used for Storage read/write
-      #
-      # The project ref is parsed from SUPABASE_DB_URL
-      # (postgresql://postgres:[pw]@db.<ref>.supabase.co:5432/postgres);
-      # storage steps skip gracefully when the service key is unset.
-      - name: Ensure backups bucket exists
-        shell: bash
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
-          [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 1; }
-          base="https://${ref}.supabase.co"
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
-            -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            "$base/storage/v1/bucket/backups")
-          if [ "$code" = "404" ]; then
-            curl -sS -f --max-time 15 -X POST "$base/storage/v1/bucket" \
-              -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-              -H 'content-type: application/json' \
-              -d '{"name":"backups","public":false}'
-            echo 'bucket backups created (private)'
-          else
-            echo "bucket check status: $code"
-          fi
-
-      - name: Upload backup to Supabase Storage
-        shell: bash
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
-          [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 1; }
-          curl -sS -f --max-time 120 -X POST \
-            "https://${ref}.supabase.co/storage/v1/object/backups/db-$(date +%F).sql.gz" \
-            -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "x-upsert: true" \
-            --data-binary @backup.sql.gz
-          echo "uploaded db-$(date +%F).sql.gz to storage"
-
-      - name: Upload backup artifact (90-day retention)
-        uses: actions/upload-artifact@v4
-        with:
-          name: db-backup-${{ github.run_id }}
-          path: |
-            roles.sql
-            backup.sql.gz
-          retention-days: 90
-
-      - name: Restore into scratch Postgres (restore proof)
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
-            -p 54329:5432 postgres:15-alpine >/dev/null
-          until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-          gunzip -c backup.sql.gz | docker exec -i pg-verify \
-            psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
-          docker exec pg-verify psql -U postgres -tAc \
-            "select count(*) from information_schema.tables where table_schema='public'" \
-            | grep -qv '^0' || { echo 'restore produced empty schema'; exit 1; }
-          docker rm -f pg-verify >/dev/null
-          echo 'restore verified'
-
-      - name: Compare row counts vs production
-        shell: bash
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          set -euo pipefail
-          docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
-            -p 54329:5432 postgres:15-alpine >/dev/null
-          until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-          gunzip -c backup.sql.gz | docker exec -i pg-verify \
-            psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
-
-          counts_sql=$(cat <<'SQL'
-            select 'products',  count(*) from products
-            union all select 'orders',   count(*) from orders
-            union all select 'customers',count(*) from customer_profiles
-            union all select 'reviews',  count(*) from product_reviews
-            order by 1;
-          SQL
-          )
-
-          docker exec pg-verify psql -U postgres -tAc "$counts_sql" > /tmp/restored_counts.txt
-          psql "$SUPABASE_DB_URL" -tAc "$counts_sql" > /tmp/prod_counts.txt
-
-          if ! diff -u /tmp/prod_counts.txt /tmp/restored_counts.txt > /tmp/diff.txt; then
-            echo 'row counts diverge between production and restored backup:'
-            cat /tmp/diff.txt
-            docker rm -f pg-verify >/dev/null
-            exit 1
-          fi
-          docker rm -f pg-verify >/dev/null
-          echo 'row counts match production'
-
-      # Retention: artifacts expire on their own after 90 days, storage does
-      # not — this prunes the storage side to match. Non-critical by design:
-      # a prune failure never fails the backup job.
-      - name: Prune backups older than 90 days
-        continue-on-error: true
-        shell: bash
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
-          [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 0; }
-          base="https://${ref}.supabase.co"
-          cutoff=$(date -u -d '90 days ago' +%s)
-          curl -sS -f --max-time 30 -X POST "$base/storage/v1/object/list/backups" \
-            -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            -H 'content-type: application/json' \
-            -d '{"prefix":"","limit":100,"offset":0}' \
-            | jq -r --argjson cutoff "$cutoff" \
-              '.[] | select((.created_at | .[0:19] + "Z" | fromdateiso8601) < $cutoff) | .name' \
-            | while read -r name; do
-                [ -n "$name" ] || continue
-                curl -sS -f --max-time 30 -X DELETE \
-                  "$base/storage/v1/object/backups/$name" \
-                  -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-                  && echo "pruned $name"
-              done
-          echo 'prune pass complete'
