@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -217,4 +218,57 @@ export async function trackOrder(_: ActionState, formData: FormData): Promise<Ac
   const cookieStore = await cookies()
   cookieStore.set(ORDER_ACCESS_COOKIE, rawAccessToken, ORDER_COOKIE_OPTIONS)
   redirect(`/orders/${encodeURIComponent(result.orderCode)}`)
+}
+
+const returnRequestSchema = z.object({
+  orderCode: z.string().trim().min(4).max(24),
+  phone: z.string().trim().min(8).max(20),
+  reasonCode: z.enum(['defective', 'wrong_item', 'not_as_described', 'changed_mind', 'other']),
+  customerNote: z.string().trim().max(1000).optional().default(''),
+})
+
+export async function requestReturn(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = returnRequestSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    phone: formData.get('phone'),
+    reasonCode: formData.get('reasonCode'),
+    customerNote: formData.get('customerNote') ?? '',
+  })
+  if (!parsed.success) {
+    return validationError(parsed.error.flatten().fieldErrors)
+  }
+
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(ORDER_ACCESS_COOKIE)?.value
+  if (!accessToken) {
+    return { ok: false, code: 'ORDER_NOT_FOUND', message: toUserMessage('ORDER_NOT_FOUND') }
+  }
+
+  const { data, error } = await getSupabaseServerClient().rpc('request_order_return', {
+    p_order_code: parsed.data.orderCode,
+    p_access_token_hash: await sha256Hex(accessToken),
+    p_phone: parsed.data.phone,
+    p_reason_code: parsed.data.reasonCode,
+    p_customer_note: parsed.data.customerNote || null,
+  })
+  const state = rpcState(data as RpcResult | null, error)
+  if (!state.ok) {
+    return {
+      ok: false,
+      code: state.code,
+      message: toUserMessage(
+        state.code === 'RETURN_ALREADY_REQUESTED' ||
+          state.code === 'NOT_RETURNABLE' ||
+          state.code === 'RATE_LIMITED' ||
+          state.code === 'ORDER_NOT_FOUND'
+          ? state.code
+          : 'INTERNAL_ERROR',
+      ),
+    }
+  }
+  revalidatePath(`/orders/${encodeURIComponent(parsed.data.orderCode)}`)
+  return { ok: true, message: 'Yêu cầu trả hàng đã gửi. Shop sẽ liên hệ trong 24 giờ.' }
 }

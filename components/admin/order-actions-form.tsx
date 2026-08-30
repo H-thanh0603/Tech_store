@@ -20,6 +20,8 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   completed: 'Hoàn tất',
   cancelled: 'Đã hủy',
   expired: 'Hết hạn',
+  return_requested: 'Yêu cầu trả hàng',
+  returned: 'Đã trả hàng',
 }
 
 export function OrderActionsForm({

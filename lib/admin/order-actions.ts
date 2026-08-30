@@ -18,7 +18,7 @@ function fail(
 }
 
 async function assertAdmin(
-  permission: 'orders.update' | 'orders.mark_paid' | 'orders.note',
+  permission:     'orders.update' | 'orders.mark_paid' | 'orders.note' | 'orders.return',
 ): Promise<AdminSession | AdminActionState> {
   try {
     return await requireAdminPermission(permission)
@@ -157,4 +157,53 @@ export async function addOrderInternalNote(
 
   revalidateOrders(parsed.data.orderCode.toUpperCase())
   return { ok: true, message: 'Đã thêm ghi chú nội bộ.' }
+}
+
+export async function decideReturn(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const admin = await assertAdmin('orders.return')
+  if (!('actorLabel' in admin)) return admin
+
+  const returnId = String(formData.get('returnId') ?? '')
+  const decision = String(formData.get('decision') ?? '')
+  const adminNote = String(formData.get('adminNote') ?? '').trim()
+  const refundRaw = String(formData.get('refundAmount') ?? '').trim()
+  const restockRaw = String(formData.get('restock') ?? 'true')
+  const orderCode = String(formData.get('orderCode') ?? '').trim()
+
+  if (!returnId) {
+    return fail('VALIDATION_ERROR', { returnId: ['Thiếu yêu cầu trả hàng.'] })
+  }
+  if (!['approve', 'reject'].includes(decision)) {
+    return fail('VALIDATION_ERROR', { decision: ['Quyết định không hợp lệ.'] })
+  }
+  let refundAmount: number | null = null
+  if (decision === 'approve' && refundRaw !== '') {
+    refundAmount = Number(refundRaw)
+    if (!Number.isFinite(refundAmount) || refundAmount < 0) {
+      return fail('VALIDATION_ERROR', { refundAmount: ['Số tiền hoàn phải >= 0.'] })
+    }
+  }
+
+  const { data, error } = await getSupabaseAdminClient().rpc('admin_decide_return', {
+    p_return_id: returnId,
+    p_approve: decision === 'approve',
+    p_admin_note: adminNote || null,
+    p_refund_amount: refundAmount,
+    p_actor_label: admin.actorLabel,
+    p_restock: restockRaw !== 'false',
+  })
+  if (error) return fail('INTERNAL_ERROR')
+  const code = (data as { code?: string } | null)?.code
+  if (code !== 'OK') return fail(code ?? 'INTERNAL_ERROR')
+
+  if (orderCode) revalidateOrders(orderCode.toUpperCase())
+  revalidatePath('/admin/orders/returns')
+  revalidatePath('/admin/inventory')
+  return {
+    ok: true,
+    message: decision === 'approve' ? 'Đã duyệt trả hàng và hoàn tồn kho.' : 'Đã từ chối yêu cầu trả hàng.',
+  }
 }

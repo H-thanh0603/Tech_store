@@ -22,6 +22,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: '/admin/brands', label: 'Thương hiệu', module: 'brands' },
   { href: '/admin/inventory', label: 'Tồn kho', module: 'inventory' },
   { href: '/admin/orders', label: 'Đơn hàng', module: 'orders' },
+  { href: '/admin/orders/returns', label: 'Trả hàng', module: 'orders' },
   { href: '/admin/customers', label: 'Khách hàng', module: 'customers' },
   { href: '/admin/coupons', label: 'Khuyến mãi', module: 'coupons' },
   { href: '/admin/content', label: 'Nội dung', module: 'content' },

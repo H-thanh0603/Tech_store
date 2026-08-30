@@ -4,6 +4,7 @@ const LABELS: Record<OrderStatusValue, string> = {
   pending: 'Đang xử lý', awaiting_payment: 'Chờ thanh toán', confirmed: 'Đã xác nhận',
   packing: 'Đang đóng gói', shipping: 'Đang giao hàng', completed: 'Hoàn thành',
   cancelled: 'Đã hủy', expired: 'Đã hết hạn',
+  return_requested: 'Yêu cầu trả hàng', returned: 'Đã trả hàng',
 }
 
 const PAYMENT_LABELS: Record<PaymentStatus, string> = {

@@ -26,6 +26,7 @@ export type AdminPermission =
   | 'orders.update'
   | 'orders.mark_paid'
   | 'orders.note'
+  | 'orders.return'
 
 /** Modules each role may open in the admin shell. */
 const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
@@ -63,8 +64,9 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
     'orders.update',
     'orders.mark_paid',
     'orders.note',
+    'orders.return',
   ],
-  manager: ['inventory.adjust', 'orders.update', 'orders.mark_paid', 'orders.note'],
+  manager: ['inventory.adjust', 'orders.update', 'orders.mark_paid', 'orders.note', 'orders.return'],
   staff: ['orders.update', 'orders.note'],
 }
 

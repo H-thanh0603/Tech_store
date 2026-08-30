@@ -26,6 +26,8 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled'
   | 'expired'
+  | 'return_requested'
+  | 'returned'
 
 export type CommerceErrorCode =
   | 'VALIDATION_ERROR'
@@ -42,6 +44,8 @@ export type CommerceErrorCode =
   | 'IDEMPOTENT_REPLAY'
   | 'ORDER_NOT_FOUND'
   | 'RATE_LIMITED'
+  | 'NOT_RETURNABLE'
+  | 'RETURN_ALREADY_REQUESTED'
   | 'CONFIGURATION_ERROR'
   | 'INTERNAL_ERROR'
 
@@ -112,6 +116,7 @@ export interface OrderItemData {
 
 export interface OrderConfirmationData {
   orderCode: string
+  customerPhone?: string
   paymentMethod: PaymentMethod
   paymentStatus: PaymentStatus
   orderStatus: OrderStatus

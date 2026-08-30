@@ -223,6 +223,7 @@ AS $$
   SELECT jsonb_build_object(
     'code', 'OK',
     'orderCode', o.order_code,
+    'customerPhone', regexp_replace(o.customer_phone, '\D', '', 'g'),
     'paymentMethod', o.payment_method,
     'paymentStatus', o.payment_status,
     'orderStatus', o.order_status,

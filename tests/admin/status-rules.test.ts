@@ -14,10 +14,13 @@ describe('admin order status rules', () => {
     expect(canTransitionOrderStatus('pending', 'shipping')).toBe(false)
   })
 
-  it('blocks terminal self-transitions', () => {
-    expect(canTransitionOrderStatus('completed', 'shipping')).toBe(false)
-    expect(isTerminalOrderStatus('completed')).toBe(true)
-    expect(allowedNextOrderStatuses('shipping')).toEqual(['completed'])
+  it('blocks terminal self-transitions and gates the return flow', () => {
+    expect(canTransitionOrderStatus('cancelled', 'completed')).toBe(false)
+    expect(isTerminalOrderStatus('completed')).toBe(false)
+    expect(isTerminalOrderStatus('returned')).toBe(true)
+    expect(allowedNextOrderStatuses('shipping')).toEqual(['completed', 'return_requested'])
+    expect(allowedNextOrderStatuses('completed')).toEqual(['return_requested'])
+    expect(allowedNextOrderStatuses('return_requested')).toEqual(['returned'])
   })
 
   it('only allows paid from pending payment', () => {
