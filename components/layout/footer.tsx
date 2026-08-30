@@ -14,6 +14,9 @@ const SUPPORT = [
   { href: '/checkout', label: 'Thanh toán' },
   { href: '/account', label: 'Tài khoản khách hàng' },
   { href: '/#trust', label: 'Chính sách & cam kết' },
+  { href: '/terms', label: 'Điều khoản' },
+  { href: '/privacy', label: 'Bảo mật' },
+  { href: '/return-policy', label: 'Đổi trả' },
 ]
 
 const STORE = [
