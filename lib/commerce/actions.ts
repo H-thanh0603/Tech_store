@@ -133,6 +133,15 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   }
 
   const rawAccessToken = createOpaqueToken()
+  // Persist the optional email on the open cart before place_order converts
+  // it — this is what lets the abandoned-cart reminder reach customers who
+  // dropped off mid-checkout.
+  if (parsed.data.customerEmail) {
+    await getSupabaseServerClient().rpc('cart_capture_email', {
+      p_cart_token_hash: await getCartTokenHash(),
+      p_email: parsed.data.customerEmail,
+    })
+  }
   // Prefer cookie-session client so place_order can read auth.uid() and attach user_id.
   const { createSupabaseAuthClient } = await import('@/lib/supabase/auth-server')
   const authClient = await createSupabaseAuthClient()

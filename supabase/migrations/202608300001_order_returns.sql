@@ -183,6 +183,13 @@ begin
     set order_status = 'returned', updated_at = now()
     where id = v_return.order_id;
 
+    -- A returned order is treated as if the transaction never happened:
+    -- release the coupon redemption so one-shot coupons get their quota
+    -- back for the customer's next attempt.
+    update coupon_redemptions
+    set released_at = now()
+    where order_id = v_return.order_id and released_at is null;
+
     if coalesce(p_restock, true) then
       for v_item in
         select oi.variant_id, oi.quantity

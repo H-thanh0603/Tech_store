@@ -24,16 +24,13 @@ Không add → các workflow tương ứng skip gracefully hoặc đỏ hoài, k
 
 ## B. Giới hạn nghiệp vụ đã ghi trong code (đọc trước khi bán)
 
-### B1. Abandoned-cart email chưa gửi được — thiếu email capture
+### B1. Abandoned-cart email — ĐÃ MỞ KHÓA (2026-08-30)
 
-`carts.email` (migration `202608300002`) tồn tại nhưng **không code path
-nào ghi email vào đó**. Guest cart hoàn toàn anonymous (chỉ có
-token_hash). RPC `queue_abandoned_cart_emails` chạy mỗi 2h nhưng không
-queue được gì cho tới khi storefront capture email.
-
-**Cách mở:** thêm trường email tùy chọn ở bước đầu checkout (hoặc
-newsletter popup), ghi vào `carts.email` qua 1 RPC nhỏ. ~nửa ngày.
-File: `lib/commerce/actions.ts` (checkout flow), migration mới.
+`cart_capture_email` (migration `202608300003`) giờ ghi email từ form
+checkout vào `carts.email` ngay khi khách submit, trước khi place_order
+convert giỏ. RPC `queue_abandoned_cart_emails` mỗi 2 giờ có địa chỉ để
+gửi. Còn thiếu duy nhất: email là **tùy chọn** ở form — khách bỏ trống
+thì vẫn không nhắc được (đúng thiết kế, không ép email).
 
 ### B2. Refund VNPay là ghi nhận thủ công, không hoàn tiền tự động
 
@@ -53,13 +50,11 @@ Sản phẩm nhiều biến thể (màu × dung tích) phải thêm tay sau impo
 
 **Khi nào cần:** nhập > 500 sp đa biến thể cùng lúc.
 
-### B4. Refund không trả coupon về cho khách
+### B4. Coupon redemption được hoàn khi return được duyệt — ĐÃ LÀM (2026-08-30)
 
-`admin_decide_return` hoàn tồn kho + ghi refund amount, nhưng
-`coupon_redemptions` của đơn đã dùng không được hoàn lại quota (coupon
-1 lần dùng / khách vẫn coi như đã tiêu). Đơn giản và an toàn (tránh
-lạm dụng); nếu muốn hoàn coupon, thêm 1 update trong RPC với điều kiện
-chỉ hoàn khi reject (đơn về trạng thái completed thì giữ nguyên).
+`admin_decide_return` khi approve giờ release `coupon_redemptions`
+(cột `released_at`), trả quota cho coupon 1-lần-dùng. Đơn bị từ chối
+giữ nguyên redemption (khách giữ đơn, đã hưởng giảm giá).
 
 ### B5. `returned` order không hoàn VNPay amount tự động + không xuất hóa đơn
 
@@ -91,9 +86,10 @@ theo quy định thuế VN nếu đăng ký kinh doanh có phát hành hóa đơ
    chạy lần nào (mới tạo, schedule thứ Hai). Chạy `workflow_dispatch`
    tay 1 lần sau deploy để xác nhận floor 80 phù hợp thực tế; chỉnh
    floor nếu build production thật chậm hơn local.
-3. `supabase test db` hiện 20 files/213 tests — chạy trong CI mỗi push.
-   Thêm test RLS cho policy mới (order_returns) khi đụng bảng đó lần
-   nữa; hiện tại chỉ trust boundary qua RPC tests.
+3. `supabase test db` hiện 21 files — có RLS smoke cho `order_returns`
+   (bảng bật RLS, không policy, access chỉ qua RPC) trong
+   `cart_capture_email.sql`. Còn thiếu RLS test chi tiết cho các bảng
+   khác thêm sau này (pattern đã có sẵn để copy).
 4. E2E Playwright (`e2e/`) có smoke + admin CRUD; chưa có spec cho:
    return flow, CSV import, bulk price. Thêm khi sửa những flow này
    lần tới (regression risk cao nhất nằm đúng ở đây).
