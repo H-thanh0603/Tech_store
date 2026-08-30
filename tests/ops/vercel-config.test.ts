@@ -11,6 +11,7 @@ describe('Vercel operations config', () => {
     expect(config.crons).toEqual([
       { path: '/api/cron/release-expired-reservations', schedule: '*/5 * * * *' },
       { path: '/api/cron/process-notifications', schedule: '*/5 * * * *' },
+      { path: '/api/cron/abandoned-carts', schedule: '0 */2 * * *' },
       { path: '/api/cron/purge-logs', schedule: '0 18 * * *' },
     ])
   })

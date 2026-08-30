@@ -66,6 +66,17 @@ function emailFor(type: string, payload: Record<string, unknown>): {
           `<p>Sản phẩm bạn đăng ký nhận thông báo đã có hàng trở lại.</p>` +
           `<p><a href="${site}/products">Xem ngay tại TechStore</a></p>`,
       }
+    case 'abandoned_cart': {
+      const count = escapeHtml(payload.itemCount ?? '')
+      return {
+        subject: 'Giỏ hàng của bạn vẫn đang chờ tại TechStore',
+        html:
+          `<p>Chào ${name},</p>` +
+          `<p>Bạn còn <strong>${count}</strong> sản phẩm trong giỏ hàng chưa hoàn tất.</p>` +
+          `<p><a href="${site}/cart">Hoàn tất đơn hàng</a></p>` +
+          `<p>Giỏ hàng sẽ được giữ sẵn khi bạn quay lại TechStore.</p>`,
+      }
+    }
     case 'review_request': {
       const code = escapeHtml(payload.orderCode ?? '')
       return {
