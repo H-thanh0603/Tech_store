@@ -152,8 +152,8 @@ test.describe.serial('guest checkout journey', () => {
     // Assert rendered content, not just the URL: order_get_by_access is the
     // anon-key RPC behind this page — a grant/invoker regression (202608270002)
     // renders notFound() at the same URL and must fail this spec.
-    await expect(page.getByText('Đặt hàng thành công')).toBeVisible()
-    await expect(page.getByText(/Thanh toán/i)).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Cảm ơn bạn — đơn / })).toBeVisible()
+    await expect(page.getByText('Thanh toán khi nhận hàng (COD).')).toBeVisible()
 
     const orderCode = new URL(page.url()).pathname.split('/')[2]
     await page.goto('/track-order')
@@ -161,8 +161,8 @@ test.describe.serial('guest checkout journey', () => {
     await page.getByLabel('Số điện thoại').fill('0901234567')
     await page.getByRole('button', { name: 'Tra cứu đơn hàng' }).click()
     await expect(page).toHaveURL(new RegExp(`/orders/${orderCode}$`))
-    await expect(page.getByText(`Đơn hàng ${orderCode}`)).toBeVisible()
-    await expect(page.getByText('Thanh toán')).toBeVisible()
+    await expect(page.getByRole('heading', { name: `Đơn hàng ${orderCode}` })).toBeVisible()
+    await expect(page.getByText('Thanh toán khi nhận hàng (COD).')).toBeVisible()
   })
 })
 
