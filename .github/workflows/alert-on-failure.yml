@@ -1,0 +1,54 @@
+name: Alert on failure
+
+# Centralised failure alerting: fires on the completed `workflow_run` event
+# of every other workflow (CI, Monitor, RLS prod smoke, Lighthouse). When a
+# run whose head branch is `main` fails, one Telegram message is sent — no
+# per-workflow edits needed. Telegram is preferred over email because the
+# free Resend tier only delivers to the account owner's address.
+#
+# Required secrets:
+#   TELEGRAM_BOT_TOKEN - token issued by @BotFather
+#   TELEGRAM_CHAT_ID   - chat that receives the alert (user/group id)
+#
+# Note: `workflow_run` events only fire for workflows that exist on the
+# default branch, so this file must be on main before it starts alerting.
+
+on:
+  workflow_run:
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  alert:
+    name: Telegram alert on red main run
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch == 'main'
+    steps:
+      - name: Send alert
+        # Secrets are not allowed in workflow-level `if:` expressions, so the
+        # empty-secret guard lives in the shell. continue-on-error keeps a
+        # Telegram outage or bad token from failing this workflow itself,
+        # which would re-trigger this alert workflow in a loop.
+        continue-on-error: true
+        shell: bash
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+        run: |
+          set -euo pipefail
+          [ -n "$BOT_TOKEN" ] || { echo 'skip: TELEGRAM_BOT_TOKEN secret not set'; exit 0; }
+          [ -n "$CHAT_ID" ] || { echo 'skip: TELEGRAM_CHAT_ID secret not set'; exit 0; }
+          subject=$(printf '%s' "$COMMIT_MESSAGE" | head -n1 | cut -c1-80)
+          text="🔴 ${WORKFLOW_NAME} failed on main — ${RUN_URL} — ${subject}"
+          response=$(curl -sS -w '\n%{http_code}' --max-time 15 \
+            -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "text=${text}")
+          echo "$response"
+          status=$(tail -n1 <<<"$response")
+          test "$status" = "200" || { echo 'telegram sendMessage failed'; exit 1; }
