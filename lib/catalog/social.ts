@@ -75,6 +75,9 @@ export async function getActiveFlashOffers(limit = 6): Promise<FlashOfferCard[]>
     .from('flash_offers')
     .select('id, title, badge, ends_at, product_id')
     .eq('is_active', true)
+    // RLS also enforces the live window; repeat it here so the admin preview
+    // path (service role) and any policy drift behave identically.
+    .or(`starts_at.is.null,starts_at.lte.${new Date().toISOString()}`)
     .gt('ends_at', new Date().toISOString())
     .order('sort_order', { ascending: true })
     .limit(limit)

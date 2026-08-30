@@ -18,7 +18,7 @@ export default async function AdminContentPage() {
 
   return (
     <section className="space-y-5">
-      <PageHeader title="Nội dung storefront" description="Quản lý banner, section trang chủ và menu từ một nơi." />
+      <PageHeader title="Nội dung storefront" description="Quản lý banner, section trang chủ, menu và flash sale từ một nơi." />
       <ContentManager {...content} />
     </section>
   )

@@ -2,8 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { requireAdminSession } from '@/lib/admin/auth'
-import { bannerUpsertSchema, navigationUpsertSchema, parseSectionForm } from '@/lib/admin/content-validation'
+import { requireAdminSession, type AdminSession } from '@/lib/admin/auth'
+import {
+  bannerUpsertSchema,
+  flashOfferUpsertSchema,
+  navigationUpsertSchema,
+  parseSectionForm,
+} from '@/lib/admin/content-validation'
 import { adminUserMessage } from '@/lib/admin/errors'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
@@ -86,10 +91,71 @@ export async function upsertNavigationItem(_prev: AdminActionState, formData: Fo
   refreshContent(); return { ok: true, message: 'Đã lưu menu.' }
 }
 
-export async function deleteContentItem(kind: 'banner' | 'section' | 'navigation', id: string): Promise<AdminActionState> {
-  const denied = await gate(); if (denied) return denied
-  const table = kind === 'banner' ? 'banners' : kind === 'section' ? 'homepage_sections' : 'navigation_items'
+async function writeAudit(
+  action: string,
+  entityId: string | null,
+  payload: Record<string, unknown>,
+  actor: Awaited<ReturnType<typeof requireAdminSession>>,
+) {
+  try {
+    await getSupabaseAdminClient().from('admin_audit_logs').insert({
+      action,
+      entity_type: 'flash_offer',
+      entity_id: entityId,
+      payload,
+      actor_label: actor.actorLabel,
+      actor_user_id: actor.userId,
+    })
+  } catch {
+    // Audit insert must never block the business action (pattern: product-actions).
+  }
+}
+
+export async function upsertFlashOffer(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('content')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
+  const raw = formValues(formData)
+  const parsed = flashOfferUpsertSchema.safeParse({ ...raw, isActive: raw.isActive === 'true' })
+  if (!parsed.success) return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+  const value = parsed.data
+  const payload = {
+    product_id: value.productId, title: value.title, badge: value.badge,
+    starts_at: value.startsAt ? new Date(value.startsAt).toISOString() : null,
+    ends_at: new Date(value.endsAt).toISOString(),
+    sort_order: value.sortOrder, is_active: value.isActive,
+  }
+  const query = value.id
+    ? getSupabaseAdminClient().from('flash_offers').update(payload).eq('id', value.id)
+    : getSupabaseAdminClient().from('flash_offers').insert(payload)
+  const { data, error } = await query.select('id').single()
+  if (error) return fail('INTERNAL_ERROR')
+  await writeAudit(value.id ? 'flash_offer_update' : 'flash_offer_create', data?.id ?? null, payload, actor)
+  refreshContent(); return { ok: true, message: 'Đã lưu flash offer.' }
+}
+
+export async function deleteContentItem(
+  kind: 'banner' | 'section' | 'navigation' | 'flash',
+  id: string,
+): Promise<AdminActionState> {
+  let actor: AdminSession | null = null
+  try {
+    actor = await requireAdminSession('content')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
+  const table = kind === 'banner'
+    ? 'banners'
+    : kind === 'section'
+      ? 'homepage_sections'
+      : kind === 'flash'
+        ? 'flash_offers'
+        : 'navigation_items'
   const { error } = await getSupabaseAdminClient().from(table).delete().eq('id', id)
   if (error) return fail('INTERNAL_ERROR')
+  if (kind === 'flash') await writeAudit('flash_offer_delete', id, {}, actor)
   refreshContent(); return { ok: true, message: 'Đã xóa nội dung.' }
 }

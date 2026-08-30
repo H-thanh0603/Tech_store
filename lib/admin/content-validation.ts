@@ -79,3 +79,36 @@ export const navigationUpsertSchema = z
       ctx.addIssue({ code: 'custom', path: ['parentId'], message: 'Menu không thể là cha của chính nó.' })
     }
   })
+
+const datetimeLocal = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !Number.isNaN(Date.parse(value)), 'Không đúng định dạng ngày giờ.')
+
+export const flashOfferUpsertSchema = z
+  .object({
+    id,
+    // Shape-level uuid check only: zod's .uuid() enforces RFC version bits,
+    // which the deterministic seed UUIDs (…-0000-…) do not satisfy. The FK on
+    // products enforces the real constraint.
+    productId: z
+      .string()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, { message: 'Chọn một sản phẩm.' }),
+    title: z.string().trim().min(1).max(120),
+    badge: z.string().trim().min(1).max(60).default('⚡ Flash'),
+    startsAt: z.union([z.literal(''), datetimeLocal]).optional().default(''),
+    endsAt: datetimeLocal,
+    sortOrder,
+    isActive: z.boolean().default(false),
+  })
+  .superRefine((value, ctx) => {
+    const startsMs = value.startsAt ? Date.parse(value.startsAt) : null
+    const endsMs = Date.parse(value.endsAt)
+    if (startsMs !== null && endsMs <= startsMs) {
+      ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'Kết thúc phải sau thời gian bắt đầu.' })
+    }
+    if (!value.id && endsMs <= Date.now()) {
+      ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'Kết thúc phải trong tương lai.' })
+    }
+  })

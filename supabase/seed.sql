@@ -586,3 +586,10 @@ on conflict (id) do update set
   ends_at = excluded.ends_at,
   usage_limit = excluded.usage_limit,
   is_active = excluded.is_active;
+
+-- Flash sale demo offers (deterministic UUIDs; ends_at relative to reset time
+-- so the homepage countdown is always live after `supabase db reset`).
+insert into flash_offers (id, product_id, title, badge, starts_at, ends_at, sort_order, is_active) values
+  ('60000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000003', 'Galaxy S24 Ultra giảm sốc', '⚡ Deal hot', now() - interval '1 hour', now() + interval '3 days', 0, true),
+  ('60000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000005', 'Buds3 Pro giá tốt', '⚡ Flash', now() - interval '1 hour', now() + interval '2 days', 1, true),
+  ('60000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', 'MacBook Air M3 tuần lễ vàng', '⚡ Flash', now() - interval '1 hour', now() + interval '5 days', 2, true);
