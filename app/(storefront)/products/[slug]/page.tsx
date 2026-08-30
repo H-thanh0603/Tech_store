@@ -59,13 +59,15 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       title: product.name,
       description,
       url,
-      images: image ? [{ url: image, alt: product.images[0]?.alt ?? product.name }] : undefined,
+      ...(image
+        ? { images: [{ url: image, alt: product.images[0]?.alt ?? product.name }] }
+        : {}),
     },
     twitter: {
       card: image ? 'summary_large_image' : 'summary',
       title: product.name,
       description,
-      images: image ? [image] : undefined,
+      ...(image ? { images: [image] } : {}),
     },
   }
 }
