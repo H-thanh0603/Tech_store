@@ -12,6 +12,9 @@ name: Backup
 #   SUPABASE_DB_URL            - postgres connection string (dump + restore proof)
 #   SUPABASE_SERVICE_ROLE_KEY  - service key for the Storage backup copy (optional;
 #                                storage steps skip gracefully when unset)
+#
+# Until SUPABASE_DB_URL is set (pre-deploy), the job skips green instead of
+# failing red every Monday — see BACKLOG.md §A.
 
 on:
   schedule:
@@ -26,11 +29,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - id: guard
+        name: Skip until SUPABASE_DB_URL is set (pre-deploy)
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo 'skip: SUPABASE_DB_URL secret not set — no production database linked yet'
+            echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: supabase/setup-cli@v1
+        if: steps.guard.outputs.skipped != 'true'
         with:
           version: latest
 
       - name: Dump remote database
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -50,6 +67,7 @@ jobs:
       # (postgresql://postgres:[pw]@db.<ref>.supabase.co:5432/postgres);
       # storage steps skip gracefully when the service key is unset.
       - name: Ensure backups bucket exists
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -74,6 +92,7 @@ jobs:
           fi
 
       - name: Upload backup to Supabase Storage
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -91,6 +110,7 @@ jobs:
           echo "uploaded db-$(date +%F).sql.gz to storage"
 
       - name: Upload backup artifact (90-day retention)
+        if: steps.guard.outputs.skipped != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-${{ github.run_id }}
@@ -100,6 +120,7 @@ jobs:
           retention-days: 90
 
       - name: Restore into scratch Postgres (restore proof)
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -115,6 +136,7 @@ jobs:
           echo 'restore verified'
 
       - name: Compare row counts vs production
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -152,6 +174,7 @@ jobs:
       # a prune failure never fails the backup job.
       - name: Prune backups older than 90 days
         continue-on-error: true
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

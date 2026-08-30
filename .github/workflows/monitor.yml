@@ -9,6 +9,9 @@ name: Monitor
 #   PROD_BASE_URL   - e.g. https://techstore.example.vercel.app
 #   SUPABASE_DB_URL - postgres connection string (service-side secret)
 #   CRON_SECRET     - shared secret guarding /api/cron/* (Vercel env)
+#
+# Until the secrets are set (pre-deploy), every job skips green instead of
+# failing red every 15 minutes — see BACKLOG.md §A.
 
 on:
   schedule:
@@ -20,7 +23,20 @@ jobs:
     name: Prod health probe
     runs-on: ubuntu-latest
     steps:
+      - id: guard
+        name: Skip until PROD_BASE_URL is set (pre-deploy)
+        shell: bash
+        env:
+          PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROD_BASE_URL" ]; then
+            echo 'skip: PROD_BASE_URL secret not set — no production deployment yet'
+            echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Ping /api/health
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -30,6 +46,7 @@ jobs:
           test "$code" = "200"
 
       - name: Probe database through /api/health?check=db
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -43,6 +60,7 @@ jobs:
           rm -f "$body"
 
       - name: Probe storefront page
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +71,21 @@ jobs:
     name: Cron self-check
     runs-on: ubuntu-latest
     steps:
+      - id: guard
+        name: Skip until PROD_BASE_URL / CRON_SECRET are set (pre-deploy)
+        shell: bash
+        env:
+          PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROD_BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo 'skip: PROD_BASE_URL / CRON_SECRET secrets not set — no production deployment yet'
+            echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run /api/cron/health
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -73,13 +105,28 @@ jobs:
     name: Migration drift check
     runs-on: ubuntu-latest
     steps:
+      - id: guard
+        name: Skip until SUPABASE_DB_URL is set (pre-deploy)
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo 'skip: SUPABASE_DB_URL secret not set — no production database linked yet'
+            echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.guard.outputs.skipped != 'true'
 
       - uses: supabase/setup-cli@v1
+        if: steps.guard.outputs.skipped != 'true'
         with:
           version: latest
 
       - name: Verify migrations applied on remote
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

@@ -5,6 +5,9 @@ name: RLS prod smoke
 # the deployed database; surfaces a regression within one week (or
 # immediately on workflow_dispatch) instead of waiting for an
 # authorization incident.
+#
+# Until SUPABASE_DB_URL is set (pre-deploy), the job skips green instead
+# of failing red every Monday — see BACKLOG.md §A.
 
 on:
   schedule:
@@ -18,13 +21,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - id: guard
+        name: Skip until SUPABASE_DB_URL is set (pre-deploy)
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo 'skip: SUPABASE_DB_URL secret not set — no production database linked yet'
+            echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install psql client
+        if: steps.guard.outputs.skipped != 'true'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
 
       - name: Run RLS smoke against live project
+        if: steps.guard.outputs.skipped != 'true'
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
