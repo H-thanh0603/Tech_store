@@ -98,8 +98,8 @@ select is(
 -- 6) The inventory adjustment row was written for the audit trail.
 select is(
   (select count(*) from inventory_adjustments
-   where variant_id = 'c0000000-0000-0000-0000-000000000011' and reason_code = 'returned'),
-  1,
+   where variant_id = 'c0000000-0000-0000-0000-000000000011' and reason_code = 'returned')::text,
+  '1',
   'inventory adjustment logged'
 );
 

@@ -112,12 +112,15 @@ begin
     return v_not_found;
   end if;
 
-  if v_order.order_status not in ('shipping', 'completed') then
-    return jsonb_build_object('code', 'NOT_RETURNABLE');
-  end if;
-
+  -- Duplicate check first: once a request exists the order sits in
+  -- return_requested, and reporting NOT_RETURNABLE for a repeat call
+  -- would mask the real reason (already requested).
   if exists (select 1 from order_returns where order_id = v_order.id) then
     return jsonb_build_object('code', 'RETURN_ALREADY_REQUESTED');
+  end if;
+
+  if v_order.order_status not in ('shipping', 'completed') then
+    return jsonb_build_object('code', 'NOT_RETURNABLE');
   end if;
 
   insert into order_returns (order_id, requested_by_phone, reason_code, customer_note)
