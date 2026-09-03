@@ -13,6 +13,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
   const isFreeShipping = cart.shippingInfo?.isFree ?? true
   const freeThreshold = cart.shippingInfo?.freeThreshold ?? 0
   const remainingForFree = isFreeShipping ? 0 : Math.max(0, freeThreshold - cart.subtotal)
+  const freeShippingProgress = !isFreeShipping && freeThreshold > 0 ? Math.min(100, (cart.subtotal / freeThreshold) * 100) : 100
 
   return (
     <aside
@@ -42,11 +43,35 @@ export function CartSummary({ cart }: CartSummaryProps) {
             {isFreeShipping ? 'Miễn phí' : formatPrice(cart.shippingTotal)}
           </dd>
         </div>
-        {!isFreeShipping && remainingForFree > 0 && (
-          <p className="text-(length:--text-xs) text-accent">
-            Mua thêm {formatPrice(remainingForFree)} để được miễn phí vận chuyển
-          </p>
+        {!isFreeShipping && freeThreshold > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-(length:--text-xs)">
+              <span className="text-fg-muted">Tiến trình miễn phí vận chuyển</span>
+              <span className="font-medium tabular-nums text-fg">{Math.round(freeShippingProgress)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full rounded-full bg-success transition-all duration-500 ease-out"
+                style={{ width: `${freeShippingProgress}%` }}
+                role="progressbar"
+                aria-valuenow={Math.round(freeShippingProgress)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Đã đạt ${Math.round(freeShippingProgress)}% để được miễn phí vận chuyển`}
+              />
+            </div>
+            {remainingForFree > 0 ? (
+              <p className="text-(length:--text-xs) text-accent">
+                Mua thêm {formatPrice(remainingForFree)} để được miễn phí vận chuyển
+              </p>
+            ) : null}
+          </div>
         )}
+        {isFreeShipping && freeThreshold > 0 ? (
+          <p className="inline-flex items-center gap-1.5 text-(length:--text-xs) font-medium text-success">
+            <span aria-hidden>✓</span> Bạn đã được miễn phí vận chuyển
+          </p>
+        ) : null}
         <div className="flex justify-between gap-4 border-t border-border pt-3 text-(length:--text-base)">
           <dt className="font-semibold text-fg">Tổng cộng</dt>
           <dd className="font-semibold tabular-nums text-fg">{formatPrice(cart.total)}</dd>

@@ -48,6 +48,15 @@ export function CartItemRow({ item }: CartItemRowProps) {
             Sản phẩm hiện đã hết hàng.
           </p>
         ) : null}
+        {!item.outOfStock && item.availableStock > 0 && item.availableStock <= 5 ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-(length:--text-xs) font-medium text-amber-700 ring-1 ring-amber-200">
+            <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+            Chỉ còn {item.availableStock} sản phẩm
+          </p>
+        ) : null}
+        {!item.outOfStock && item.availableStock > 5 && item.availableStock <= 10 ? (
+          <p className="mt-2 text-(length:--text-xs) text-fg-muted">Sắp hết hàng — còn {item.availableStock}</p>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-end gap-3 sm:justify-end">
