@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 import {
   EditProductForm,
@@ -9,7 +9,8 @@ import {
   UseCasesForm,
   VariantForm,
 } from '@/components/admin/product-forms'
-import { isAdminAuthenticated } from '@/lib/admin/auth'
+import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-state'
+import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { getAdminProduct, listBrands, listCategories } from '@/lib/admin/queries'
 
 export default async function AdminProductDetailPage({
@@ -17,7 +18,8 @@ export default async function AdminProductDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  if (!(await isAdminAuthenticated())) redirect('/admin/login')
+  const access = await requireAdminModule('products')
+  if (isForbidden(access)) return <PermissionDeniedState />
 
   const { id } = await params
   const [product, categories, brands] = await Promise.all([
