@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   defaultModelFor,
+  fetchWithRetry,
   fromDeepSeekResponse,
+  isUnsupportedReasonerModel,
   resolveProvider,
   toDeepSeekRequest,
 } from '@/lib/assistant/providers'
@@ -110,5 +112,41 @@ describe('assistant providers', () => {
     })
     expect(out.content[0]).toEqual({ type: 'text', text: 'chào' })
     expect(out.content[1]).toEqual({ type: 'tool_use', id: 'c1', name: 'x', input: {} })
+  })
+
+  it('blocks reasoning models that break tool-calling', () => {
+    expect(isUnsupportedReasonerModel('deepseek-reasoner')).toBe(true)
+    expect(isUnsupportedReasonerModel('deepseek-chat')).toBe(false)
+    expect(isUnsupportedReasonerModel('claude-haiku-4-5')).toBe(false)
+  })
+
+  it('retries retryable statuses then succeeds', async () => {
+    const ok = { ok: true, status: 200 } as Response
+    const fail = { ok: false, status: 503 } as Response
+    const fetchMock = vi
+      .fn<(...args: unknown[]) => Promise<Response>>()
+      .mockResolvedValueOnce(fail)
+      .mockResolvedValueOnce(ok)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const res = await fetchWithRetry('https://example.test', {}, 3)
+      expect(res).toBe(ok)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not retry client errors', async () => {
+    const bad = { ok: false, status: 400 } as Response
+    const fetchMock = vi.fn<(...args: unknown[]) => Promise<Response>>().mockResolvedValue(bad)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const res = await fetchWithRetry('https://example.test', {}, 3)
+      expect(res).toBe(bad)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

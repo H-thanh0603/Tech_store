@@ -224,11 +224,47 @@ export function fromDeepSeekResponse(json: {
   return { content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
 }
 
+/**
+ * Pilot only supports non-reasoning chat models. DeepSeek-R1 leaks its chain
+ * of thought in `reasoning_content` and its tool calls are unreliable — the
+ * translator intentionally does not handle that shape. Fail fast with a clear
+ * message instead of burning money on a flaky turn.
+ */
+export function isUnsupportedReasonerModel(model: string): boolean {
+  return model.toLowerCase().includes('reasoner') || model.toLowerCase().includes('/r1')
+}
+
+export const REASONER_GUARD_REPLY =
+  'Trợ lý hiện chỉ hỗ trợ model chat thường (ví dụ deepseek-chat). Model reasoning ' +
+  'không dùng được cho chế độ tool-calling này — bạn đổi ASSISTANT_MODEL giúp mình nhé.'
+
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504])
+const RETRY_DELAYS_MS = [500, 1500]
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+export async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const res = await fetch(url, init)
+      if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === attempts - 1) return res
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts - 1) throw error
+    }
+    await sleep(RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)])
+  }
+  throw lastError instanceof Error ? lastError : new Error('DeepSeek request failed')
+}
+
 function createDeepSeekClient(apiKey: string): MessagesClient {
   return {
     messages: {
       create: async (params) => {
-        const res = await fetch(DEEPSEEK_URL, {
+        const res = await fetchWithRetry(DEEPSEEK_URL, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
           body: JSON.stringify(toDeepSeekRequest(params)),

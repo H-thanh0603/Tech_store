@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
-import { createProviderClient } from './providers'
+import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
 import {
   createDispatchContext,
   buildAnthropicTools,
@@ -94,6 +94,9 @@ export async function runAssistantTurn(
   }
 
   const config = assistantConfig
+  if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
+    return { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [] }
+  }
   const ctx: DispatchContext = createDispatchContext()
   const userText = lastUserText(history)
   const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {

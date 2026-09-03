@@ -51,3 +51,18 @@ tool contracts, fencing và grounding giữ nguyên.
   + provenance/quantity gates (tham khảo `gates.py` của blueprint), UI xác nhận.
 - Streaming: đổi route sang SSE, giữ nguyên `runAssistantTurn` (tách event loop).
 - Merchant agent: để phase sau — cần approval surface cho staged writes.
+
+## Ngưỡng tốt nghiệp translator
+
+`lib/assistant/providers.ts` là translator mỏng cố ý cho pilot (4 tool đọc,
+dispatch tuần tự, không ảnh, không billing). Khi chạm một trong các ngưỡng sau,
+migrate sang **Vercel AI SDK** (`ai` package — TS-native, có người maintain:
+multi-provider, retry, usage) thay vì phình translator:
+
+- tool calls song song hoặc multi-step phụ thuộc lẫn nhau qua nhiều vòng,
+- input ảnh/file, streaming token-level, billing theo usage,
+- model reasoning (`deepseek-reasoner` và họ hàng — hiện bị chặn cứng vì
+  `reasoning_content` + tool-calling không ổn định).
+
+Không dùng LiteLLM proxy: nó là Python sidecar, mâu thuẫn với kiến trúc
+Next.js thuần của dự án và Vercel Hobby không host được.
