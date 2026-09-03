@@ -20,9 +20,24 @@ export function Pagination({ page, pageCount, filters }: PaginationProps) {
   const hrefFor = (target: number): string =>
     `/products${buildCatalogQuery({ ...filters, page: target })}`
 
-  const pages = Array.from({ length: pageCount }, (_, index) => index + 1)
   const hasPrev = page > 1
   const hasNext = page < pageCount
+
+  // Windowed pagination: first, last, current ±2, with ellipsis. Prevents
+  // rendering 80k links when pageCount is large (FE-101).
+  const pages: Array<number | 'ellipsis-start' | 'ellipsis-end'> = (() => {
+    if (pageCount <= 7) {
+      return Array.from({ length: pageCount }, (_, i) => i + 1)
+    }
+    const result: Array<number | 'ellipsis-start' | 'ellipsis-end'> = [1]
+    const start = Math.max(2, page - 2)
+    const end = Math.min(pageCount - 1, page + 2)
+    if (start > 2) result.push('ellipsis-start')
+    for (let i = start; i <= end; i++) result.push(i)
+    if (end < pageCount - 1) result.push('ellipsis-end')
+    result.push(pageCount)
+    return result
+  })()
 
   const edgeClass =
     'inline-flex min-h-(--size-touch) min-w-(--size-touch) items-center justify-center rounded-(--radius-md) border border-border px-3 text-(length:--text-sm)'
@@ -40,7 +55,16 @@ export function Pagination({ page, pageCount, filters }: PaginationProps) {
       )}
 
       <ul className="flex items-center gap-1">
-        {pages.map((target) => {
+        {pages.map((target, idx) => {
+          if (target === 'ellipsis-start' || target === 'ellipsis-end') {
+            return (
+              <li key={target + idx}>
+                <span className="inline-flex min-h-(--size-touch) min-w-(--size-touch) items-center justify-center px-1 text-fg-subtle">
+                  …
+                </span>
+              </li>
+            )
+          }
           const isCurrent = target === page
           return (
             <li key={target}>
