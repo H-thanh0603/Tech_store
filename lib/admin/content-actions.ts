@@ -17,6 +17,8 @@ function fail(code: string, fieldErrors?: Record<string, string[] | undefined>):
   return { ok: false, code, message: adminUserMessage(code), fieldErrors }
 }
 
+// Kept for reference; upserts now capture actor directly for audit
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function gate(): Promise<AdminActionState | null> {
   try { await requireAdminSession('content'); return null } catch (error) {
     return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
@@ -33,7 +35,12 @@ function formValues(formData: FormData) {
 }
 
 export async function upsertBanner(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
-  const denied = await gate(); if (denied) return denied
+  let actor: Awaited<ReturnType<typeof requireAdminSession>>
+  try {
+    actor = await requireAdminSession('content')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
   const raw = formValues(formData)
   const parsed = bannerUpsertSchema.safeParse({ ...raw, isActive: raw.isActive === 'true' })
   if (!parsed.success) return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
@@ -46,13 +53,19 @@ export async function upsertBanner(_prev: AdminActionState, formData: FormData):
   const query = value.id
     ? getSupabaseAdminClient().from('banners').update(payload).eq('id', value.id)
     : getSupabaseAdminClient().from('banners').insert(payload)
-  const { error } = await query
+  const { data, error } = await query.select('id').single()
   if (error) return fail('INTERNAL_ERROR')
+  await writeAudit(value.id ? 'banner_update' : 'banner_create', 'banner', data?.id ?? value.id ?? null, payload, actor)
   refreshContent(); return { ok: true, message: 'Đã lưu banner.' }
 }
 
 export async function upsertHomepageSection(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
-  const denied = await gate(); if (denied) return denied
+  let actor: Awaited<ReturnType<typeof requireAdminSession>>
+  try {
+    actor = await requireAdminSession('content')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
   const raw = formValues(formData)
   const parsed = parseSectionForm({ ...raw, isActive: raw.isActive === 'true' })
   if (!parsed.success) return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
@@ -65,13 +78,19 @@ export async function upsertHomepageSection(_prev: AdminActionState, formData: F
   const query = value.id
     ? getSupabaseAdminClient().from('homepage_sections').update(payload).eq('id', value.id)
     : getSupabaseAdminClient().from('homepage_sections').insert(payload)
-  const { error } = await query
+  const { data, error } = await query.select('id').single()
   if (error) return fail(error.code === '23505' ? 'SLUG_TAKEN' : 'INTERNAL_ERROR')
+  await writeAudit(value.id ? 'section_update' : 'section_create', 'homepage_section', data?.id ?? value.id ?? null, payload, actor)
   refreshContent(); return { ok: true, message: 'Đã lưu section.' }
 }
 
 export async function upsertNavigationItem(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
-  const denied = await gate(); if (denied) return denied
+  let actor: Awaited<ReturnType<typeof requireAdminSession>>
+  try {
+    actor = await requireAdminSession('content')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
   const raw = formValues(formData)
   const parsed = navigationUpsertSchema.safeParse({
     ...raw, isActive: raw.isActive === 'true', openInNewTab: raw.openInNewTab === 'true',
@@ -86,13 +105,15 @@ export async function upsertNavigationItem(_prev: AdminActionState, formData: Fo
   const query = value.id
     ? getSupabaseAdminClient().from('navigation_items').update(payload).eq('id', value.id)
     : getSupabaseAdminClient().from('navigation_items').insert(payload)
-  const { error } = await query
+  const { data, error } = await query.select('id').single()
   if (error) return fail('INTERNAL_ERROR')
+  await writeAudit(value.id ? 'navigation_update' : 'navigation_create', 'navigation_item', data?.id ?? value.id ?? null, payload, actor)
   refreshContent(); return { ok: true, message: 'Đã lưu menu.' }
 }
 
 async function writeAudit(
   action: string,
+  entityType: string,
   entityId: string | null,
   payload: Record<string, unknown>,
   actor: Awaited<ReturnType<typeof requireAdminSession>>,
@@ -100,7 +121,7 @@ async function writeAudit(
   try {
     await getSupabaseAdminClient().from('admin_audit_logs').insert({
       action,
-      entity_type: 'flash_offer',
+      entity_type: entityType,
       entity_id: entityId,
       payload,
       actor_label: actor.actorLabel,
@@ -133,7 +154,7 @@ export async function upsertFlashOffer(_prev: AdminActionState, formData: FormDa
     : getSupabaseAdminClient().from('flash_offers').insert(payload)
   const { data, error } = await query.select('id').single()
   if (error) return fail('INTERNAL_ERROR')
-  await writeAudit(value.id ? 'flash_offer_update' : 'flash_offer_create', data?.id ?? null, payload, actor)
+  await writeAudit(value.id ? 'flash_offer_update' : 'flash_offer_create', 'flash_offer', data?.id ?? null, payload, actor)
   refreshContent(); return { ok: true, message: 'Đã lưu flash offer.' }
 }
 
@@ -156,6 +177,7 @@ export async function deleteContentItem(
         : 'navigation_items'
   const { error } = await getSupabaseAdminClient().from(table).delete().eq('id', id)
   if (error) return fail('INTERNAL_ERROR')
-  if (kind === 'flash') await writeAudit('flash_offer_delete', id, {}, actor)
+  const entityType = kind === 'banner' ? 'banner' : kind === 'section' ? 'homepage_section' : kind === 'flash' ? 'flash_offer' : 'navigation_item'
+  await writeAudit(`${kind}_delete`, entityType, id, {}, actor)
   refreshContent(); return { ok: true, message: 'Đã xóa nội dung.' }
 }
