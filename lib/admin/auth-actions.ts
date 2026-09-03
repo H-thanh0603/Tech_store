@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { getAdminAuthState } from '@/lib/admin/auth'
@@ -7,6 +8,7 @@ import { adminUserMessage } from '@/lib/admin/errors'
 import type { AdminActionState } from '@/lib/admin/types'
 import { adminAccountLoginSchema } from '@/lib/admin/validation'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
+import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 export async function adminLogin(
   _prev: AdminActionState,
@@ -23,6 +25,31 @@ export async function adminLogin(
       message: adminUserMessage('VALIDATION_ERROR'),
       fieldErrors: parsed.error.flatten().fieldErrors,
     }
+  }
+
+  // Rate-limit admin login 5/15min per email+IP (SEC-002)
+  try {
+    const headerList = await headers()
+    const ip =
+      headerList.get('x-real-ip')?.trim() ||
+      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+      'unknown'
+    const identity = `${parsed.data.email.toLowerCase()}:${ip}`
+    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+      p_action: 'admin_login',
+      p_identity: identity,
+      p_limit: 5,
+      p_window_minutes: 15,
+    })
+    if (limited === true) {
+      return {
+        ok: false,
+        code: 'RATE_LIMITED',
+        message: 'Thử quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+      }
+    }
+  } catch {
+    // Rate-limit infra failure must not block admin login
   }
 
   const supabase = await createSupabaseAuthClient()
