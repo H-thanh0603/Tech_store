@@ -32,6 +32,8 @@ function fail(
   }
 }
 
+// Kept for non-audited admin gates
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function assertAdmin(module: AdminModule): Promise<AdminActionState | null> {
   try {
     await requireAdminSession(module)
@@ -62,12 +64,37 @@ function revalidateCatalogAdmin() {
   updateTag('catalog-facets')
 }
 
+async function writeCatalogAudit(
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  payload: Record<string, unknown>,
+  actor: AdminSession,
+) {
+  try {
+    await getSupabaseAdminClient().from('admin_audit_logs').insert({
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      payload,
+      actor_label: actor.actorLabel,
+      actor_user_id: actor.userId,
+    })
+  } catch {
+    // Audit must never block business action
+  }
+}
+
 export async function upsertCategory(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('categories')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('categories')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
   const parsed = categoryUpsertSchema.safeParse({
     id: formData.get('id') ?? '',
     name: formData.get('name'),
@@ -117,6 +144,13 @@ export async function upsertCategory(
     }
   }
 
+  await writeCatalogAudit(
+    parsed.data.id ? 'category_update' : 'category_create',
+    'category',
+    parsed.data.id || null,
+    { name: payload.name, slug: payload.slug },
+    actor,
+  )
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã lưu danh mục.' }
 }
@@ -125,8 +159,12 @@ export async function setCategoryActive(
   categoryId: string,
   isActive: boolean,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('categories')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('categories')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
 
   const { error } = await getSupabaseAdminClient()
     .from('categories')
@@ -134,13 +172,18 @@ export async function setCategoryActive(
     .eq('id', categoryId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeCatalogAudit('category_toggle', 'category', categoryId, { is_active: isActive }, actor)
   revalidateCatalogAdmin()
   return { ok: true, message: isActive ? 'Đã kích hoạt danh mục.' : 'Đã tắt danh mục.' }
 }
 
 export async function deleteCategory(categoryId: string): Promise<AdminActionState> {
-  const gate = await assertAdmin('categories')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('categories')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
 
   const db = getSupabaseAdminClient()
   const { count, error: countError } = await db
@@ -155,6 +198,7 @@ export async function deleteCategory(categoryId: string): Promise<AdminActionSta
   const { error } = await db.from('categories').delete().eq('id', categoryId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeCatalogAudit('category_delete', 'category', categoryId, {}, actor)
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã xóa danh mục.' }
 }
@@ -163,8 +207,12 @@ export async function upsertBrand(
   _prev: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
-  const gate = await assertAdmin('brands')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('brands')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
 
   const parsed = brandUpsertSchema.safeParse({
     id: formData.get('id') ?? '',
@@ -197,13 +245,24 @@ export async function upsertBrand(
     }
   }
 
+  await writeCatalogAudit(
+    parsed.data.id ? 'brand_update' : 'brand_create',
+    'brand',
+    parsed.data.id || null,
+    { name: payload.name, slug: payload.slug },
+    actor,
+  )
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã lưu thương hiệu.' }
 }
 
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<AdminActionState> {
-  const gate = await assertAdmin('brands')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('brands')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
 
   const { error } = await getSupabaseAdminClient()
     .from('brands')
@@ -211,13 +270,18 @@ export async function setBrandActive(brandId: string, isActive: boolean): Promis
     .eq('id', brandId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeCatalogAudit('brand_toggle', 'brand', brandId, { is_active: isActive }, actor)
   revalidateCatalogAdmin()
   return { ok: true, message: isActive ? 'Đã kích hoạt thương hiệu.' : 'Đã tắt thương hiệu.' }
 }
 
 export async function deleteBrand(brandId: string): Promise<AdminActionState> {
-  const gate = await assertAdmin('brands')
-  if (gate) return gate
+  let actor: AdminSession
+  try {
+    actor = await requireAdminSession('brands')
+  } catch (error) {
+    return fail(error instanceof Error && error.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHORIZED')
+  }
 
   const db = getSupabaseAdminClient()
   const { count, error: countError } = await db
@@ -232,6 +296,7 @@ export async function deleteBrand(brandId: string): Promise<AdminActionState> {
   const { error } = await db.from('brands').delete().eq('id', brandId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeCatalogAudit('brand_delete', 'brand', brandId, {}, actor)
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã xóa thương hiệu.' }
 }
