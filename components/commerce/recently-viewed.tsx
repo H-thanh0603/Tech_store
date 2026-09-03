@@ -60,3 +60,62 @@ export function RecentlyViewedSection() {
     </section>
   )
 }
+
+// Compact variant for product detail / cart — supports excludeId and denser layout
+export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
+  const items = useSyncExternalStore(
+    subscribeLists,
+    getRecentlyViewedSnapshot,
+    getServerListSnapshot,
+  )
+  const filtered = excludeId ? items.filter((p) => p.id !== excludeId) : items
+  if (filtered.length === 0) return null
+  const visible = filtered.slice(0, 6)
+  return (
+    <section aria-labelledby="recently-viewed-heading">
+      <SectionHeader
+        eyebrow="Đã xem"
+        title="Vừa xem"
+        titleId="recently-viewed-heading"
+        description="Quay lại nhanh sản phẩm bạn vừa quan tâm."
+      />
+      <div className="mt-4 flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+        {visible.map((product) => (
+          <Link
+            key={product.id}
+            href={`/products/${product.slug}`}
+            className="group min-w-[10rem] max-w-[10rem] shrink-0 overflow-hidden rounded-(--radius-lg) border border-border bg-surface-raised transition hover:border-brand/30 hover:shadow-(--shadow-sm)"
+            onClick={() => track('recently_viewed_click', { productId: product.id })}
+          >
+            <div className="relative aspect-square overflow-hidden bg-surface-muted">
+              {product.imageUrl ? (
+                <Image
+                  src={product.imageUrl}
+                  alt={product.name}
+                  fill
+                  className="object-cover transition duration-300 group-hover:scale-[1.03]"
+                  sizes="10rem"
+                />
+              ) : (
+                <div className="grid size-full place-items-center text-fg-subtle">—</div>
+              )}
+            </div>
+            <div className="p-2.5">
+              {product.brandName ? (
+                <p className="truncate text-(length:--text-2xs) font-semibold uppercase tracking-wide text-fg-subtle">
+                  {product.brandName}
+                </p>
+              ) : null}
+              <p className="line-clamp-2 text-(length:--text-sm) font-medium leading-tight text-fg group-hover:text-brand">
+                {product.name}
+              </p>
+              <p className="mt-1 text-(length:--text-sm) font-semibold tabular-nums text-fg">
+                {formatPrice(product.minPrice)}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}

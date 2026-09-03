@@ -17,6 +17,7 @@ import { PickupAvailability } from '@/components/commerce/pickup-availability'
 import { ProductReviews } from '@/components/commerce/product-reviews'
 import { ProductReviewForm } from '@/components/commerce/product-review-form'
 import { ProductViewTracker } from '@/components/commerce/product-view-tracker'
+import { RecentlyViewed } from '@/components/commerce/recently-viewed'
 import { VariantSelector } from '@/components/commerce/variant-selector'
 import { SectionHeader } from '@/components/ui/section-header'
 import { JsonLd } from '@/components/seo/json-ld'
@@ -332,6 +333,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <ProductGrid products={related} />
         </section>
       ) : null}
+
+      <RecentlyViewed excludeId={product.id} />
     </div>
   )
 }

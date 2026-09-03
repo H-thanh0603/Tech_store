@@ -1,6 +1,7 @@
 import { CartPageContent } from '@/components/commerce/cart-page-content'
 import { CartUpsell } from '@/components/commerce/cart-upsell'
 import { CheckoutStepper } from '@/components/commerce/checkout-stepper'
+import { RecentlyViewed } from '@/components/commerce/recently-viewed'
 import { getCart } from '@/lib/commerce/queries'
 
 export default async function CartPage() {
@@ -14,6 +15,9 @@ export default async function CartPage() {
           <CartUpsell excludeSlugs={cart.items.map((item) => item.productSlug)} />
         </div>
       ) : null}
+      <div className="mt-10">
+        <RecentlyViewed />
+      </div>
     </div>
   )
 }
