@@ -23,6 +23,7 @@ declare
   v_rate_deleted int;
   v_outbox_deleted int;
   v_cart_deleted int;
+  v_cart_deleted2 int;
 begin
   if p_audit_days < 30 then
     return jsonb_build_object('code', 'VALIDATION_ERROR', 'message', 'Audit log phải giữ ít nhất 30 ngày.');
@@ -69,7 +70,8 @@ begin
   delete from carts
   where status = 'open'
     and updated_at < now() - ((p_cart_days * 2) || ' days')::interval;
-  get diagnostics v_cart_deleted = v_cart_deleted + row_count;
+  get diagnostics v_cart_deleted2 = row_count;
+  v_cart_deleted := v_cart_deleted + v_cart_deleted2;
 
   return jsonb_build_object(
     'code', 'OK',
