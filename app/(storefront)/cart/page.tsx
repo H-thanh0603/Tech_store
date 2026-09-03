@@ -1,11 +1,13 @@
 import { CartPageContent } from '@/components/commerce/cart-page-content'
 import { CartUpsell } from '@/components/commerce/cart-upsell'
+import { CheckoutStepper } from '@/components/commerce/checkout-stepper'
 import { getCart } from '@/lib/commerce/queries'
 
 export default async function CartPage() {
   const cart = await getCart()
   return (
     <div className="container-store py-8 sm:py-10">
+      <CheckoutStepper current={1} />
       <CartPageContent cart={cart} />
       {cart.items.length > 0 ? (
         <div className="mt-10">

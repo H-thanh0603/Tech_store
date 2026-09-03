@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 
+import { CheckoutStepper } from '@/components/commerce/checkout-stepper'
 import { OrderSavedEffect } from '@/components/commerce/order-saved'
 import { OrderStatus } from '@/components/commerce/order-status'
 import { PaymentSummary } from '@/components/commerce/payment-summary'
@@ -30,6 +31,7 @@ export default async function OrderConfirmationPage({
 
   return (
     <div className="container-store grid max-w-3xl gap-8 py-10 sm:py-14">
+      <CheckoutStepper current={3} />
       <OrderSavedEffect orderCode={order.orderCode} total={order.total} />
       {vnpay === 'failed' ? (
         <p
