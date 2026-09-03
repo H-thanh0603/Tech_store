@@ -467,24 +467,24 @@ on conflict (store_id, variant_id) do nothing;
 -- Images (Dell XPS 13 intentionally has none: missing-image edge case)
 
 insert into product_images (id, product_id, variant_id, url, alt_text, sort_order) values
-  ('60000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', null, 'https://placehold.co/800x800?text=MacBook+Air+1', 'MacBook Air M3 mặt trước', 0),
-  ('60000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', null, 'https://placehold.co/800x800?text=MacBook+Air+2', 'MacBook Air M3 góc nghiêng', 1),
-  ('60000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', null, 'https://placehold.co/800x800?text=Galaxy+S24+Ultra', 'Samsung Galaxy S24 Ultra', 0),
-  ('60000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000004', null, 'https://placehold.co/800x800?text=Tai+Nghe', 'Tai nghe chưa ra mắt', 0),
-  ('60000000-0000-0000-0000-000000000005', '30000000-0000-0000-0000-000000000005', null, 'https://placehold.co/800x800?text=Galaxy+Buds3+Pro', 'Samsung Galaxy Buds3 Pro', 0),
-  ('60000000-0000-0000-0000-000000000006', '30000000-0000-0000-0000-000000000006', null, 'https://placehold.co/800x800?text=Dell+XPS+15', 'Dell XPS 15 ngừng bán', 0),
+  ('60000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', null, '/product-images/real/macbook-air-m3-1.jpg', 'MacBook Air M3 mặt trước', 0),
+  ('60000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', null, '/product-images/real/macbook-air-m3-2.jpg', 'MacBook Air M3 góc nghiêng', 1),
+  ('60000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', null, '/product-images/real/galaxy-s24-ultra.jpg', 'Samsung Galaxy S24 Ultra', 0),
+  ('60000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000004', null, '/product-images/real/tai-nghe.jpg', 'Tai nghe chưa ra mắt', 0),
+  ('60000000-0000-0000-0000-000000000005', '30000000-0000-0000-0000-000000000005', null, '/product-images/real/galaxy-buds3-pro.jpg', 'Samsung Galaxy Buds3 Pro', 0),
+  ('60000000-0000-0000-0000-000000000006', '30000000-0000-0000-0000-000000000006', null, '/product-images/real/dell-xps-15.jpg', 'Dell XPS 15 ngừng bán', 0),
   -- S3: ảnh cho sản phẩm mới (7–11)
-  ('60000000-0000-0000-0000-000000000007', '30000000-0000-0000-0000-000000000007', null, 'https://placehold.co/800x800?text=Redmi+Note+13', 'Xiaomi Redmi Note 13', 0),
-  ('60000000-0000-0000-0000-000000000008', '30000000-0000-0000-0000-000000000008', null, 'https://placehold.co/800x800?text=iPhone+15', 'iPhone 15', 0),
-  ('60000000-0000-0000-0000-000000000009', '30000000-0000-0000-0000-000000000009', null, 'https://placehold.co/800x800?text=ROG+Strix+G16', 'Asus ROG Strix G16', 0),
-  ('60000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-00000000000a', null, 'https://placehold.co/800x800?text=PC+ProArt', 'Asus PC Văn Phòng ProArt', 0),
-  ('60000000-0000-0000-0000-00000000000b', '30000000-0000-0000-0000-00000000000b', null, 'https://placehold.co/800x800?text=TUF+VG27', 'Asus TUF Gaming VG27', 0),
-  ('60000000-0000-0000-0000-00000000000c', '30000000-0000-0000-0000-00000000000c', null, 'https://placehold.co/800x800?text=ViewFinity+S8', 'Samsung ViewFinity S8', 0),
-  ('60000000-0000-0000-0000-00000000000d', '30000000-0000-0000-0000-00000000000d', null, 'https://placehold.co/800x800?text=JBL+Flip+6', 'JBL Flip 6', 0),
-  ('60000000-0000-0000-0000-00000000000e', '30000000-0000-0000-0000-00000000000e', null, 'https://placehold.co/800x800?text=Sony+WH-1000XM5', 'Sony WH-1000XM5', 0),
-  ('60000000-0000-0000-0000-00000000000f', '30000000-0000-0000-0000-00000000000f', null, 'https://placehold.co/800x800?text=Apple+Watch+SE', 'Apple Watch SE', 0),
-  ('60000000-0000-0000-0000-000000000010', '30000000-0000-0000-0000-000000000010', null, 'https://placehold.co/800x800?text=iPhone+12+Cu', 'iPhone 12 cũ 99%', 0),
-  ('60000000-0000-0000-0000-000000000011', '30000000-0000-0000-0000-000000000011', null, 'https://placehold.co/800x800?text=Dell+Latitude+Cu', 'Dell Latitude cũ like new', 0)
+  ('60000000-0000-0000-0000-000000000007', '30000000-0000-0000-0000-000000000007', null, '/product-images/real/redmi-note-13.jpg', 'Xiaomi Redmi Note 13', 0),
+  ('60000000-0000-0000-0000-000000000008', '30000000-0000-0000-0000-000000000008', null, '/product-images/real/iphone-15.jpg', 'iPhone 15', 0),
+  ('60000000-0000-0000-0000-000000000009', '30000000-0000-0000-0000-000000000009', null, '/product-images/real/rog-strix-g16.jpg', 'Asus ROG Strix G16', 0),
+  ('60000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-00000000000a', null, '/product-images/real/pc-proart.jpg', 'Asus PC Văn Phòng ProArt', 0),
+  ('60000000-0000-0000-0000-00000000000b', '30000000-0000-0000-0000-00000000000b', null, '/product-images/real/tuf-vg27.jpg', 'Asus TUF Gaming VG27', 0),
+  ('60000000-0000-0000-0000-00000000000c', '30000000-0000-0000-0000-00000000000c', null, '/product-images/real/viewfinity-s8.jpg', 'Samsung ViewFinity S8', 0),
+  ('60000000-0000-0000-0000-00000000000d', '30000000-0000-0000-0000-00000000000d', null, '/product-images/real/jbl-flip-6.jpg', 'JBL Flip 6', 0),
+  ('60000000-0000-0000-0000-00000000000e', '30000000-0000-0000-0000-00000000000e', null, '/product-images/real/sony-wh-1000xm5.jpg', 'Sony WH-1000XM5', 0),
+  ('60000000-0000-0000-0000-00000000000f', '30000000-0000-0000-0000-00000000000f', null, '/product-images/real/apple-watch-se.jpg', 'Apple Watch SE', 0),
+  ('60000000-0000-0000-0000-000000000010', '30000000-0000-0000-0000-000000000010', null, '/product-images/real/iphone-12-cu.jpg', 'iPhone 12 cũ 99%', 0),
+  ('60000000-0000-0000-0000-000000000011', '30000000-0000-0000-0000-000000000011', null, '/product-images/real/dell-latitude-cu.jpg', 'Dell Latitude cũ like new', 0)
 on conflict (id) do nothing;
 
 -- Specs
