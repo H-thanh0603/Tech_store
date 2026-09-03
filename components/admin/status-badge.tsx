@@ -1,2 +1,2 @@
-/** @deprecated Prefer `@/components/admin/ui/status-badge` */
-export { StatusBadge } from '@/components/admin/ui/status-badge'
+/** @deprecated Prefer `@/components/ui/status-badge` */
+export { StatusBadge } from '@/components/ui/status-badge'

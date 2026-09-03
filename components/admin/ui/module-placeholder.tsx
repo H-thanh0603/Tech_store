@@ -1,4 +1,4 @@
-import { EmptyState } from '@/components/admin/ui/empty-state'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/admin/ui/page-header'
 
 type ModulePlaceholderProps = {

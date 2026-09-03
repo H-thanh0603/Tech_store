@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 
-import { EmptyState } from '@/components/admin/ui/empty-state'
-import { ErrorState } from '@/components/admin/ui/error-state'
-import { TableSkeleton } from '@/components/admin/ui/loading-skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { TableSkeleton } from '@/components/ui/loading-skeleton'
 import { AdminPagination } from '@/components/admin/ui/pagination'
 
 export type DataTableColumn<T> = {
