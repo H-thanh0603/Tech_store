@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
+import { isCronAuthorized } from '@/lib/cron'
 import { processPendingNotifications } from '@/lib/commerce/notify'
 
 interface RouteResult {
@@ -28,11 +29,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const expected = process.env.CRON_SECRET
-  const received = request.headers
-    .get('authorization')
-    ?.replace('Bearer ', '')
-  if (received !== expected) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 

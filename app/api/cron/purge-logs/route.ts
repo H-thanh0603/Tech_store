@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { isCronAuthorized } from '@/lib/cron'
+
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 // Daily log retention sweep. Guarded by CRON_SECRET; Vercel Cron calls this
@@ -7,9 +9,7 @@ import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 // analytics_events (90d), and request_rate_limits (2d) from filling the
 // 500 MB free-tier database.
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET
-  const received = request.headers.get('authorization')?.replace('Bearer ', '')
-  if (!expected || received !== expected) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 

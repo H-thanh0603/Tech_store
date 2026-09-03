@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 
+import { isCronAuthorized } from '@/lib/cron'
+
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 // Cron sweep: expire overdue awaiting_payment orders and release their stock
 // reservations. Complements the lazy expiry in order_track. Guarded by
 // CRON_SECRET; Vercel Cron (vercel.json) calls this periodically.
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET
-  const received = request.headers.get('authorization')?.replace('Bearer ', '')
-  if (!expected || received !== expected) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
