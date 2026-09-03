@@ -102,6 +102,27 @@ export async function applyCoupon(_: ActionState, formData: FormData): Promise<A
   if (!parsed.success) {
     return validationError(parsed.error.flatten().fieldErrors)
   }
+  // Brute-force protection: 10 attempts / 15m per cart+IP (API-007)
+  try {
+    const headerList = await headers()
+    const ip =
+      headerList.get('x-real-ip')?.trim() ||
+      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+      'unknown'
+    const cartHash = await getCartTokenHash()
+    const identity = `${cartHash}:${ip}`
+    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+      p_action: 'coupon_apply',
+      p_identity: identity,
+      p_limit: 10,
+      p_window_minutes: 15,
+    })
+    if (limited === true) {
+      return { ok: false, code: 'RATE_LIMITED', message: toUserMessage('RATE_LIMITED') }
+    }
+  } catch {
+    // fail-open
+  }
   return mutate('cart_apply_coupon', { p_code: parsed.data.code })
 }
 

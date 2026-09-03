@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server'
 
-import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { getAdminSession } from '@/lib/admin/auth'
 import { canAccessModule } from '@/lib/admin/permissions'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
+import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 // CSV export of admin audit logs. Same filters as the audit page. Guarded by
 // the admin session + reports module permission.
 
 function csvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`
+  // Neutralize formula injection: prefix =, +, -, @, tab-carriage (SEC-009)
+  let safe = value
+  if (/^[=+\-@\t\r]/.test(safe)) safe = `'${safe}`
+  if (/[",\n\r]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`
   }
-  return value
+  return safe
 }
 
 export async function GET(request: Request) {
@@ -21,6 +25,21 @@ export async function GET(request: Request) {
   }
   if (!canAccessModule(session.role, 'reports')) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+
+  // Throttle export: 10 / hour per admin (heavy RPC, prevent abuse)
+  try {
+    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+      p_action: 'export_audit',
+      p_identity: session.userId,
+      p_limit: 10,
+      p_window_minutes: 60,
+    })
+    if (limited === true) {
+      return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
+    }
+  } catch {
+    // fail-open
   }
 
   const url = new URL(request.url)
@@ -38,7 +57,7 @@ export async function GET(request: Request) {
     p_offset: 0,
   })
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
 
   const rows = ((data as { rows?: unknown[] } | null)?.rows ?? []) as Array<{

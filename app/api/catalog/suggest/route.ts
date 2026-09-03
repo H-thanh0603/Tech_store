@@ -1,6 +1,8 @@
+import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import { getProducts } from '@/lib/catalog/queries'
+import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +16,27 @@ export async function GET(request: Request) {
 
   if (q.length < 2) {
     return NextResponse.json({ query: q, products: [], empty: false })
+  }
+
+  // Throttle suggest: 30/min per IP to prevent count:exact flood (API-009)
+  try {
+    const headerList = await headers()
+    const ip =
+      headerList.get('x-real-ip')?.trim() ||
+      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+      request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+      'unknown'
+    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+      p_action: 'suggest',
+      p_identity: ip,
+      p_limit: 30,
+      p_window_minutes: 1,
+    })
+    if (limited === true) {
+      return NextResponse.json({ query: q, products: [], empty: true }, { status: 429 })
+    }
+  } catch {
+    // fail-open
   }
 
   try {
