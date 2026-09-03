@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { getSupabaseServerClient } from '@/lib/supabase/server'
@@ -102,8 +103,7 @@ function isSort(value: string | undefined): value is CatalogSort {
 
 export type CatalogFacetOption = { name: string; slug: string }
 
-/** Active categories/brands for filter UI (public read via RLS). */
-export async function getCatalogFacets(): Promise<{
+async function fetchCatalogFacets(): Promise<{
   categories: CatalogFacetOption[]
   brands: CatalogFacetOption[]
 }> {
@@ -127,6 +127,12 @@ export async function getCatalogFacets(): Promise<{
     })),
   }
 }
+
+/** Active categories/brands for filter UI (public read via RLS). Cached 5m to avoid per-request facet queries on /products (FE-201). */
+export const getCatalogFacets = unstable_cache(fetchCatalogFacets, ['catalog-facets'], {
+  revalidate: 300,
+  tags: ['catalog-facets'],
+})
 
 // Normalizes untrusted filter input to safe, concrete values. Page is clamped
 // to a positive integer, price bounds drop non-finite/negative values, and an

@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 
 import {
   requireAdminPermission,
@@ -59,6 +59,7 @@ function revalidateCatalogAdmin() {
   revalidatePath('/admin')
   revalidatePath('/products')
   revalidatePath('/', 'layout')
+  updateTag('catalog-facets')
 }
 
 export async function upsertCategory(
