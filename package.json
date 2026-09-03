@@ -21,6 +21,7 @@
     "perf:audit": "node scripts/perf-audit.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
     "@sentry/nextjs": "^10.72.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.110.8",

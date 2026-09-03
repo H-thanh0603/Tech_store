@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { AssistantWidget } from '@/components/assistant/assistant-widget'
 import { FloatingActions } from '@/components/layout/floating-actions'
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
@@ -47,6 +48,7 @@ export default async function StorefrontLayout({ children }: { children: ReactNo
       </main>
       <PromoPopup />
       <FloatingActions />
+      <AssistantWidget />
       {/* Clears the fixed mobile bottom navigation. */}
       <div className="pad-bottom-nav">
         <Footer />
