@@ -61,6 +61,22 @@ export async function GET(request: Request) {
   )
   results.push(notifications)
 
+  // Abandoned-cart reminders are idempotent (deduped by carts.reminded_at),
+  // so running every 5 min via the 2-cron health job is safe and keeps
+  // Vercel Hobby within 2-cron limit (OPS-002). Previously this was a
+  // separate 0 */2 cron that pushed us to 4 crons.
+  const abandoned = await runWithTiming(
+    'abandoned-carts',
+    async () => {
+      const { data, error } = await getSupabaseAdminClient().rpc(
+        'queue_abandoned_cart_emails',
+      )
+      if (error) throw new Error(error.message)
+      return data
+    },
+  )
+  results.push(abandoned)
+
   const allOk = results.every((r) => r.ok)
   return NextResponse.json(
     { ok: allOk, checkedAt: new Date().toISOString(), results },
