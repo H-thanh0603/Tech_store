@@ -1,0 +1,253 @@
+/**
+ * Model providers behind the assistant's MessagesClient seam.
+ *
+ * - `anthropic` (default): native Messages API via @anthropic-ai/sdk.
+ * - `deepseek`: DeepSeek's OpenAI-compatible `/chat/completions`, translated
+ *   to/from the same Anthropic-shaped params so the turn loop is untouched.
+ *
+ * Select with ASSISTANT_PROVIDER=anthropic|deepseek (default anthropic).
+ * Keys are server-only: ANTHROPIC_API_KEY / DEEPSEEK_API_KEY.
+ */
+
+import Anthropic from '@anthropic-ai/sdk'
+
+import type { MessagesClient } from './agent'
+
+export type AssistantProvider = 'anthropic' | 'deepseek'
+
+export function resolveProvider(): AssistantProvider {
+  return process.env.ASSISTANT_PROVIDER === 'deepseek' ? 'deepseek' : 'anthropic'
+}
+
+export function defaultModelFor(provider: AssistantProvider): string {
+  if (process.env.ASSISTANT_MODEL) return process.env.ASSISTANT_MODEL
+  return provider === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5'
+}
+
+function createAnthropicClient(apiKey: string): MessagesClient {
+  const client = new Anthropic({ apiKey })
+  return {
+    messages: {
+      create: async (params) => {
+        const message = await client.messages.create({
+          model: params.model,
+          max_tokens: params.max_tokens,
+          system: params.system,
+          tools: params.tools,
+          tool_choice: params.tool_choice,
+          messages: params.messages,
+        })
+        const content: (
+          | { type: 'text'; text: string }
+          | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+        )[] = []
+        for (const block of message.content) {
+          if (block.type === 'text') content.push({ type: 'text', text: block.text })
+          else if (block.type === 'tool_use') {
+            content.push({
+              type: 'tool_use',
+              id: block.id,
+              name: block.name,
+              input: (block.input ?? {}) as Record<string, unknown>,
+            })
+          }
+        }
+        return { content, stop_reason: message.stop_reason }
+      },
+    },
+  }
+}
+
+// -- DeepSeek (OpenAI-compatible) -------------------------------------------
+
+const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
+
+interface DSMessage {
+  role: string
+  content: string | null
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]
+  tool_call_id?: string
+}
+
+interface DSTool {
+  type: 'function'
+  function: { name: string; description?: string; parameters: unknown }
+}
+
+/** Local view over Anthropic content blocks: only the fields the converter reads. */
+interface BlockView {
+  type: string
+  text?: unknown
+  id?: unknown
+  name?: unknown
+  input?: unknown
+  tool_use_id?: unknown
+  content?: unknown
+}
+
+function view(block: unknown): BlockView {
+  return block as BlockView
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function blockText(content: string | unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((raw) => {
+      const b = view(raw)
+      if (typeof raw === 'string') return raw
+      if (b.type === 'text') return String(b.text ?? '')
+      if (b.type === 'tool_result') {
+        return typeof b.content === 'string' ? b.content : JSON.stringify(b.content ?? '')
+      }
+      return ''
+    })
+    .join('\n')
+}
+
+export function toDeepSeekRequest(params: {
+  model: string
+  max_tokens: number
+  system: string
+  tools: Pick<Anthropic.Tool, 'name' | 'description' | 'input_schema'>[]
+  tool_choice: { type?: string; name?: string }
+  messages: Anthropic.MessageParam[]
+}): Record<string, unknown> {
+  const dsMessages: DSMessage[] = [{ role: 'system', content: params.system }]
+  for (const m of params.messages) {
+    if (m.role === 'user') {
+      const raws = Array.isArray(m.content) ? m.content : []
+      const results = raws.map(view).filter(
+        (b): b is BlockView & { tool_use_id: string } =>
+          b.type === 'tool_result' && typeof b.tool_use_id === 'string',
+      )
+      if (results.length > 0) {
+        for (const r of results) {
+          dsMessages.push({
+            role: 'tool',
+            tool_call_id: r.tool_use_id,
+            content:
+              typeof r.content === 'string' ? r.content : JSON.stringify(r.content ?? ''),
+          })
+        }
+      } else {
+        dsMessages.push({ role: 'user', content: blockText(m.content) })
+      }
+    } else {
+      const blocks = (Array.isArray(m.content) ? m.content : []).map(view)
+      const texts: string[] = []
+      const calls: NonNullable<DSMessage['tool_calls']> = []
+      for (const b of blocks) {
+        if (typeof b === 'string') {
+          texts.push(b)
+          continue
+        }
+        if (b.type === 'text') texts.push(String(b.text ?? ''))
+        else if (b.type === 'tool_use' && typeof b.id === 'string' && typeof b.name === 'string') {
+          calls.push({
+            id: b.id,
+            type: 'function',
+            function: { name: b.name, arguments: JSON.stringify(asRecord(b.input)) },
+          })
+        }
+      }
+      dsMessages.push({
+        role: 'assistant',
+        content: texts.join('\n') || null,
+        ...(calls.length > 0 ? { tool_calls: calls } : {}),
+      })
+    }
+  }
+
+  const tools: DSTool[] = params.tools.map((t) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description ?? '', parameters: t.input_schema },
+  }))
+
+  const choice = params.tool_choice
+  const tool_choice =
+    choice.type === 'none'
+      ? 'none'
+      : choice.type === 'tool' && choice.name
+        ? { type: 'function', function: { name: choice.name } }
+        : 'auto'
+
+  return {
+    model: params.model,
+    max_tokens: params.max_tokens,
+    messages: dsMessages,
+    tools,
+    tool_choice,
+  }
+}
+
+export function fromDeepSeekResponse(json: {
+  choices?: {
+    message?: {
+      content?: string | null
+      tool_calls?: { id: string; function?: { name?: string; arguments?: string } }[]
+    }
+    finish_reason?: string
+  }[]
+}): {
+  content: (
+    | { type: 'text'; text: string }
+    | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  )[]
+  stop_reason: string | null
+} {
+  const msg = json.choices?.[0]?.message
+  const content: (
+    | { type: 'text'; text: string }
+    | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  )[] = []
+  if (msg?.content) content.push({ type: 'text', text: msg.content })
+  for (const call of msg?.tool_calls ?? []) {
+    let input: Record<string, unknown> = {}
+    try {
+      const parsed: unknown = JSON.parse(call.function?.arguments ?? '{}')
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        input = parsed as Record<string, unknown>
+      }
+    } catch {
+      // Malformed arguments: empty input, the dispatcher reports the miss.
+    }
+    content.push({ type: 'tool_use', id: call.id, name: call.function?.name ?? '', input })
+  }
+  const finish = json.choices?.[0]?.finish_reason
+  return { content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
+}
+
+function createDeepSeekClient(apiKey: string): MessagesClient {
+  return {
+    messages: {
+      create: async (params) => {
+        const res = await fetch(DEEPSEEK_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(toDeepSeekRequest(params)),
+          signal: AbortSignal.timeout(60_000),
+        })
+        if (!res.ok) throw new Error(`DeepSeek HTTP ${res.status}`)
+        return fromDeepSeekResponse(await res.json())
+      },
+    },
+  }
+}
+
+/** Build the configured provider client, or null when its key is missing. */
+export function createProviderClient(): MessagesClient | null {
+  const provider = resolveProvider()
+  if (provider === 'deepseek') {
+    const apiKey = process.env.DEEPSEEK_API_KEY
+    return apiKey ? createDeepSeekClient(apiKey) : null
+  }
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  return apiKey ? createAnthropicClient(apiKey) : null
+}

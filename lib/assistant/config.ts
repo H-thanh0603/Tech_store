@@ -28,8 +28,11 @@ export const assistantConfig: AssistantConfig = {
   assistantName: 'Trợ lý TechStore',
   brandName: 'TechStore',
   brandVoice: 'thân thiện, ngắn gọn, nói rõ đánh đổi',
-  // Overridable via ASSISTANT_MODEL; keep a cheap default for the pilot.
-  model: process.env.ASSISTANT_MODEL ?? 'claude-haiku-4-5',
+  // Overridable via ASSISTANT_MODEL. Provider default comes from
+  // defaultModelFor() so it tracks ASSISTANT_PROVIDER at import time.
+  model:
+    process.env.ASSISTANT_MODEL ??
+    (process.env.ASSISTANT_PROVIDER === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5'),
   maxTokens: 1024,
   maxToolIterations: 5,
   searchLimit: 6,

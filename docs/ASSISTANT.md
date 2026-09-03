@@ -17,9 +17,16 @@ TypeScript-native port of the shopping agent from
 
 ## Setup
 
-1. `ANTHROPIC_API_KEY=...` vào `.env.local` (server-only, không bao giờ `NEXT_PUBLIC_*`).
-2. Restart dev server. Chưa có key → widget vẫn hiện nhưng trả lời "chưa được cấu hình" (xem `DISABLED_REPLY`).
-3. Optional: `ASSISTANT_MODEL=` (mặc định `claude-haiku-4-5`, rẻ cho pilot).
+1. Chọn provider: `ASSISTANT_PROVIDER=anthropic` (mặc định) hoặc `deepseek`.
+2. Thêm key tương ứng vào `.env.local` (server-only, không bao giờ `NEXT_PUBLIC_*`):
+   - Anthropic: `ANTHROPIC_API_KEY=...` (https://console.anthropic.com → API Keys)
+   - DeepSeek: `DEEPSEEK_API_KEY=...` (https://platform.deepseek.com → API Keys)
+3. Restart dev server. Chưa có key → widget vẫn hiện nhưng trả lời "chưa được cấu hình" (xem `DISABLED_REPLY`).
+4. Optional: `ASSISTANT_MODEL=` (mặc định `claude-haiku-4-5` / `deepseek-chat`).
+
+DeepSeek chạy qua endpoint OpenAI-compatible (`/chat/completions`), được dịch
+hai chiều trong `lib/assistant/providers.ts` nên vòng lặp turn không đổi —
+tool contracts, fencing và grounding giữ nguyên.
 
 ## Safety (port từ `docs/safety.md` của blueprint)
 

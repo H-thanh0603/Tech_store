@@ -10,6 +10,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
+import { createProviderClient } from './providers'
 import {
   createDispatchContext,
   buildAnthropicTools,
@@ -77,36 +78,7 @@ function lastUserText(history: ChatMessage[]): string {
 }
 
 function createRealClient(): MessagesClient | null {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return null
-  const client = new Anthropic({ apiKey })
-  return {
-    messages: {
-      create: async (params) => {
-        const message = await client.messages.create({
-          model: params.model,
-          max_tokens: params.max_tokens,
-          system: params.system,
-          tools: params.tools,
-          tool_choice: params.tool_choice,
-          messages: params.messages,
-        })
-        const content: MinimalBlock[] = []
-        for (const block of message.content) {
-          if (block.type === 'text') content.push({ type: 'text', text: block.text })
-          else if (block.type === 'tool_use') {
-            content.push({
-              type: 'tool_use',
-              id: block.id,
-              name: block.name,
-              input: (block.input ?? {}) as Record<string, unknown>,
-            })
-          }
-        }
-        return { content, stop_reason: message.stop_reason }
-      },
-    },
-  }
+  return createProviderClient()
 }
 
 const DISABLED_REPLY =
