@@ -58,6 +58,23 @@ export async function handleVnpayCallback(
     return { ok: false, orderCode, message: 'Số tiền thanh toán không khớp đơn hàng.', ipnResponseCode: '04' }
   }
   if (result?.code === 'ORDER_EXPIRED') {
+    // Valid VNPay payment arrived after 24h expiry — money deducted but order
+    // is expired. Requires manual refund or reopen (API-001). Record for ops.
+    try {
+      await getSupabaseAdminClient().from('admin_audit_logs').insert({
+        action: 'vnpay_expired_paid',
+        entity_type: 'order',
+        entity_id: orderCode,
+        payload: {
+          vnpTransactionNo: searchParams.vnp_TransactionNo ?? '',
+          vnpAmount: amount,
+          reason: 'paid_after_expiry_requires_refund',
+        },
+        actor_label: 'vnpay-ipn',
+      })
+    } catch {
+      // audit insert failure must not mask the IPN response
+    }
     return { ok: false, orderCode, message: 'Đơn hàng đã hết thời gian thanh toán.', ipnResponseCode: '02' }
   }
   if (result?.code === 'ORDER_NOT_PAYABLE' || result?.code === 'PAYMENT_CONFLICT') {
