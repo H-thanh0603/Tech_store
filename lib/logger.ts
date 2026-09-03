@@ -4,9 +4,26 @@ interface LogContext {
   [key: string]: unknown
 }
 
+function getRequestId(): string | undefined {
+  try {
+    // next/headers is async in Next 16 (returns Promise), sync in older.
+    // Fail-open: if Promise, skip.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const maybeHeaders = (require('next/headers') as unknown as { headers: () => unknown }).headers() as unknown
+    if (maybeHeaders && typeof (maybeHeaders as Promise<unknown>).then === 'function') return undefined
+    const hdrs = maybeHeaders as { get: (k: string) => string | null }
+    return hdrs.get('x-request-id') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 function formatMessage(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString()
-  const prefix = `[${timestamp}] [${level.toUpperCase()}]`
+  const requestId = getRequestId()
+  const prefix = requestId
+    ? `[${timestamp}] [${level.toUpperCase()}] [${requestId}]`
+    : `[${timestamp}] [${level.toUpperCase()}]`
   if (context && Object.keys(context).length > 0) {
     return `${prefix} ${message} ${JSON.stringify(context)}`
   }

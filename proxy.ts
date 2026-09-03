@@ -6,6 +6,7 @@ import { updateSession } from '@/lib/supabase/middleware'
 // against Supabase Auth + admin_users; the proxy only refreshes sessions.
 export async function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID()
+  const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
   const development = process.env.NODE_ENV === 'development'
 
   // connect-src is the exfiltration channel for a compromised dependency:
@@ -43,10 +44,12 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('x-request-id', requestId)
   requestHeaders.set('Content-Security-Policy', csp)
 
   const response = await updateSession(request, requestHeaders)
   response.headers.set('Content-Security-Policy', csp)
+  response.headers.set('x-request-id', requestId)
   return response
 }
 
