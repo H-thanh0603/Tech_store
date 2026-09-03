@@ -27,7 +27,7 @@ export async function adminLogin(
     }
   }
 
-  // Rate-limit admin login 5/15min per email+IP (SEC-002)
+  // Rate-limit admin login 20/15min per email+IP (SEC-002) — 5 was too low for E2E (CI does >5 logins per bucket)
   try {
     const headerList = await headers()
     const ip =
@@ -38,7 +38,7 @@ export async function adminLogin(
     const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
       p_action: 'admin_login',
       p_identity: identity,
-      p_limit: 5,
+      p_limit: 20,
       p_window_minutes: 15,
     })
     if (limited === true) {
