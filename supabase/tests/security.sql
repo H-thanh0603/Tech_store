@@ -8,8 +8,8 @@ select plan(11);
 select has_function(
   'public',
   'place_order',
-  array['text', 'uuid', 'text', 'jsonb', 'text', 'text'],
-  'secure six-argument place_order wrapper exists'
+  array['text', 'uuid', 'text', 'jsonb', 'text', 'text', 'text'],
+  'secure seven-argument place_order wrapper exists (IP-bound)'
 );
 
 select has_function(
@@ -22,7 +22,7 @@ select has_function(
 select is(
   has_function_privilege(
     'anon',
-    'public.place_order(text, uuid, text, jsonb, text, text)',
+    'public.place_order(text, uuid, text, jsonb, text, text, text)',
     'execute'
   ),
   true,
