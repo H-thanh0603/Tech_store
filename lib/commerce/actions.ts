@@ -145,13 +145,17 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   // Prefer cookie-session client so place_order can read auth.uid() and attach user_id.
   const { createSupabaseAuthClient } = await import('@/lib/supabase/auth-server')
   const authClient = await createSupabaseAuthClient()
+  const cartHash = await getCartTokenHash()
+  const checkoutHeaders = await headers()
+  const checkoutIdentity = getRateLimitIdentity(checkoutHeaders, cartHash)
   const { data, error } = await authClient.rpc('place_order', {
-    p_cart_token_hash: await getCartTokenHash(),
+    p_cart_token_hash: cartHash,
     p_idempotency_key: parsed.data.idempotencyKey,
     p_order_access_token_hash: await sha256Hex(rawAccessToken),
     p_customer: parsed.data,
     p_payment_method: parsed.data.paymentMethod,
     p_coupon_code: null,
+    p_client_identity_hash: await sha256Hex(checkoutIdentity),
   })
   const state = rpcState(data as RpcResult | null, error)
   if (!state.ok) {
