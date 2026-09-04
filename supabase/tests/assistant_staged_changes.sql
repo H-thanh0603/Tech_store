@@ -9,10 +9,10 @@ select plan(5);
 -- 1) Table exists with the staged → applied/discarded lifecycle.
 select has_table('assistant_staged_changes');
 
--- 2) Status is constrained to the lifecycle values.
-select col_is_null(
-  (select status from assistant_staged_changes limit 0),
-  'status column present'
+-- 2) RLS is enabled: staff reach rows only through the API.
+select ok(
+  (select relrowsecurity from pg_class where relname = 'assistant_staged_changes'),
+  'RLS enabled on ledger'
 );
 
 -- 3) A staged row inserts cleanly.
@@ -47,6 +47,7 @@ select throws_ok(
   $$ insert into assistant_staged_changes (id, kind, summary, action, signature, status)
      values ('chg-test-002', 'price', 'x', '{}', repeat('b', 64), 'live') $$,
   '23514',
+  'new row for relation "assistant_staged_changes" violates check constraint "assistant_staged_changes_status_check"',
   'unknown status rejected'
 );
 
