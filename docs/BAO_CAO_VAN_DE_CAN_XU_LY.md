@@ -1,5 +1,10 @@
 # Báo cáo vấn đề, điểm yếu và hạng mục cần xử lý
 
+> **Trạng thái (cập nhật 2026-09): TÀI LIỆU LƯU TRỮ.** Các P0 trong báo cáo này
+> đã được xử lý (schema drift + guest authorization qua các migration checkout
+> trust boundary; xem `RELEASE_AND_MIGRATION.md`). Đừng dùng kết luận "KHÔNG ĐẠT"
+> bên dưới để đánh giá hiện trạng.
+
 **Dự án:** TechStore  
 **Ngày audit:** 2026-07-26  
 **Trạng thái phát hành:** **KHÔNG ĐẠT** — còn lỗi chặn build và lỗ hổng phân quyền.  

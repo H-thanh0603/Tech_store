@@ -1,5 +1,11 @@
 # PRODUCTION READINESS AUDIT — TechStore
 
+> **Trạng thái (cập nhật 2026-09): TÀI LIỆU LƯU TRỮ.** Hai nhóm P0 nêu trong audit
+> đã được xử lý: (1) landmine `shipping_rates` qua các migration
+> `202608300004_fix_order_access_and_shipping` +
+> `202609010003_fix_overload_ambiguity`; (2) backup tách thành workflow riêng
+> `.github/workflows/backup.yml` (chờ secrets production để chạy thật).
+
 **Ngày audit:** 2026-08-30 · **Commit:** `d8e4d8b` (main, clean tree)
 **Phạm vi:** toàn bộ repo — 36 SQL migrations, ~50 API route/server-action module, 42 unit test files, 21 pgTAP files, 4 GitHub workflows, docs/ops.
 **Phương pháp:** 5 luồng audit song song (Database, Backend/API, Security, Frontend, DevOps/Reliability) + xác minh thủ công từng phát hiện P0/P1 trực tiếp trên code. Mọi kết luận dưới đây đều trích dẫn file cụ thể.
