@@ -1,5 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
-import { num } from './shared'
+import { asRecord, num } from './shared'
 
 export async function listAdminCoupons(): Promise<import('@/lib/admin/types').AdminCouponRow[]> {
   const db = getSupabaseAdminClient()
@@ -11,18 +11,14 @@ export async function listAdminCoupons(): Promise<import('@/lib/admin/types').Ad
     .order('created_at', { ascending: false })
   if (error) throw error
 
-  const ids = (data ?? []).map((row) => String(row.id))
-  const usedMap = new Map<string, number>()
-  if (ids.length > 0) {
-    const { data: redemptions } = await db
-      .from('coupon_redemptions')
-      .select('coupon_id')
-      .in('coupon_id', ids)
-      .is('released_at', null)
-    for (const row of redemptions ?? []) {
-      const id = String(row.coupon_id)
-      usedMap.set(id, (usedMap.get(id) ?? 0) + 1)
-    }
+  // Active redemption counts come from one grouped RPC — never a full-table
+  // pull of coupon_redemptions into Node.
+  const { data: usage, error: usageError } = await db.rpc('admin_coupon_usage')
+  if (usageError) throw usageError
+  const usedByCoupon = asRecord(usage)
+  const usedCountOf = (id: string): number => {
+    const value = usedByCoupon[id]
+    return typeof value === 'number' ? value : num(value)
   }
 
   return (data ?? []).map((row) => ({
@@ -35,7 +31,7 @@ export async function listAdminCoupons(): Promise<import('@/lib/admin/types').Ad
     startsAt: row.starts_at == null ? null : String(row.starts_at),
     endsAt: row.ends_at == null ? null : String(row.ends_at),
     usageLimit: row.usage_limit == null ? null : num(row.usage_limit),
-    usedCount: usedMap.get(String(row.id)) ?? 0,
+    usedCount: usedCountOf(String(row.id)),
     isActive: Boolean(row.is_active),
     createdAt: String(row.created_at),
   }))
