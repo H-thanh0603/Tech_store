@@ -50,16 +50,43 @@ export async function handleVnpayCallback(
     console.error('[vnpay] payment confirmation RPC failed', error.code)
     return { ok: false, orderCode, message: 'Không xác nhận được thanh toán.', ipnResponseCode: '99' }
   }
-  const result = data as { code?: string } | null
+  const result = data as { code?: string; reopenedFromExpired?: boolean } | null
   if (result?.code === 'OK' || result?.code === 'ALREADY_PAID') {
     return { ok: true, orderCode, message: 'Thanh toán thành công.', ipnResponseCode: '00' }
+  }
+  if (result?.code === 'REOPENED') {
+    // Valid payment arrived after expiry (API-001): money accepted, order
+    // revived. Reopened-from-expired needs an ops stock check before packing
+    // (reservations were released), so always leave an audit trail.
+    try {
+      await getSupabaseAdminClient().from('admin_audit_logs').insert({
+        action: 'vnpay_late_payment_reopened',
+        entity_type: 'order',
+        entity_id: orderCode,
+        payload: {
+          vnpTransactionNo: searchParams.vnp_TransactionNo ?? '',
+          vnpAmount: amount,
+          reopenedFromExpired: result.reopenedFromExpired === true,
+        },
+        actor_label: 'vnpay-ipn',
+      })
+    } catch {
+      // audit insert failure must not mask the IPN response
+    }
+    return {
+      ok: true,
+      orderCode,
+      message: 'Đã nhận thanh toán muộn, đơn hàng đang được xử lý lại.',
+      ipnResponseCode: '00',
+    }
   }
   if (result?.code === 'AMOUNT_MISMATCH') {
     return { ok: false, orderCode, message: 'Số tiền thanh toán không khớp đơn hàng.', ipnResponseCode: '04' }
   }
   if (result?.code === 'ORDER_EXPIRED') {
-    // Valid VNPay payment arrived after 24h expiry — money deducted but order
-    // is expired. Requires manual refund or reopen (API-001). Record for ops.
+    // Defensive fallback: current RPC reopens late payments instead of
+    // returning this code. Kept so an older DB still gets an ops trail
+    // instead of silently dropping the customer's money.
     try {
       await getSupabaseAdminClient().from('admin_audit_logs').insert({
         action: 'vnpay_expired_paid',

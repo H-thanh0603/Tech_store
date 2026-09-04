@@ -2,7 +2,7 @@
 -- for the same gateway transaction reference.
 
 begin;
-select plan(10);
+select plan(12);
 
 insert into orders (
   id, order_code, idempotency_key, access_token_hash,
@@ -37,19 +37,39 @@ insert into orders (
     'Amount Payment', '0903000004', '{}'::jsonb,
     'vnpay', 'pending', 'awaiting_payment', now() + interval '1 hour',
     1000, 0, 0, 1000
+  ),
+  (
+    'c1000000-0000-0000-0000-000000000005', 'TS-PAY-SWEPT',
+    'c1000000-0000-4000-8000-000000000005', repeat('5', 64),
+    'Swept Payment', '0903000005', '{}'::jsonb,
+    'vnpay', 'expired', 'expired', now() - interval '1 hour',
+    1000, 0, 0, 1000
   );
 
 set local role service_role;
 
+-- Case 1 (cron race): still awaiting_payment but past expiry -> accept money.
 select is(
   order_mark_paid_by_gateway('TS-PAY-EXPIRED', 'VNP-EXPIRED', 100000)->>'code',
-  'ORDER_EXPIRED',
-  'late callback cannot pay an expired order'
+  'REOPENED',
+  'late callback on a not-yet-swept order is accepted'
 );
+select results_eq(
+  $$select payment_status, order_status from orders where order_code = 'TS-PAY-EXPIRED'$$,
+  $$values ('paid'::text, 'awaiting_payment'::text)$$,
+  'race-window reopen keeps the confirm flow and marks paid'
+);
+
+-- Case 2 (already swept): expired/expired order with late money -> confirmed.
 select is(
-  (select payment_status from orders where order_code = 'TS-PAY-EXPIRED'),
-  'pending',
-  'expired callback leaves payment pending'
+  order_mark_paid_by_gateway('TS-PAY-SWEPT', 'VNP-SWEPT', 100000)->>'code',
+  'REOPENED',
+  'late callback on a swept order reopens it'
+);
+select results_eq(
+  $$select payment_status, order_status, payment_ref from orders where order_code = 'TS-PAY-SWEPT'$$,
+  $$values ('paid'::text, 'confirmed'::text, 'VNP-SWEPT'::text)$$,
+  'swept reopen lands in confirmed for the ops queue'
 );
 
 select is(
