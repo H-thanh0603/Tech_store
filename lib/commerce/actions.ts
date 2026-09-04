@@ -12,6 +12,7 @@ import { isCommerceErrorCode, toUserMessage } from '@/lib/commerce/errors'
 import { getRateLimitIdentity } from '@/lib/commerce/request-identity'
 import type { ActionState, CommerceErrorCode } from '@/lib/commerce/types'
 import { cartItemSchema, checkoutSchema, couponCodeSchema, trackingSchema } from '@/lib/commerce/validation'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 interface RpcResult {
@@ -111,7 +112,7 @@ export async function applyCoupon(_: ActionState, formData: FormData): Promise<A
       'unknown'
     const cartHash = await getCartTokenHash()
     const identity = `${cartHash}:${ip}`
-    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: 'coupon_apply',
       p_identity: identity,
       p_limit: 10,

@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server'
 import { getAdminSession } from '@/lib/admin/auth'
 import { canAccessModule } from '@/lib/admin/permissions'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
-import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 // CSV export of admin audit logs. Same filters as the audit page. Guarded by
 // the admin session + reports module permission.
@@ -29,7 +28,7 @@ export async function GET(request: Request) {
 
   // Throttle export: 10 / hour per admin (heavy RPC, prevent abuse)
   try {
-    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: 'export_audit',
       p_identity: session.userId,
       p_limit: 10,

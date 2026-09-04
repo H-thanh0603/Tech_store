@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger'
-import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 export const runtime = 'nodejs'
 
@@ -19,8 +19,8 @@ export async function POST(request: Request) {
       request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
       'unknown'
     try {
-      const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
-        p_action: 'suggest',
+      const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
+        p_action: 'csp_report',
         p_identity: `csp:${ip}`,
         p_limit: 20,
         p_window_minutes: 1,

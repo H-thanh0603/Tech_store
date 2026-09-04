@@ -8,7 +8,7 @@ import { adminUserMessage } from '@/lib/admin/errors'
 import type { AdminActionState } from '@/lib/admin/types'
 import { adminAccountLoginSchema } from '@/lib/admin/validation'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
-import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 export async function adminLogin(
   _prev: AdminActionState,
@@ -35,7 +35,7 @@ export async function adminLogin(
       headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
       'unknown'
     const identity = `${parsed.data.email.toLowerCase()}:${ip}`
-    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: 'admin_login',
       p_identity: identity,
       p_limit: 20,

@@ -4,7 +4,7 @@
  * Fail-open: a limiter outage never breaks chat.
  */
 
-import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 export const SHOPPING_CHAT_LIMIT = 20
 export const MERCHANT_CHAT_LIMIT = 60
@@ -25,7 +25,7 @@ export async function isChatRateLimited(
   identity: string,
 ): Promise<boolean> {
   try {
-    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: action,
       p_identity: identity,
       p_limit: action === 'assistant_chat' ? SHOPPING_CHAT_LIMIT : MERCHANT_CHAT_LIMIT,

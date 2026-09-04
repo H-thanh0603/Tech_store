@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 export type AuthFormState = {
@@ -21,7 +21,7 @@ async function authRateLimited(
   email: string,
 ): Promise<boolean> {
   try {
-    const { data } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: action,
       p_identity: email,
       p_limit: 5,

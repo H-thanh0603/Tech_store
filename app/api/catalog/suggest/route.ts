@@ -2,7 +2,7 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import { getProducts } from '@/lib/catalog/queries'
-import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
       request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
       'unknown'
-    const { data: limited } = await getSupabaseServerClient().rpc('check_rate_limit', {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: 'suggest',
       p_identity: ip,
       p_limit: 30,
