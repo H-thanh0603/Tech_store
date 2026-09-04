@@ -69,7 +69,23 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">5. Cookie shop dùng</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">5. Trợ lý AI</h2>
+            <p className="mt-2">
+              Khung chat trợ lý trên website dùng mô hình AI của bên thứ ba (nhà cung cấp do shop
+              cấu hình) để hiểu câu hỏi và tra cứu catalog, chính sách, trạng thái đơn hàng.
+            </p>
+            <ul className="mt-2 list-disc pl-5">
+              <li>
+                Nội dung bạn nhập (kể cả mã đơn và số điện thoại khi tra cứu đơn) được gửi cho nhà
+                cung cấp AI để tạo câu trả lời — không nhập mật khẩu, mã OTP hay số thẻ vào khung chat.
+              </li>
+              <li>Shop không dùng nội dung chat để đào tạo mô hình và không lưu lịch sử chat của khách.</li>
+              <li>Đặt hàng và thanh toán luôn diễn ra trên website, trợ lý không thu tiền hộ.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">6. Cookie shop dùng</h2>
             <ul className="mt-2 list-disc pl-5">
               <li>
                 <code className="rounded bg-bg-secondary px-1 py-0.5 text-fg">techstore_cart</code> —
@@ -88,7 +104,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">6. Xem và xuất dữ liệu</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">7. Xem và xuất dữ liệu</h2>
             <p className="mt-2">
               Bạn có thể tải toàn bộ dữ liệu cá nhân shop đang lưu qua tính năng xuất dữ liệu tại{' '}
               <code className="rounded bg-bg-secondary px-1 py-0.5 text-fg">/api/account/export</code>{' '}
@@ -97,7 +113,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">7. Yêu cầu xóa dữ liệu</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">8. Yêu cầu xóa dữ liệu</h2>
             <p className="mt-2">
               Bạn có thể yêu cầu shop xóa dữ liệu cá nhân bất cứ lúc nào bằng cách liên hệ hỗ trợ.
               Shop sẽ xóa trong phạm vi pháp luật cho phép — một số dữ liệu giao dịch có thể phải
@@ -106,7 +122,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">8. Bảo mật hệ thống</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">9. Bảo mật hệ thống</h2>
             <p className="mt-2">
               Shop truyền dữ liệu qua HTTPS, giới hạn quyền truy cập dữ liệu theo vai trò và kiểm
               tra nhật ký hệ thống định kỳ. Không hệ thống nào an toàn 100%, nhưng shop xử lý sự cố
@@ -115,7 +131,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">9. Trẻ em</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">10. Trẻ em</h2>
             <p className="mt-2">
               Website không dành cho người dưới 15 tuổi. Đơn hàng của người chưa thành niên cần
               người lớn thực hiện hoặc xác nhận.
@@ -123,7 +139,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">10. Quyền riêng tư EU (GDPR)</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">11. Quyền riêng tư EU (GDPR)</h2>
             <p className="mt-2">
               Vì máy chủ có thể đặt tại EU, shop hỗ trợ quyền GDPR cơ bản: quyền truy cập (xuất dữ
               liệu), quyền xóa, quyền sửa dữ liệu. Gửi yêu cầu qua email hỗ trợ, shop phản hồi trong
@@ -132,7 +148,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">11. Thay đổi chính sách</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">12. Thay đổi chính sách</h2>
             <p className="mt-2">
               Nếu shop thay đổi cách xử lý dữ liệu, chính sách này sẽ được cập nhật trên trang này.
               Thay đổi lớn shop sẽ thông báo qua email nếu bạn có tài khoản.
@@ -140,7 +156,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-(length:--text-lg) font-semibold text-fg">12. Liên hệ</h2>
+            <h2 className="text-(length:--text-lg) font-semibold text-fg">13. Liên hệ</h2>
             <p className="mt-2">
               Câu hỏi về dữ liệu cá nhân? Liên hệ bộ phận hỗ trợ của shop hoặc xem{' '}
               <Link href="/terms" className="font-medium text-brand hover:underline">
