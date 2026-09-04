@@ -196,13 +196,16 @@ export function mapCatalogRowToCard(row: CatalogRow): ProductCardData {
   }
 }
 
-function mapVariant(row: VariantRow): ProductVariantData {
+function mapVariant(row: VariantRow, availability?: Map<string, number>): ProductVariantData {
   const regularPrice = toNumber(row.regular_price)
   const salePrice = row.sale_price === null ? null : toNumber(row.sale_price)
   const price = salePrice ?? regularPrice
-  const availableStock = row.inventory
-    ? Math.max(row.inventory.quantity - row.inventory.reserved_quantity, 0)
-    : 0
+  // Reservation-aware stock comes from the product_variant_availability RPC
+  // (DB-050: raw inventory rows are no longer anon-readable). The embedded
+  // inventory fallback stays until the revoke migration lands.
+  const availableStock =
+    availability?.get(row.id) ??
+    (row.inventory ? Math.max(row.inventory.quantity - row.inventory.reserved_quantity, 0) : 0)
   return {
     id: row.id,
     sku: row.sku,
@@ -218,10 +221,13 @@ function mapVariant(row: VariantRow): ProductVariantData {
 
 // Pure detail row → DTO mapper. Only active variants surface, images/specs are
 // sorted, and product-level price/stock are derived from the active variants.
-export function mapProductDetail(row: DetailRow): ProductDetail {
+// availability maps variant id → reservation-aware stock from the
+// product_variant_availability RPC; without it the mapper falls back to the
+// embedded inventory rows.
+export function mapProductDetail(row: DetailRow, availability?: Map<string, number>): ProductDetail {
   const variants = (row.product_variants ?? [])
     .filter((v) => v.is_active)
-    .map(mapVariant)
+    .map((v) => mapVariant(v, availability))
 
   const images: ProductImageData[] = (row.product_images ?? [])
     .slice()
@@ -270,7 +276,7 @@ const DETAIL_SELECT = `
   product_images ( url, alt_text, sort_order ),
   product_specs ( group_name, label, value, sort_order ),
   product_use_cases ( use_case ),
-  product_variants ( id, sku, attributes, regular_price, sale_price, is_active, inventory ( quantity, reserved_quantity ) )
+  product_variants ( id, sku, attributes, regular_price, sale_price, is_active )
 `
 
 export async function getProducts(
@@ -366,7 +372,27 @@ export async function getProductBySlug(
     return null
   }
 
-  return mapProductDetail(data as unknown as DetailRow)
+  const detail = data as unknown as DetailRow
+  // Reservation-aware per-variant stock via definer RPC (DB-050). Falls back
+  // to the embedded inventory rows when the RPC is unavailable (pre-migration).
+  let availability: Map<string, number> | undefined
+  try {
+    const { data: rows, error: availabilityError } = await supabase.rpc(
+      'product_variant_availability',
+      { p_product_id: detail.id },
+    )
+    if (!availabilityError && Array.isArray(rows)) {
+      availability = new Map(
+        (rows as Array<{ variant_id: string; available_stock: number | string | null }>).map(
+          (r) => [r.variant_id, Math.max(toNumber(r.available_stock), 0)],
+        ),
+      )
+    }
+  } catch {
+    // pre-migration: mapper falls back to embedded inventory rows
+  }
+
+  return mapProductDetail(detail, availability)
 }
 
 export async function getRecommendedProducts(

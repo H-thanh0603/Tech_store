@@ -154,6 +154,37 @@ describe('mapProductDetail', () => {
     expect(detail.brandName).toBe('Apple')
     expect(detail.categorySlug).toBe('laptop')
   })
+
+  it('prefers RPC availability over embedded inventory rows (DB-050)', () => {
+    const row = {
+      id: 'p1',
+      name: 'MacBook',
+      slug: 'macbook',
+      description: 'desc',
+      category_id: 'cat1',
+      is_featured: false,
+      categories: null,
+      brands: null,
+      product_images: [],
+      product_specs: [],
+      product_use_cases: [],
+      product_variants: [
+        {
+          id: 'v1',
+          sku: 'SKU-1',
+          attributes: null,
+          regular_price: 1000,
+          sale_price: null,
+          is_active: true,
+          inventory: { quantity: 10, reserved_quantity: 2 },
+        },
+      ],
+    }
+    // Without the map, embedded rows are used (pre-migration fallback).
+    expect(mapProductDetail(row).variants[0].availableStock).toBe(8)
+    // With the map, the reservation-aware RPC value wins.
+    expect(mapProductDetail(row, new Map([['v1', 3]])).variants[0].availableStock).toBe(3)
+  })
 })
 
 // Minimal thenable query-builder mock: every chained method returns `this`,

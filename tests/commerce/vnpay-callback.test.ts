@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const rpc = vi.fn(async () => ({ data: { code: 'OK' }, error: null }))
+const rpc = vi.fn(
+  async (): Promise<{ data: Record<string, unknown> | null; error: unknown }> => ({
+    data: { code: 'OK' },
+    error: null,
+  }),
+)
 const auditInsert = vi.fn(async () => ({ error: null }))
 
 vi.mock('@/lib/admin/supabase', () => ({

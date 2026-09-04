@@ -12,7 +12,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(28);
 
 -- Table existence
 
@@ -85,18 +85,9 @@ select results_eq(
   'Anonymous role sees only active variants of published products'
 );
 
-select results_eq(
-  $$select id from inventory
-    where id in (
-      '50000000-0000-0000-0000-000000000001',
-      '50000000-0000-0000-0000-000000000005',
-      '50000000-0000-0000-0000-000000000009',
-      '91000000-0000-0000-0000-000000000002'
-    )
-    order by id$$,
-  ARRAY['50000000-0000-0000-0000-000000000001'::uuid],
-  'Anonymous role sees only inventory for visible variants'
-);
+-- DB-050: raw inventory rows are no longer browser-readable at all (the
+-- SELECT itself is denied, so results_eq cannot run here). Privilege + RPC
+-- coverage lives in variant_availability.sql.
 
 select results_eq(
   $$select id from product_images
