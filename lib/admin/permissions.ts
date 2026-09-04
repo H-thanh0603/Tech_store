@@ -19,6 +19,7 @@ export type AdminModule =
   | 'content'
   | 'reports'
   | 'settings'
+  | 'assistant'
 
 export type AdminPermission =
   | 'staff.manage'
@@ -42,6 +43,7 @@ const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
     'content',
     'reports',
     'settings',
+    'assistant',
   ],
   manager: [
     'dashboard',
@@ -53,6 +55,7 @@ const ROLE_MODULES: Record<AdminRole, readonly AdminModule[]> = {
     'coupons',
     'content',
     'reports',
+    'assistant',
   ],
   staff: ['dashboard', 'inventory', 'orders'],
 }

@@ -1,0 +1,275 @@
+'use client'
+
+import { useRef, useState } from 'react'
+
+interface StagedItem {
+  productId: string
+  name: string
+  before: string
+  after: string
+}
+
+interface SignedChange {
+  change: {
+    id: string
+    kind: 'publish' | 'price' | 'stock'
+    summary: string
+    note: string | null
+    action: unknown
+    items: StagedItem[]
+    createdAt: string
+  }
+  signature: string
+}
+
+interface Entry {
+  role: 'user' | 'assistant'
+  content: string
+  suggestions?: string[]
+}
+
+interface PendingCard extends SignedChange {
+  status: 'staged' | 'applying' | 'applied' | 'failed' | 'dropped'
+  result?: string
+}
+
+const HELLO: Entry = {
+  role: 'assistant',
+  content:
+    'Chào bạn, mình là trợ lý vận hành. Hỏi mình về doanh thu, tồn kho, đơn chờ xử lý — hoặc nhờ stage thay đổi giá/xuất bản/nhập hàng.',
+  suggestions: ['Doanh thu 7 ngày qua?', 'Hàng nào sắp hết?', 'Đơn nào đang chờ xử lý?'],
+}
+
+async function postChat(messages: { role: string; content: string }[]) {
+  const res = await fetch('/api/v1/assistant/merchant/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: messages.slice(-10) }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json()) as {
+    reply: string
+    staged: SignedChange[]
+    suggestions: string[]
+  }
+}
+
+async function postApprove(signed: SignedChange) {
+  const res = await fetch('/api/v1/assistant/merchant/approve', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(signed),
+  })
+  const data = (await res.json()) as { ok: boolean; message: string }
+  if (!res.ok && !data.message) throw new Error(`HTTP ${res.status}`)
+  return data
+}
+
+export function MerchantAssistant() {
+  const [entries, setEntries] = useState<Entry[]>([HELLO])
+  const [cards, setCards] = useState<PendingCard[]>([])
+  const [draft, setDraft] = useState('')
+  const [pending, setPending] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  function scrollDown() {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
+    })
+  }
+
+  async function send(text: string) {
+    const clean = text.trim().slice(0, 1000)
+    if (!clean || pending) return
+    setDraft('')
+    setFailed(false)
+    const next = [...entries, { role: 'user', content: clean } as Entry]
+    setEntries(next)
+    setPending(true)
+    try {
+      const data = await postChat(next.map((e) => ({ role: e.role, content: e.content })))
+      setEntries([
+        ...next,
+        { role: 'assistant', content: data.reply, suggestions: data.suggestions },
+      ])
+      if (data.staged.length > 0) {
+        setCards((prev) => [
+          ...prev,
+          ...data.staged.map((s) => ({ ...s, status: 'staged' as const })),
+        ])
+      }
+    } catch {
+      setFailed(true)
+    } finally {
+      setPending(false)
+      scrollDown()
+    }
+  }
+
+  async function approve(id: string) {
+    const card = cards.find((c) => c.change.id === id)
+    if (!card || card.status !== 'staged') return
+    setCards((prev) => prev.map((c) => (c.change.id === id ? { ...c, status: 'applying' as const } : c)))
+    try {
+      const result = await postApprove({ change: card.change, signature: card.signature })
+      setCards((prev) =>
+        prev.map((c) =>
+          c.change.id === id
+            ? { ...c, status: result.ok ? ('applied' as const) : ('failed' as const), result: result.message }
+            : c,
+        ),
+      )
+    } catch {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.change.id === id ? { ...c, status: 'failed' as const, result: 'Lỗi mạng khi áp dụng.' } : c,
+        ),
+      )
+    }
+  }
+
+  function drop(id: string) {
+    setCards((prev) => prev.map((c) => (c.change.id === id ? { ...c, status: 'dropped' as const } : c)))
+  }
+
+  const visibleCards = cards.filter((c) => c.status !== 'dropped')
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_24rem]">
+      <section
+        aria-label="Chat trợ lý vận hành"
+        className="flex h-[min(640px,72vh)] flex-col overflow-hidden rounded-(--radius-lg) border border-border bg-bg-primary"
+      >
+        <div ref={listRef} className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+          {entries.map((entry, i) => (
+            <div key={i} className={entry.role === 'user' ? 'self-end' : 'self-start'}>
+              <div
+                className={
+                  entry.role === 'user'
+                    ? 'max-w-96 rounded-(--radius-md) bg-brand px-3 py-2 text-(length:--text-sm) text-accent-fg'
+                    : 'max-w-96 rounded-(--radius-md) bg-surface-muted px-3 py-2 text-(length:--text-sm) text-fg'
+                }
+              >
+                {entry.content}
+              </div>
+              {entry.suggestions && entry.suggestions.length > 0 ? (
+                <div className="mt-2 flex max-w-96 flex-wrap gap-1.5">
+                  {entry.suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => void send(s)}
+                      className="rounded-full border border-brand/40 px-2.5 py-1 text-(length:--text-xs) font-medium text-brand hover:bg-brand/10"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {pending ? (
+            <p className="text-(length:--text-xs) text-fg-muted" role="status">Trợ lý đang trả lời…</p>
+          ) : null}
+          {failed ? (
+            <p className="text-(length:--text-xs) text-danger" role="alert">
+              Không gửi được. Thử lại nhé.
+            </p>
+          ) : null}
+        </div>
+        <form
+          className="flex gap-2 border-t border-border p-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void send(draft)
+          }}
+        >
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Hỏi doanh thu, tồn kho, đơn chờ… hoặc nhờ stage thay đổi"
+            maxLength={1000}
+            aria-label="Nhắn cho trợ lý vận hành"
+            className="min-h-10 flex-1 rounded-(--radius-md) border border-border bg-bg-elevated px-3 text-(length:--text-sm) text-fg"
+          />
+          <button
+            type="submit"
+            disabled={pending || !draft.trim()}
+            className="rounded-(--radius-md) bg-brand px-4 text-(length:--text-sm) font-semibold text-accent-fg disabled:opacity-50"
+          >
+            Gửi
+          </button>
+        </form>
+      </section>
+
+      <aside aria-label="Change chờ duyệt" className="flex flex-col gap-3">
+        <h2 className="text-(length:--text-sm) font-semibold text-fg">
+          Change chờ duyệt ({visibleCards.filter((c) => c.status === 'staged').length})
+        </h2>
+        {visibleCards.length === 0 ? (
+          <p className="rounded-(--radius-md) border border-dashed border-border p-4 text-(length:--text-xs) text-fg-muted">
+            Chưa có change nào. Nhờ trợ lý stage thay đổi (ví dụ: “giảm giá 10% 3 laptop bán chậm nhất”),
+            thẻ preview kèm nút Duyệt sẽ hiện ở đây. Model không bao giờ tự áp dụng.
+          </p>
+        ) : null}
+        {visibleCards.map((card) => (
+          <div
+            key={card.change.id}
+            className="rounded-(--radius-lg) border border-border bg-bg-primary p-3"
+          >
+            <p className="text-(length:--text-xs) font-semibold text-fg">{card.change.summary}</p>
+            {card.change.note ? (
+              <p className="mt-1 text-(length:--text-xs) text-fg-muted">Ghi chú: {card.change.note}</p>
+            ) : null}
+            <ul className="mt-2 flex flex-col gap-1">
+              {card.change.items.slice(0, 10).map((item) => (
+                <li key={item.productId} className="text-(length:--text-xs) text-fg-muted">
+                  <span className="font-medium text-fg">{item.name}</span>
+                  <br />
+                  {item.before} → {item.after}
+                </li>
+              ))}
+              {card.change.items.length > 10 ? (
+                <li className="text-(length:--text-xs) text-fg-muted">
+                  …và {card.change.items.length - 10} dòng nữa
+                </li>
+              ) : null}
+            </ul>
+            {card.status === 'staged' ? (
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void approve(card.change.id)}
+                  className="rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
+                >
+                  Duyệt & áp dụng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => drop(card.change.id)}
+                  className="rounded-(--radius-md) border border-border px-3 py-1.5 text-(length:--text-xs) font-medium text-fg-muted hover:bg-surface-muted"
+                >
+                  Bỏ
+                </button>
+              </div>
+            ) : null}
+            {card.status === 'applying' ? (
+              <p className="mt-2 text-(length:--text-xs) text-fg-muted" role="status">Đang áp dụng…</p>
+            ) : null}
+            {card.status === 'applied' ? (
+              <p className="mt-2 text-(length:--text-xs) font-medium text-success" role="status">
+                Đã áp dụng{card.result ? `: ${card.result}` : '.'}
+              </p>
+            ) : null}
+            {card.status === 'failed' ? (
+              <p className="mt-2 text-(length:--text-xs) font-medium text-danger" role="alert">
+                {card.result ?? 'Áp dụng thất bại.'}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </aside>
+    </div>
+  )
+}

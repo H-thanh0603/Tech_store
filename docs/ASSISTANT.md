@@ -44,6 +44,41 @@ tool contracts, fencing và grounding giữ nguyên.
 - **Trung thực catalog**: cấm bịa review, số đã bán, khan hiếm giả — cùng triết lý
   với spec TechStore (§ homepage sections).
 
+---
+
+# Merchant Assistant (pilot)
+
+Port of the merchant agent (propose → preview → approve → apply). Staff-only,
+MFA-verified, trong `/admin/assistant` (module `assistant`: role admin/manager).
+
+## Scope (pilot)
+
+| ON | OFF |
+|---|---|
+| `get_business_snapshot` — doanh thu/đơn 7 ngày, chờ xử lý, sắp hết, nháp | Campaigns — tư vấn lời, không stage |
+| `get_inventory_alerts`, `get_order_issues` | SQL analysis delegate |
+| `search_listings`, `get_listing`, `get_pricing_context` | Memory extraction, streaming |
+| `stage_*` — publish/draft/archive, giá %/tắt sale, đặt tồn | apply/discard cho model (không có tool) |
+
+## Staged-write contract
+
+1. Model chỉ được gọi `stage_*` với id đã đọc trong cuộc trò chuyện; kết quả là
+   **signed envelope** (HMAC-SHA256, `ASSISTANT_STAGING_SECRET`) trả về UI.
+2. Người vận hành bấm **Duyệt & áp dụng** trên thẻ preview
+   (`POST /api/v1/assistant/merchant/approve`, yêu cầu module `products`).
+3. Server verify chữ ký → đọc lại LIVE state → check guardrails lần nữa
+   (giá có thể đã đổi từ lúc stage) → chạy Server Action có sẵn
+   (`bulkUpdateProducts`/`bulkAdjustPrice`/`bulkSetStock`, kèm audit log).
+4. Guardrails (`lib/assistant/merchant/guardrails.ts`): tối đa 10 items/change,
+   giá ±20%/change, tồn 0–1.000.000 và restock ≤ 1000/change, không target trùng,
+   bỏ change (drop) là xóa ở UI — server không lưu state.
+
+## Setup thêm
+
+- `ASSISTANT_STAGING_SECRET=` vào `.env.local` (production bắt buộc; dev fallback
+  kèm cảnh báo — approve vẫn yêu cầu staff session + re-validate nên fallback chỉ
+  chống sửa lén envelope, không phải biên an toàn chính).
+
 ## Mở rộng
 
 - Thêm passage chính sách: sửa `lib/assistant/policies.ts` + giữ trang nguồn đồng bộ.
