@@ -135,13 +135,17 @@ export const getCatalogFacets = unstable_cache(fetchCatalogFacets, ['catalog-fac
 })
 
 // Normalizes untrusted filter input to safe, concrete values. Page is clamped
-// to a positive integer, price bounds drop non-finite/negative values, and an
-// unknown sort falls back to 'relevance'. Pure: no DB access, easy to test.
+// to 1..MAX_PAGE (deep OFFSET pages cost DB linearly and no real shopper walks
+// past 1200 products by pager; use search/filters instead), price bounds drop
+// non-finite/negative values, and an unknown sort falls back to 'relevance'.
+// Pure: no DB access, easy to test.
+export const MAX_CATALOG_PAGE = 100
+
 export function normalizeCatalogFilters(filters: CatalogFilters): NormalizedCatalogFilters {
   const rawPage = filters.page
   const page =
     typeof rawPage === 'number' && Number.isFinite(rawPage) && rawPage >= 1
-      ? Math.floor(rawPage)
+      ? Math.min(Math.floor(rawPage), MAX_CATALOG_PAGE)
       : 1
 
   const normalizePrice = (value: number | undefined): number | undefined =>

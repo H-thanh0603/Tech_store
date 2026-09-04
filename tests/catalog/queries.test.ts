@@ -21,6 +21,13 @@ describe('normalizeCatalogFilters', () => {
     expect(normalizeCatalogFilters({ page: Number.NaN }).page).toBe(1)
   })
 
+  it('clamps deep pages to MAX_CATALOG_PAGE (deep OFFSET costs DB linearly)', () => {
+    expect(normalizeCatalogFilters({ page: 9999 }).page).toBe(100)
+    expect(normalizeCatalogFilters({ page: 101 }).page).toBe(100)
+    expect(normalizeCatalogFilters({ page: 100 }).page).toBe(100)
+    expect(normalizeCatalogFilters({ page: 99 }).page).toBe(99)
+  })
+
   it('falls back to relevance for an unknown sort', () => {
     expect(normalizeCatalogFilters({ sort: 'bogus' as never }).sort).toBe('relevance')
     expect(normalizeCatalogFilters({ sort: 'price-asc' }).sort).toBe('price-asc')
