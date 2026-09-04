@@ -354,6 +354,13 @@ export async function adjustInventory(
     return fail(code, undefined, result?.message)
   }
 
+  await writeCatalogAudit(
+    'inventory_adjust',
+    'inventory',
+    parsed.data.variantId,
+    { delta, reasonCode: parsed.data.reasonCode, note: parsed.data.note || null },
+    admin,
+  )
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã điều chỉnh tồn kho.' }
 }
@@ -377,6 +384,13 @@ export async function updateInventoryThreshold(
     .eq('variant_id', parsed.data.variantId)
   if (error) return fail('INTERNAL_ERROR')
 
+  await writeCatalogAudit(
+    'inventory_threshold',
+    'inventory',
+    parsed.data.variantId,
+    { lowStockThreshold: parsed.data.lowStockThreshold },
+    admin,
+  )
   revalidateCatalogAdmin()
   return { ok: true, message: 'Đã cập nhật ngưỡng cảnh báo.' }
 }
