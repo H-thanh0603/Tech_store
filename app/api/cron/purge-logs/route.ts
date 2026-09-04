@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { isCronAuthorized } from '@/lib/cron'
+import { isCronAuthorized, reportCronError } from '@/lib/cron'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
@@ -15,6 +15,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await getSupabaseAdminClient().rpc('purge_expired_logs')
   if (error) {
+    reportCronError('purge-logs', error)
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
   }
   return NextResponse.json({ ok: true, ...(data as object) })

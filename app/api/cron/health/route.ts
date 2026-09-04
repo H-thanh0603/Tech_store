@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
-import { isCronAuthorized } from '@/lib/cron'
+import { isCronAuthorized, reportCronError } from '@/lib/cron'
 import { processPendingNotifications } from '@/lib/commerce/notify'
 
 interface RouteResult {
@@ -96,6 +96,7 @@ async function runWithTiming(
     const detail = await run()
     return { route, ok: true, detail }
   } catch (err) {
+    reportCronError(route, err)
     return {
       route,
       ok: false,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { isCronAuthorized } from '@/lib/cron'
+import { isCronAuthorized, reportCronError } from '@/lib/cron'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 
@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     'queue_abandoned_cart_emails',
   )
   if (error) {
+    reportCronError('abandoned-carts', error)
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
   }
   return NextResponse.json({ ok: true, ...(data as object) })
