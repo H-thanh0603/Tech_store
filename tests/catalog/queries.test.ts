@@ -51,6 +51,13 @@ describe('normalizeCatalogFilters', () => {
     expect(result.category).toBeUndefined()
   })
 
+  it('truncates overlong queries to MAX_CATALOG_QUERY_LENGTH', () => {
+    const long = 'điện thoại '.repeat(30)
+    const result = normalizeCatalogFilters({ query: long })
+    expect(result.query?.length).toBeLessThanOrEqual(120)
+    expect(normalizeCatalogFilters({ query: 'điện thoại' }).query).toBe('điện thoại')
+  })
+
   it('defaults inStock to false unless explicitly true', () => {
     expect(normalizeCatalogFilters({}).inStock).toBe(false)
     expect(normalizeCatalogFilters({ inStock: true }).inStock).toBe(true)

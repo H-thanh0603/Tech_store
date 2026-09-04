@@ -140,6 +140,7 @@ export const getCatalogFacets = unstable_cache(fetchCatalogFacets, ['catalog-fac
 // non-finite/negative values, and an unknown sort falls back to 'relevance'.
 // Pure: no DB access, easy to test.
 export const MAX_CATALOG_PAGE = 100
+export const MAX_CATALOG_QUERY_LENGTH = 120
 
 export function normalizeCatalogFilters(filters: CatalogFilters): NormalizedCatalogFilters {
   const rawPage = filters.page
@@ -158,7 +159,10 @@ export function normalizeCatalogFilters(filters: CatalogFilters): NormalizedCata
     ;[minPrice, maxPrice] = [maxPrice, minPrice]
   }
 
-  const query = filters.query?.trim()
+  const rawQuery = filters.query?.trim() ?? ''
+  // Bound query length: FTS cost grows with input size and no real shopper
+  // types more than a sentence; overlong input is truncated, not rejected.
+  const query = rawQuery ? rawQuery.slice(0, MAX_CATALOG_QUERY_LENGTH) : undefined
 
   return {
     query: query ? query : undefined,
