@@ -5,8 +5,8 @@ import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
 
 const rpc = vi.fn()
 
-vi.mock('@/lib/supabase/server', () => ({
-  getSupabaseServerClient: () => ({ rpc }),
+vi.mock('@/lib/admin/supabase', () => ({
+  getSupabaseAdminClient: () => ({ rpc }),
 }))
 
 vi.mock('@/lib/assistant/agent', () => ({
