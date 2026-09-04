@@ -4,7 +4,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(7);
+select plan(10);
 
 -- Fixtures: one completed order with a single item, stock reserved=0.
 insert into products (id, category_id, brand_id, name, slug, description, is_published, is_archived)
@@ -101,6 +101,49 @@ select is(
    where variant_id = 'c0000000-0000-0000-0000-000000000011' and reason_code = 'returned')::text,
   '1',
   'inventory adjustment logged'
+);
+
+-- 7) DB-014: rejecting a return from a shipping order restores shipping.
+insert into orders (
+  id, order_code, idempotency_key, access_token_hash,
+  customer_name, customer_phone, address_snapshot,
+  payment_method, payment_status, order_status,
+  subtotal, total
+) values (
+  'c0000000-0000-0000-0000-000000000003',
+  'RET-ORDER-2',
+  gen_random_uuid(),
+  repeat('b', 64),
+  'Return Tester', '0901234567', '{}'::jsonb,
+  'cod', 'paid', 'shipping',
+  2000, 2000
+) on conflict (id) do nothing;
+
+select is(
+  (
+    select (request_order_return(
+      'RET-ORDER-2', repeat('b', 64), '0901234567', 'changed_mind'
+    ))->>'code'
+  ),
+  'OK',
+  'return request from a shipping order succeeds'
+);
+
+select is(
+  (
+    select (admin_decide_return(
+      (select id from order_returns where order_id = 'c0000000-0000-0000-0000-000000000003'),
+      false, 'not eligible', null, 'tap'
+    ))->>'code'
+  ),
+  'OK',
+  'admin reject succeeds'
+);
+
+select is(
+  (select order_status from orders where order_code = 'RET-ORDER-2'),
+  'shipping',
+  'rejected return restores shipping instead of forcing completed'
 );
 
 select finish();
