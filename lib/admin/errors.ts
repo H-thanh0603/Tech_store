@@ -21,6 +21,7 @@ const MESSAGES: Record<string, string> = {
   MFA_NOT_ENROLLED: 'Tài khoản chưa đăng ký MFA.',
   MFA_RESET_PARTIAL: 'MFA đã được xóa nhưng không thể ghi đủ audit. Kiểm tra log hệ thống.',
   CONFIGURATION_ERROR: 'Thiếu cấu hình server admin.',
+  RATE_LIMITED: 'Thử quá nhiều lần. Vui lòng thử lại sau 15 phút.',
   INTERNAL_ERROR: 'Có lỗi hệ thống. Thử lại sau.',
 }
 

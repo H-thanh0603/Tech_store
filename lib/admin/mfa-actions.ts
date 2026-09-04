@@ -32,6 +32,23 @@ async function writeMfaAudit(action: string, actor: AdminAuthState, payload: Rec
   })
 }
 
+// TOTP codes are 6 digits: without a limit, enrollment/challenge verify is a
+// brute-force oracle. 10 attempts / 15 min per staff account (SEC-003).
+// Fail-open so a limiter outage never locks staff out of admin.
+async function mfaVerifyLimited(userId: string): Promise<boolean> {
+  try {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
+      p_action: 'admin_mfa',
+      p_identity: userId,
+      p_limit: 10,
+      p_window_minutes: 15,
+    })
+    return limited === true
+  } catch {
+    return false
+  }
+}
+
 export async function beginAdminMfaEnrollment(
   _prev: AdminActionState<AdminMfaEnrollment>,
   _formData: FormData,
@@ -82,6 +99,8 @@ export async function verifyAdminMfaEnrollment(
   )
   if (listed.error || !ownedFactor) return fail('MFA_STATE_CHANGED')
 
+  if (await mfaVerifyLimited(actor.userId)) return fail('RATE_LIMITED')
+
   const { error } = await supabase.auth.mfa.challengeAndVerify(parsed.data)
   if (error) return fail('MFA_CODE_INVALID', { code: [adminUserMessage('MFA_CODE_INVALID')] })
 
@@ -103,6 +122,8 @@ export async function verifyAdminMfaChallenge(
   const listed = await supabase.auth.mfa.listFactors()
   const factor = listed.data?.totp[0]
   if (listed.error || !factor) return fail('MFA_NOT_ENROLLED')
+
+  if (await mfaVerifyLimited(actor.userId)) return fail('RATE_LIMITED')
 
   const { error } = await supabase.auth.mfa.challengeAndVerify({
     factorId: factor.id,
