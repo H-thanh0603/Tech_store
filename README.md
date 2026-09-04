@@ -72,3 +72,4 @@ npm run lint && npm run type-check && npm test -- --run && supabase db reset && 
 
 - Blueprint: `docs/Claude_Code_TechStore_Blueprint.md`
 - Specs/plans: `docs/superpowers/`
+- AI assistants (shopping + merchant pilots): `docs/ASSISTANT.md`

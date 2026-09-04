@@ -79,6 +79,27 @@ MFA-verified, trong `/admin/assistant` (module `assistant`: role admin/manager).
   kèm cảnh báo — approve vẫn yêu cầu staff session + re-validate nên fallback chỉ
   chống sửa lén envelope, không phải biên an toàn chính).
 
+## Streaming
+
+Cả 2 chat endpoint nhận `"stream": true` → SSE (`text` deltas + `result` cuối).
+Vòng lặp chung `lib/assistant/stream.ts` (Anthropic native stream, DeepSeek SSE
++ ráp tool_calls); khi provider không có stream sẽ fallback 1 `create()` mỗi vòng.
+Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
+
+---
+
+# Production checklist (trước khi mở assistant cho người thật)
+
+| # | Việc | Ở đâu |
+|---|---|---|
+| 1 | `ASSISTANT_PROVIDER` + key tương ứng (`ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`) vào Vercel env (Production), **không** commit | Vercel → Settings → Environment Variables |
+| 2 | `ASSISTANT_STAGING_SECRET` random ≥ 32 ký tự vào Vercel env; thiếu → staging từ chối ở production | Vercel env |
+| 3 | Áp migration `202609010005_assistant_staged_changes.sql` lên DB production (`supabase db push`) + chạy pgTAP `assistant_staged_changes.sql` | Supabase |
+| 4 | Đặt trần chi tiêu + cảnh báo trên dashboard nhà cung cấp model (Anthropic Console / DeepSeek Platform) — endpoint công khai đã rate-limit 20 turns/15'/IP nhưng trần billing là chốt cuối | Provider dashboard |
+| 5 | Xoay key ngay nếu từng paste vào chat/log; key cũ revoke trên dashboard | Provider dashboard |
+| 6 | Kiểm tra CSP: chat chỉ gọi `same-origin` (`/api/v1/assistant/*`) — đã nằm trong `connect-src 'self'`, không cần sửa | `proxy.ts` |
+| 7 | Smoke test production: chat thử 1 câu catalog + merchant stage 1 change lên staging (chưa Duyệt), rồi discard | Browser |
+
 ## Mở rộng
 
 - Thêm passage chính sách: sửa `lib/assistant/policies.ts` + giữ trang nguồn đồng bộ.

@@ -60,6 +60,13 @@ vi.mock('@/lib/assistant/merchant/backend', () => ({
   }),
 }))
 
+vi.mock('@/lib/assistant/merchant/ledger', () => ({
+  recordStaged: vi.fn(async () => {}),
+  listPendingStaged: vi.fn(async () => []),
+  getStagedById: vi.fn(async () => null),
+  markStagedDecided: vi.fn(async () => {}),
+}))
+
 describe('merchant tool dispatcher', () => {
   it('reports the business snapshot', async () => {
     const ctx = createMerchantContext()

@@ -11,6 +11,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
+import { streamTurn, type StreamEvent } from './stream'
 import {
   createDispatchContext,
   buildAnthropicTools,
@@ -53,16 +54,23 @@ interface MinimalMessage {
   stop_reason: string | null
 }
 
+export type ProviderStreamEvent =
+  | { type: 'text_delta'; text: string }
+  | { type: 'message'; content: MinimalBlock[]; stop_reason: string | null }
+
+export interface StreamParams {
+  model: string
+  max_tokens: number
+  system: string
+  tools: Anthropic.Tool[]
+  tool_choice: Anthropic.ToolChoice
+  messages: Anthropic.MessageParam[]
+}
+
 export interface MessagesClient {
   messages: {
-    create(params: {
-      model: string
-      max_tokens: number
-      system: string
-      tools: Anthropic.Tool[]
-      tool_choice: Anthropic.ToolChoice
-      messages: Anthropic.MessageParam[]
-    }): Promise<MinimalMessage>
+    create(params: StreamParams): Promise<MinimalMessage>
+    stream?(params: StreamParams): AsyncGenerator<ProviderStreamEvent>
   }
 }
 
@@ -177,4 +185,49 @@ export async function runAssistantTurn(
     cards: ctx.cards.slice(0, 6),
     suggestions: ctx.suggestions,
   }
+}
+
+export type ShoppingStreamEvent = StreamEvent<TurnResult>
+
+/**
+ * Streaming variant of runAssistantTurn. Same grounding, tools and caps;
+ * yields text deltas then one result. Falls back to a single create() call
+ * per round when the provider has no stream() implementation.
+ */
+export async function* streamAssistantTurn(
+  history: ChatMessage[],
+  deps?: { client?: MessagesClient; now?: Date },
+): AsyncGenerator<ShoppingStreamEvent> {
+  const client = deps?.client ?? createRealClient()
+  if (!client) {
+    yield { type: 'result', result: { reply: DISABLED_REPLY, cards: [], suggestions: [], disabled: true } }
+    return
+  }
+
+  const config = assistantConfig
+  const ctx: DispatchContext = createDispatchContext()
+  const userText = lastUserText(history)
+  const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {
+    orderHint: config.enableOrders && wantsOrderGrounding(userText),
+  })}`
+
+  yield* streamTurn<TurnResult>(client, {
+    model: config.model,
+    maxTokens: config.maxTokens,
+    maxIterations: config.maxToolIterations,
+    system,
+    tools: buildAnthropicTools(),
+    messages: toAnthropicHistory(history),
+    forcedTool:
+      config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null,
+    dispatch: (name, input) => dispatchTool(ctx, name, input),
+    shouldEnd: () => ctx.endTurn,
+    fallbackReply:
+      'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
+    finish: (reply) => ({
+      reply,
+      cards: ctx.cards.slice(0, 6),
+      suggestions: ctx.suggestions,
+    }),
+  })
 }

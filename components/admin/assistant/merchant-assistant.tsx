@@ -1,6 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+import { readChatStream } from '@/lib/assistant/sse'
 
 interface StagedItem {
   productId: string
@@ -9,13 +11,12 @@ interface StagedItem {
   after: string
 }
 
-interface SignedChange {
+interface StagedEnvelope {
   change: {
     id: string
     kind: 'publish' | 'price' | 'stock'
     summary: string
     note: string | null
-    action: unknown
     items: StagedItem[]
     createdAt: string
   }
@@ -28,7 +29,13 @@ interface Entry {
   suggestions?: string[]
 }
 
-interface PendingCard extends SignedChange {
+interface PendingCard {
+  changeId: string
+  kind: 'publish' | 'price' | 'stock'
+  summary: string
+  note: string | null
+  items: StagedItem[]
+  createdAt: string
   status: 'staged' | 'applying' | 'applied' | 'failed' | 'dropped'
   result?: string
 }
@@ -40,29 +47,38 @@ const HELLO: Entry = {
   suggestions: ['Doanh thu 7 ngày qua?', 'Hàng nào sắp hết?', 'Đơn nào đang chờ xử lý?'],
 }
 
-async function postChat(messages: { role: string; content: string }[]) {
+async function postChat(
+  messages: { role: string; content: string }[],
+  onText: (delta: string) => void,
+) {
   const res = await fetch('/api/v1/assistant/merchant/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ messages: messages.slice(-10) }),
+    body: JSON.stringify({ messages: messages.slice(-10), stream: true }),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as {
+  return readChatStream<{
     reply: string
-    staged: SignedChange[]
+    staged: StagedEnvelope[]
     suggestions: string[]
-  }
+  }>(res, onText)
 }
 
-async function postApprove(signed: SignedChange) {
+async function postDecision(changeId: string, decision: 'apply' | 'discard') {
   const res = await fetch('/api/v1/assistant/merchant/approve', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(signed),
+    body: JSON.stringify({ changeId, decision }),
   })
   const data = (await res.json()) as { ok: boolean; message: string }
   if (!res.ok && !data.message) throw new Error(`HTTP ${res.status}`)
   return data
+}
+
+async function fetchPending(): Promise<PendingCard[]> {
+  const res = await fetch('/api/v1/assistant/merchant/pending')
+  if (!res.ok) return []
+  const data = (await res.json()) as { pending: Omit<PendingCard, 'status'>[] }
+  return data.pending.map((p) => ({ ...p, status: 'staged' as const }))
 }
 
 export function MerchantAssistant() {
@@ -85,54 +101,112 @@ export function MerchantAssistant() {
     setDraft('')
     setFailed(false)
     const next = [...entries, { role: 'user', content: clean } as Entry]
-    setEntries(next)
+    setEntries([...next, { role: 'assistant', content: '' } as Entry])
     setPending(true)
+    const appendDelta = (delta: string) => {
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [...prev.slice(0, -1), { ...last, content: last.content + delta }]
+      })
+    }
     try {
-      const data = await postChat(next.map((e) => ({ role: e.role, content: e.content })))
-      setEntries([
-        ...next,
-        { role: 'assistant', content: data.reply, suggestions: data.suggestions },
-      ])
+      const data = await postChat(
+        next.map((e) => ({ role: e.role, content: e.content })),
+        appendDelta,
+      )
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [
+          ...prev.slice(0, -1),
+          { role: 'assistant', content: data.reply, suggestions: data.suggestions },
+        ]
+      })
       if (data.staged.length > 0) {
-        setCards((prev) => [
-          ...prev,
-          ...data.staged.map((s) => ({ ...s, status: 'staged' as const })),
-        ])
+        setCards((prev) => {
+          const known = new Set(prev.map((c) => c.changeId))
+          const fresh = data.staged
+            .filter((s) => !known.has(s.change.id))
+            .map((s) => ({
+              changeId: s.change.id,
+              kind: s.change.kind,
+              summary: s.change.summary,
+              note: s.change.note,
+              items: s.change.items,
+              createdAt: s.change.createdAt,
+              status: 'staged' as const,
+            }))
+          return [...prev, ...fresh]
+        })
       }
     } catch {
       setFailed(true)
+      setEntries((prev) => {
+        const last = prev[prev.length - 1]
+        if (last && last.role === 'assistant' && !last.content) {
+          return prev.slice(0, -1)
+        }
+        return prev
+      })
     } finally {
       setPending(false)
       scrollDown()
     }
   }
 
-  async function approve(id: string) {
-    const card = cards.find((c) => c.change.id === id)
+  async function decide(id: string, decision: 'apply' | 'discard') {
+    const card = cards.find((c) => c.changeId === id)
     if (!card || card.status !== 'staged') return
-    setCards((prev) => prev.map((c) => (c.change.id === id ? { ...c, status: 'applying' as const } : c)))
+    setCards((prev) => prev.map((c) => (c.changeId === id ? { ...c, status: 'applying' as const } : c)))
     try {
-      const result = await postApprove({ change: card.change, signature: card.signature })
+      const result = await postDecision(id, decision)
       setCards((prev) =>
         prev.map((c) =>
-          c.change.id === id
-            ? { ...c, status: result.ok ? ('applied' as const) : ('failed' as const), result: result.message }
+          c.changeId === id
+            ? {
+                ...c,
+                status:
+                  decision === 'discard'
+                    ? ('dropped' as const)
+                    : result.ok
+                      ? ('applied' as const)
+                      : ('failed' as const),
+                result: result.message,
+              }
             : c,
         ),
       )
     } catch {
       setCards((prev) =>
         prev.map((c) =>
-          c.change.id === id ? { ...c, status: 'failed' as const, result: 'Lỗi mạng khi áp dụng.' } : c,
+          c.changeId === id ? { ...c, status: 'failed' as const, result: 'Lỗi mạng, thử lại.' } : c,
         ),
       )
     }
   }
 
-  function drop(id: string) {
-    setCards((prev) => prev.map((c) => (c.change.id === id ? { ...c, status: 'dropped' as const } : c)))
+  function approve(id: string) {
+    void decide(id, 'apply')
   }
 
+  function drop(id: string) {
+    void decide(id, 'discard')
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    fetchPending()
+      .then((rows) => {
+        if (!cancelled) setCards(rows)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const visibleCards = cards.filter((c) => c.status !== 'dropped')
 
   return (
@@ -215,24 +289,24 @@ export function MerchantAssistant() {
         ) : null}
         {visibleCards.map((card) => (
           <div
-            key={card.change.id}
+            key={card.changeId}
             className="rounded-(--radius-lg) border border-border bg-bg-primary p-3"
           >
-            <p className="text-(length:--text-xs) font-semibold text-fg">{card.change.summary}</p>
-            {card.change.note ? (
-              <p className="mt-1 text-(length:--text-xs) text-fg-muted">Ghi chú: {card.change.note}</p>
+            <p className="text-(length:--text-xs) font-semibold text-fg">{card.summary}</p>
+            {card.note ? (
+              <p className="mt-1 text-(length:--text-xs) text-fg-muted">Ghi chú: {card.note}</p>
             ) : null}
             <ul className="mt-2 flex flex-col gap-1">
-              {card.change.items.slice(0, 10).map((item) => (
+              {card.items.slice(0, 10).map((item) => (
                 <li key={item.productId} className="text-(length:--text-xs) text-fg-muted">
                   <span className="font-medium text-fg">{item.name}</span>
                   <br />
                   {item.before} → {item.after}
                 </li>
               ))}
-              {card.change.items.length > 10 ? (
+              {card.items.length > 10 ? (
                 <li className="text-(length:--text-xs) text-fg-muted">
-                  …và {card.change.items.length - 10} dòng nữa
+                  …và {card.items.length - 10} dòng nữa
                 </li>
               ) : null}
             </ul>
@@ -240,14 +314,14 @@ export function MerchantAssistant() {
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => void approve(card.change.id)}
+                  onClick={() => approve(card.changeId)}
                   className="rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
                 >
                   Duyệt & áp dụng
                 </button>
                 <button
                   type="button"
-                  onClick={() => drop(card.change.id)}
+                  onClick={() => drop(card.changeId)}
                   className="rounded-(--radius-md) border border-border px-3 py-1.5 text-(length:--text-xs) font-medium text-fg-muted hover:bg-surface-muted"
                 >
                   Bỏ

@@ -9,6 +9,7 @@ import { bulkAdjustPrice, bulkSetStock, bulkUpdateProducts } from '@/lib/admin/p
 import type { AdminActionState } from '@/lib/admin/types'
 
 import { getListing, liveStates } from './backend'
+import { recordStaged } from './ledger'
 import {
   checkGuardrails,
   nextChangeId,
@@ -24,6 +25,18 @@ import {
 } from './guardrails'
 
 const INITIAL_STATE: AdminActionState = { ok: true }
+
+type StageResult = { change?: SignedChange; violations?: string[]; error?: string }
+
+async function persist(actorUserId: string | null, change: StagedChange): Promise<StageResult> {
+  const signed = signChange(change)
+  try {
+    await recordStaged(signed, actorUserId)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Không lưu được change.' }
+  }
+  return { change: signed }
+}
 
 function formDataWithIds(productIds: string[], extra?: Record<string, string>): FormData {
   const fd = new FormData()
@@ -50,7 +63,8 @@ export async function stagePublish(
   target: PublishAction['target'],
   productIds: string[],
   note: string | null,
-): Promise<{ change?: SignedChange; violations?: string[] }> {
+  actorUserId: string | null = null,
+): Promise<StageResult> {
   const ids = [...new Set(productIds)].slice(0, 50)
   const action: PublishAction = { kind: 'publish', target, productIds: ids }
   const live = await liveStates(ids)
@@ -73,7 +87,7 @@ export async function stagePublish(
     items: publishPreview(target, seen, ids),
     createdAt: new Date().toISOString(),
   }
-  return { change: signChange(change) }
+  return persist(actorUserId, change)
 }
 
 export async function stagePrice(
@@ -81,7 +95,8 @@ export async function stagePrice(
   mode: PriceAction['mode'],
   value: number,
   note: string | null,
-): Promise<{ change?: SignedChange; violations?: string[] }> {
+  actorUserId: string | null = null,
+): Promise<StageResult> {
   const ids = [...new Set(productIds)].slice(0, 50)
   const action: PriceAction = { kind: 'price', productIds: ids, mode, value }
   const live = await liveStates(ids)
@@ -113,14 +128,15 @@ export async function stagePrice(
     items,
     createdAt: new Date().toISOString(),
   }
-  return { change: signChange(change) }
+  return persist(actorUserId, change)
 }
 
 export async function stageStock(
   productIds: string[],
   quantity: number,
   note: string | null,
-): Promise<{ change?: SignedChange; violations?: string[] }> {
+  actorUserId: string | null = null,
+): Promise<StageResult> {
   const ids = [...new Set(productIds)].slice(0, 50)
   const action: StockAction = { kind: 'stock', productIds: ids, quantity }
   const live = await liveStates(ids)
@@ -143,7 +159,7 @@ export async function stageStock(
     }),
     createdAt: new Date().toISOString(),
   }
-  return { change: signChange(change) }
+  return persist(actorUserId, change)
 }
 
 export interface ApplyResult {

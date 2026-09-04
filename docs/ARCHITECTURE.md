@@ -8,6 +8,7 @@
 | Admin UI | `app/admin`, `components/admin` | `lib/admin/{auth,catalog,orders,content,coupons,dashboard,customers,shared}` barrels for new code |
 | Admin kernel | `lib/admin/*` | only place allowed to use `getSupabaseAdminClient()` (service_role) |
 | Commerce server | `lib/commerce/*`, `app/api/*` | may use admin client in route handlers / RPC wrappers only |
+| AI assistants | `lib/assistant/*`, `app/api/v1/assistant/*`, `components/{assistant,admin/assistant}` | shopping pilot reads `lib/catalog|commerce(public)`; merchant pilot reads admin kernel + executes via existing Server Actions only. Keys never leave server. Details: `docs/ASSISTANT.md` |
 
 ## Barrel rules
 

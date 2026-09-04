@@ -3,7 +3,9 @@ import { z } from 'zod'
 
 import { requireAdminSession } from '@/lib/admin/auth'
 import type { ChatMessage } from '@/lib/assistant/agent'
-import { runMerchantTurn } from '@/lib/assistant/merchant/agent'
+import { runMerchantTurn, streamMerchantTurn } from '@/lib/assistant/merchant/agent'
+import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import { streamToSSE } from '@/lib/assistant/sse'
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -12,6 +14,7 @@ const messageSchema = z.object({
 
 const bodySchema = z.object({
   messages: z.array(messageSchema).min(1).max(10),
+  stream: z.boolean().optional(),
 })
 
 /**
@@ -20,8 +23,9 @@ const bodySchema = z.object({
  * for the approval buttons — the model can never apply.
  */
 export async function POST(request: Request) {
+  let session
   try {
-    await requireAdminSession('assistant')
+    session = await requireAdminSession('assistant')
   } catch (error) {
     const status = error instanceof Error && error.message === 'FORBIDDEN' ? 403 : 401
     return NextResponse.json({ code: 'FORBIDDEN', message: 'Cần quyền trợ lý vận hành.' }, { status })
@@ -43,7 +47,27 @@ export async function POST(request: Request) {
     role: m.role,
     content: m.content,
   }))
-  const result = await runMerchantTurn(history)
+
+  // Per-staff budget: 60 turns / 15 min (fail-open on limiter outage).
+  const identity = `staff:${session.userId}:${clientIp(request.headers)}`
+  if (await isChatRateLimited('merchant_chat', identity)) {
+    return NextResponse.json(
+      {
+        code: 'RATE_LIMITED',
+        message: 'Bạn thao tác hơi nhanh — nghỉ ít phút rồi tiếp tục nhé.',
+        reply: 'Bạn thao tác hơi nhanh — nghỉ ít phút rồi tiếp tục nhé.',
+        staged: [],
+        suggestions: [],
+      },
+      { status: 429 },
+    )
+  }
+
+  if (parsed.data.stream) {
+    return streamToSSE(streamMerchantTurn(history, { actorUserId: session.userId }))
+  }
+
+  const result = await runMerchantTurn(history, { actorUserId: session.userId })
   return NextResponse.json({
     reply: result.reply,
     staged: result.staged,

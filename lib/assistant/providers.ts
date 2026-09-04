@@ -11,7 +11,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 
-import type { MessagesClient } from './agent'
+import type { MessagesClient, ProviderStreamEvent, StreamParams } from './agent'
 
 export type AssistantProvider = 'anthropic' | 'deepseek'
 
@@ -53,6 +53,45 @@ function createAnthropicClient(apiKey: string): MessagesClient {
           }
         }
         return { content, stop_reason: message.stop_reason }
+      },
+      stream: async function* (params: StreamParams): AsyncGenerator<ProviderStreamEvent> {
+        const stream = client.messages.stream({
+          model: params.model,
+          max_tokens: params.max_tokens,
+          system: params.system,
+          tools: params.tools,
+          tool_choice: params.tool_choice,
+          messages: params.messages,
+        })
+        // MessageStreamEvent is structurally light: only text deltas are read.
+        const events = stream as AsyncIterable<{
+          type: string
+          delta?: { type: string; text?: string }
+        }>
+        for await (const event of events) {
+          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            const text = event.delta.text ?? ''
+            if (text) yield { type: 'text_delta', text }
+          }
+        }
+        const final = await stream.finalMessage()
+        const content: (
+          | { type: 'text'; text: string }
+          | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+        )[] = []
+        for (const block of final.content) {
+          if (block.type === 'text') {
+            if (block.text) content.push({ type: 'text', text: block.text })
+          } else if (block.type === 'tool_use') {
+            content.push({
+              type: 'tool_use',
+              id: block.id,
+              name: block.name,
+              input: (block.input ?? {}) as Record<string, unknown>,
+            })
+          }
+        }
+        yield { type: 'message', content, stop_reason: final.stop_reason }
       },
     },
   }
@@ -260,6 +299,114 @@ export async function fetchWithRetry(url: string, init: RequestInit, attempts = 
   throw lastError instanceof Error ? lastError : new Error('DeepSeek request failed')
 }
 
+interface PendingToolCall {
+  id: string
+  name: string
+  args: string
+}
+
+/**
+ * Feed one SSE `data:` payload into the accumulator. Exported for tests.
+ * Returns text deltas to yield immediately.
+ */
+export function feedDeepSeekDelta(
+  pending: PendingToolCall[],
+  payload: {
+    choices?: {
+      delta?: {
+        content?: string | null
+        tool_calls?: { index: number; id?: string; function?: { name?: string; arguments?: string } }[]
+      }
+      finish_reason?: string | null
+    }[]
+  },
+): string[] {
+  const deltas: string[] = []
+  const delta = payload.choices?.[0]?.delta
+  if (delta?.content) deltas.push(delta.content)
+  for (const tc of delta?.tool_calls ?? []) {
+    let slot = pending[tc.index]
+    if (!slot) {
+      slot = { id: '', name: '', args: '' }
+      pending[tc.index] = slot
+    }
+    if (tc.id) slot.id = tc.id
+    if (tc.function?.name) slot.name += tc.function.name
+    if (tc.function?.arguments) slot.args += tc.function.arguments
+  }
+  return deltas
+}
+
+function toolUseBlocks(pending: PendingToolCall[]) {
+  const blocks: { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }[] = []
+  for (const call of pending) {
+    if (!call || !call.id) continue
+    let input: Record<string, unknown> = {}
+    try {
+      const parsed: unknown = JSON.parse(call.args || '{}')
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        input = parsed as Record<string, unknown>
+      }
+    } catch {
+      // Malformed arguments: empty input, the dispatcher reports the miss.
+    }
+    blocks.push({ type: 'tool_use', id: call.id, name: call.name, input })
+  }
+  return blocks
+}
+
+async function* streamDeepSeek(
+  body: Record<string, unknown>,
+  apiKey: string,
+): AsyncGenerator<ProviderStreamEvent> {
+  const res = await fetchWithRetry(DEEPSEEK_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal: AbortSignal.timeout(90_000),
+  })
+  if (!res.ok || !res.body) throw new Error(`DeepSeek HTTP ${res.status}`)
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  const pending: PendingToolCall[] = []
+  let fullText = ''
+  let finish: string | null = null
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() ?? ''
+    for (const frame of frames) {
+      for (const line of frame.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+        const data = trimmed.slice(5).trim()
+        if (data === '[DONE]') continue
+        try {
+          const json = JSON.parse(data) as Parameters<typeof feedDeepSeekDelta>[1]
+          for (const t of feedDeepSeekDelta(pending, json)) {
+            fullText += t
+            yield { type: 'text_delta', text: t }
+          }
+          const reason = json.choices?.[0]?.finish_reason
+          if (reason) finish = reason
+        } catch {
+          // Partial frame: wait for more bytes.
+        }
+      }
+    }
+  }
+  const content: (
+    | { type: 'text'; text: string }
+    | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  )[] = []
+  if (fullText) content.push({ type: 'text', text: fullText })
+  content.push(...toolUseBlocks(pending))
+  yield { type: 'message', content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
+}
+
 function createDeepSeekClient(apiKey: string): MessagesClient {
   return {
     messages: {
@@ -273,6 +420,8 @@ function createDeepSeekClient(apiKey: string): MessagesClient {
         if (!res.ok) throw new Error(`DeepSeek HTTP ${res.status}`)
         return fromDeepSeekResponse(await res.json())
       },
+      stream: (params: StreamParams) =>
+        streamDeepSeek(toDeepSeekRequest(params) as Record<string, unknown>, apiKey),
     },
   }
 }

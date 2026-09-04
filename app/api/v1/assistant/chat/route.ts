@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-import { runAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
+import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
+import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import { streamToSSE } from '@/lib/assistant/sse'
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -10,6 +12,7 @@ const messageSchema = z.object({
 
 const bodySchema = z.object({
   messages: z.array(messageSchema).min(1).max(10),
+  stream: z.boolean().optional(),
 })
 
 /**
@@ -37,6 +40,25 @@ export async function POST(request: Request) {
     role: m.role,
     content: m.content,
   }))
+
+  // Budget protection: 20 turns / 15 min per IP (fail-open on limiter outage).
+  // request.headers (not next/headers) so the route stays unit-testable.
+  if (await isChatRateLimited('assistant_chat', clientIp(request.headers))) {
+    return NextResponse.json(
+      {
+        code: 'RATE_LIMITED',
+        message: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
+        reply: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
+        cards: [],
+        suggestions: [],
+      },
+      { status: 429 },
+    )
+  }
+
+  if (parsed.data.stream) {
+    return streamToSSE(streamAssistantTurn(history))
+  }
 
   const result = await runAssistantTurn(history)
   return NextResponse.json({

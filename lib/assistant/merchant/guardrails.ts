@@ -136,10 +136,14 @@ export function checkGuardrails(
 // -- Signed envelope (stateless staging) -------------------------------------
 
 function stagingSecret(): string {
-  return (
-    process.env.ASSISTANT_STAGING_SECRET ??
-    'dev-only-staging-secret-change-me'
-  )
+  const secret = process.env.ASSISTANT_STAGING_SECRET
+  if (secret) return secret
+  // Fail loud in production: stagings signed with a well-known dev secret
+  // would be forgeable. Staging refuses; reads keep working.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ASSISTANT_STAGING_SECRET is required in production.')
+  }
+  return 'dev-only-staging-secret-change-me'
 }
 
 function canonical(change: StagedChange): string {

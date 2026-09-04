@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRef, useState } from 'react'
 
 import { formatPrice } from '@/lib/format'
+import { readChatStream } from '@/lib/assistant/sse'
 
 interface AssistantCard {
   product_id: string
@@ -32,18 +33,20 @@ const HELLO: ChatEntry = {
   suggestions: ['Laptop học tập dưới 20 triệu', 'iPhone cũ còn hàng không', 'Tra cứu đơn hàng'],
 }
 
-async function postChat(messages: { role: string; content: string }[]) {
+async function postChat(
+  messages: { role: string; content: string }[],
+  onText: (delta: string) => void,
+) {
   const res = await fetch('/api/v1/assistant/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ messages: messages.slice(-10) }),
+    body: JSON.stringify({ messages: messages.slice(-10), stream: true }),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as {
+  return readChatStream<{
     reply: string
     cards: AssistantCard[]
     suggestions: string[]
-  }
+  }>(res, onText)
 }
 
 function ProductMiniCard({ card }: { card: AssistantCard }) {
@@ -82,16 +85,42 @@ export function AssistantWidget() {
     setDraft('')
     setFailed(false)
     const next = [...entries, { role: 'user', content: clean } as ChatEntry]
-    setEntries(next)
+    // Placeholder assistant entry streams deltas into place.
+    setEntries([...next, { role: 'assistant', content: '' } as ChatEntry])
     setPending(true)
+    const appendDelta = (delta: string) => {
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [...prev.slice(0, -1), { ...last, content: last.content + delta }]
+      })
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
+    }
     try {
-      const data = await postChat(next.map((e) => ({ role: e.role, content: e.content })))
-      setEntries([
-        ...next,
-        { role: 'assistant', content: data.reply, cards: data.cards, suggestions: data.suggestions },
-      ])
+      const data = await postChat(
+        next.map((e) => ({ role: e.role, content: e.content })),
+        appendDelta,
+      )
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [
+          ...prev.slice(0, -1),
+          { role: 'assistant', content: data.reply, cards: data.cards, suggestions: data.suggestions },
+        ]
+      })
     } catch {
       setFailed(true)
+      // Drop the empty placeholder on failure so the transcript stays clean.
+      setEntries((prev) => {
+        const last = prev[prev.length - 1]
+        if (last && last.role === 'assistant' && !last.content && !last.cards?.length) {
+          return prev.slice(0, -1)
+        }
+        return prev
+      })
     } finally {
       setPending(false)
       requestAnimationFrame(() => {

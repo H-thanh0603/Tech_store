@@ -16,6 +16,7 @@ import {
 import { fencePayload } from '../fencing'
 import { merchantConfig } from './config'
 import { stagePrice, stagePublish, stageStock } from './stage'
+import { listPendingStaged } from './ledger'
 import type { SignedChange } from './guardrails'
 
 export const TOOL_SNAPSHOT = 'get_business_snapshot'
@@ -27,6 +28,7 @@ export const TOOL_GET_PRICING = 'get_pricing_context'
 export const TOOL_STAGE_PUBLISH = 'stage_publish_change'
 export const TOOL_STAGE_PRICE = 'stage_price_change'
 export const TOOL_STAGE_STOCK = 'stage_stock_change'
+export const TOOL_PENDING = 'get_pending_changes'
 export const TOOL_PRESENT_SUGGESTIONS = 'present_suggestions'
 
 export interface MerchantDispatchContext {
@@ -34,10 +36,11 @@ export interface MerchantDispatchContext {
   stagedIds: string[]
   suggestions: string[]
   endTurn: boolean
+  actorUserId: string | null
 }
 
-export function createMerchantContext(): MerchantDispatchContext {
-  return { seenListingIds: new Set(), stagedIds: [], suggestions: [], endTurn: false }
+export function createMerchantContext(actorUserId: string | null = null): MerchantDispatchContext {
+  return { seenListingIds: new Set(), stagedIds: [], suggestions: [], endTurn: false, actorUserId }
 }
 
 export function buildMerchantTools(): Anthropic.Tool[] {
@@ -139,6 +142,11 @@ export function buildMerchantTools(): Anthropic.Tool[] {
     })
   }
   tools.push({
+    name: TOOL_PENDING,
+    description: 'Liệt kê change đang chờ duyệt (đã stage nhưng chưa áp dụng/bỏ).',
+    input_schema: { type: 'object' as const, properties: {} },
+  })
+  tools.push({
     name: TOOL_PRESENT_SUGGESTIONS,
     description: 'Tối đa 4 gợi ý bước tiếp theo, kết thúc lượt.',
     input_schema: {
@@ -215,6 +223,7 @@ export async function dispatchMerchantTool(
                 input.target === 'draft' ? 'draft' : input.target === 'archive' ? 'archive' : 'publish',
                 ids,
                 note,
+                ctx.actorUserId,
               )
             : name === TOOL_STAGE_PRICE
               ? await stagePrice(
@@ -224,15 +233,39 @@ export async function dispatchMerchantTool(
                     : 'percent_down',
                   typeof input.value === 'number' ? input.value : 0,
                   note,
+                  ctx.actorUserId,
                 )
-              : await stageStock(ids, typeof input.quantity === 'number' ? input.quantity : -1, note)
+              : await stageStock(
+                  ids,
+                  typeof input.quantity === 'number' ? input.quantity : -1,
+                  note,
+                  ctx.actorUserId,
+                )
         if (!staged.change) {
-          return { text: fencePayload({ result: 'held', violations: staged.violations }) }
+          const problems = staged.violations ?? [staged.error ?? 'Stage thất bại.']
+          return { text: fencePayload({ result: 'held', violations: problems }) }
         }
         ctx.stagedIds.push(staged.change.change.id)
         return {
           text: fencePayload({ result: 'staged', change: staged.change.change }),
           signed: staged.change,
+        }
+      }
+      case TOOL_PENDING: {
+        const pending = await listPendingStaged()
+        if (pending.length === 0) {
+          return { text: fencePayload({ result: 'ok', pending: [] }) }
+        }
+        return {
+          text: fencePayload({
+            result: 'ok',
+            pending: pending.map((s) => ({
+              change_id: s.change.id,
+              kind: s.change.kind,
+              summary: s.change.summary,
+              items: s.change.items,
+            })),
+          }),
         }
       }
       case TOOL_PRESENT_SUGGESTIONS: {

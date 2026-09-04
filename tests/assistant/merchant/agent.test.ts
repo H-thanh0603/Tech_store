@@ -12,6 +12,13 @@ vi.mock('@/lib/assistant/merchant/backend', () => ({
   liveStates: vi.fn(async () => new Map()),
 }))
 
+vi.mock('@/lib/assistant/merchant/ledger', () => ({
+  recordStaged: vi.fn(async () => {}),
+  listPendingStaged: vi.fn(async () => []),
+  getStagedById: vi.fn(async () => null),
+  markStagedDecided: vi.fn(async () => {}),
+}))
+
 function stubClient(
   script: Array<{ text?: string; tool?: { name: string; input: Record<string, unknown> } }>,
 ) {

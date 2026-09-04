@@ -8,6 +8,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 
 import type { ChatMessage, MessagesClient } from '../agent'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from '../providers'
+import { streamTurn, type StreamEvent } from '../stream'
 import { merchantConfig, wantsChangeHint, wantsMetricsGrounding } from './config'
 import type { SignedChange } from './guardrails'
 import { buildMerchantDynamicContext, buildMerchantStaticSystem } from './prompt'
@@ -39,7 +40,7 @@ const DISABLED_REPLY =
 
 export async function runMerchantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date },
+  deps?: { client?: MessagesClient; now?: Date; actorUserId?: string | null },
 ): Promise<MerchantTurnResult> {
   const client = deps?.client ?? createProviderClient()
   if (!client) {
@@ -51,7 +52,7 @@ export async function runMerchantTurn(
     return { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] }
   }
 
-  const ctx: MerchantDispatchContext = createMerchantContext()
+  const ctx: MerchantDispatchContext = createMerchantContext(deps?.actorUserId ?? null)
   const userText = lastUserText(history)
   const system =
     `${buildMerchantStaticSystem()}\n\n` +
@@ -129,4 +130,52 @@ export async function runMerchantTurn(
     staged,
     suggestions: ctx.suggestions,
   }
+}
+
+export type MerchantStreamEvent = StreamEvent<MerchantTurnResult>
+
+export async function* streamMerchantTurn(
+  history: ChatMessage[],
+  deps?: { client?: MessagesClient; now?: Date; actorUserId?: string | null },
+): AsyncGenerator<MerchantStreamEvent> {
+  const client = deps?.client ?? createProviderClient()
+  if (!client) {
+    yield { type: 'result', result: { reply: DISABLED_REPLY, staged: [], suggestions: [], disabled: true } }
+    return
+  }
+
+  const config = merchantConfig
+  if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
+    yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] } }
+    return
+  }
+
+  const ctx: MerchantDispatchContext = createMerchantContext(deps?.actorUserId ?? null)
+  const userText = lastUserText(history)
+  const system =
+    `${buildMerchantStaticSystem()}\n\n` +
+    buildMerchantDynamicContext(deps?.now ?? new Date(), {
+      metricsHint: wantsMetricsGrounding(userText),
+      changeHint: wantsChangeHint(userText),
+    })
+  const staged: SignedChange[] = []
+
+  yield* streamTurn<MerchantTurnResult>(client, {
+    model: config.model,
+    maxTokens: config.maxTokens,
+    maxIterations: config.maxToolIterations,
+    system,
+    tools: buildMerchantTools(),
+    messages: history.map((m) => ({ role: m.role, content: m.content })),
+    forcedTool: wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null,
+    dispatch: async (name, input) => {
+      const outcome = await dispatchMerchantTool(ctx, name, input)
+      if (outcome.signed) staged.push(outcome.signed)
+      return outcome.text
+    },
+    shouldEnd: () => ctx.endTurn,
+    fallbackReply:
+      'Mình chưa hiểu ý bạn. Bạn hỏi về doanh thu, tồn kho, đơn chờ xử lý, hay muốn stage thay đổi giá/xuất bản?',
+    finish: (reply) => ({ reply, staged, suggestions: ctx.suggestions }),
+  })
 }
