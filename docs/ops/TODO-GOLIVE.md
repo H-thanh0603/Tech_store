@@ -17,20 +17,32 @@ lại wizard không phải nhập lại Telegram/service key.
 
 ## Việc bạn phải làm theo thứ tự (tổng ~45 phút)
 
-### 1. Áp migrations lên DB cloud (~10 phút, chưa cần Vercel)
+### 1. Áp migrations lên DB cloud — ĐÃ XONG (2026-09-12)
 
-DB cloud đang **thiếu hầu hết migrations** (chỉ có bảng cart + vài RPC đầu;
-`place_order`, `check_rate_limit`… chưa tồn tại). Tại repo root:
+DB cloud từng là schema "lạc đề": 4 migrations lạ ngày 07/08 trong
+history table (không tồn tại trong repo), mọi bảng trống 0 rows, 0 auth
+users. `db push` từ chối vì history không khớp. Đã xử lý bằng:
 
 ```bash
-npx supabase login
-npx supabase link --project-ref sdrdzerdasxbxdbxykso
-npx supabase db push
+npx supabase db reset --linked --yes
 ```
 
-`db push` sẽ áp toàn bộ migrations còn thiếu (kể cả
-`202609120001_agent_rate_limit_buckets`). Xem danh sách trước nếu muốn:
-`npx supabase migration list --linked` (sau khi link).
+Kết quả đã verify: 69 migrations áp sạch (local = remote, không còn
+orphan/missing), seed nạp 117 products, `check_rate_limit` RPC hoạt động
+với bucket `agents_catalog`. Không dữ liệu nào bị mất (DB trống trước đó).
+
+**Lưu ý:** reset làm sạch cả auth users — sau khi deploy, tạo lại admin
+trên project cloud (script đọc SUPABASE_URL/key từ env, mặc định `.env.local`
+trỏ local — phải ghi đè bằng giá trị cloud khi chạy):
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://sdrdzerdasxbxdbxykso.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=<service key trong .env.ops-wizard> \
+ADMIN_E2E_EMAIL=<email admin của bạn> ADMIN_E2E_PASSWORD=<mật khẩu mạnh> \
+node scripts/seed-admin-user.mjs
+```
+
+rồi đăng nhập `/admin/login` và bật TOTP theo `docs/ops/DEPLOY.md` §2.
 
 ### 2. Deploy app lên Vercel lần đầu (~15 phút)
 
