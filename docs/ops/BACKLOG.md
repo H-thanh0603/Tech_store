@@ -38,6 +38,21 @@ Secrets and variables → Actions) và **Vercel env**:
 Không add → các workflow tương ứng skip gracefully hoặc đỏ hoài, không
 ảnh hưởng storefront chạy.
 
+**Cách làm nhanh (2026-09-12):** chạy wizard `./scripts/ops-bootstrap.sh` —
+dẫn từng bước lấy 6 secrets, tự gán vào GitHub qua `gh secret set`, gán
+Vercel env `CRON_SECRET`, sinh `CRON_SECRET` ngẫu nhiên, test gửi Telegram,
+rồi **trigger workflow Backup thật 1 lần và chứng minh pass** (dump →
+upload Storage → restore proof → row-count match). Secrets tạm lưu ở
+`.env.ops-wizard` (đã git-ignore) để chạy lại không phải paste lại.
+
+## A2. Preview không còn ghi được vào DB prod (OPS-003) — ĐÃ GUARD (2026-09-12)
+
+`proxy.ts` giờ chặn mọi request ghi khi `VERCEL_ENV=preview` trừ khi đặt
+`ALLOW_PREVIEW_WRITES=1` ở env preview — PR preview chỉ xem được UI, không
+checkout/duyệt trả hàng/chỉnh tồn kho vào data thật. Test
+`tests/security/preview-guard.test.ts`. Lộ trình staging project riêng:
+`docs/ops/STAGING.md` (làm khi có người cộng tác).
+
 ## B. Giới hạn nghiệp vụ đã ghi trong code (đọc trước khi bán)
 
 ### B1. Abandoned-cart email — ĐÃ MỞ KHÓA (2026-08-30)
@@ -53,6 +68,12 @@ thì vẫn không nhắc được (đúng thiết kế, không ép email).
 `admin_decide_return` chỉ ghi `refund_amount` vào `order_returns` +
 audit log. Shop phải vào dashboard VNPay hoàn tiền tay. Không gọi
 VNPay refund API (cần tmn_code + secret refund riêng + ký HMAC).
+
+**Miệng hếch đã bịt (2026-09-12):** form duyệt trả hàng giờ hiển thị cảnh
+báo "phải chuyển tiền qua dashboard merchant.vnpayment.vn rồi mới duyệt"
+khi đơn thanh toán qua VNPay (`components/admin/returns-table.tsx`) —
+nhân viên không còn tưởng bấm duyệt là đã hoàn tiền. Test:
+`tests/ui/returns-table.test.tsx`.
 
 **Khi nào cần tự động:** > 20 refund/tháng hoặc thuê nhân viên riêng xử
 lý CSKH. Tự động: 1-2 ngày, `lib/commerce/vnpay.ts` thêm

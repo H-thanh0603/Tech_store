@@ -30,3 +30,6 @@ dev-server.log
 .codegraph
 .playwright-mcp
 
+
+# ops-bootstrap wizard secrets (one-time go-live run)
+.env.ops-wizard
