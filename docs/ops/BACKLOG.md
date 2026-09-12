@@ -45,6 +45,13 @@ rồi **trigger workflow Backup thật 1 lần và chứng minh pass** (dump →
 upload Storage → restore proof → row-count match). Secrets tạm lưu ở
 `.env.ops-wizard` (đã git-ignore) để chạy lại không phải paste lại.
 
+**Chạy lần 1 bị đỏ — đã chẩn đoán và fix (2026-09-12):** xem
+`docs/ops/TODO-GOLIVE.md`. Ngắn gọn: DB URL phải là **Session pooler**
+(host direct là IPv6-only, GitHub không nối nổi), `PROD_BASE_URL` phải là
+URL app đã deploy (không phải URL dashboard), và DB cloud còn thiếu hầu hết
+migrations (`supabase db push` trước). Wizard v2 đã validate cả ba lỗi này
+tại chỗ; các secrets sai đã xóa khỏi GitHub.
+
 ## A2. Preview không còn ghi được vào DB prod (OPS-003) — ĐÃ GUARD (2026-09-12)
 
 `proxy.ts` giờ chặn mọi request ghi khi `VERCEL_ENV=preview` trừ khi đặt

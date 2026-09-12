@@ -186,7 +186,9 @@ finish() {
 
 # Secrets captured this run land in .env.ops-wizard (git-ignored) so the
 # wizard can be re-run without re-pasting; CI values go to GitHub secrets.
-ENV_FILE="${ENV_FILE:-.env.ops-wizard}"
+# Re-assign (not ":-" default): the library above already sets ENV_FILE=.env,
+# and a :- expansion keeps that pre-set value instead of overriding it.
+ENV_FILE=".env.ops-wizard"
 
 TOTAL_STAGES=9
 
@@ -208,17 +210,38 @@ printf '  %s✓ đã sinh:%s CRON_SECRET (64 ký tự hex)%s\n' "$GREEN" "$RESET
 write_env CRON_SECRET "$CRON_SECRET"
 set_secret CRON_SECRET "$CRON_SECRET"
 
-# ── Stage 2: Supabase DB URL ──────────────────────────────────────────────
-stage "Supabase — connection string DB"
+# ── Stage 2: Supabase DB URL (bắt buộc session pooler) ────────────────────
+stage "Supabase — connection string DB (Session pooler)"
 say "Cần chuỗi postgres của project production (backup dump + drift check)."
+say "GitHub Actions chỉ có IPv4; host trực tiếp db.<ref>.supabase.co là"
+say "IPv6-only → backup sẽ chết với 'Network is unreachable'."
+say "PHẢI dùng connection string kiểu Session pooler (IPv4)."
 open_url "https://supabase.com/dashboard"
 step "Chọn project Supabase production của TechStore."
-step "Project Settings → Database → Connection string → tab 'URI'."
-step "Chọn database password của project, copy chuỗi bắt đầu bằng postgresql://"
-ask_secret SUPABASE_DB_URL "Paste chuỗi postgresql:// (postgres:...@db.<ref>.supabase.co:5432/postgres):"
+step "Nút 'Connect' (góc trên phải) → mục 'Session pooler' → tab 'URI'."
+step "Nhập/chọn database password nếu được hỏi, rồi copy chuỗi bắt đầu bằng postgresql://postgres.<ref>:..."
+note "Nhận dạng đúng: postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+while true; do
+  ask_secret SUPABASE_DB_URL "Paste chuỗi Session pooler URI:"
+  if [[ "$SUPABASE_DB_URL" =~ ^postgres(ql)?://postgres\.[a-z0-9]+:.+@aws-0-[a-z0-9-]+\.pooler\.supabase\.com:5432/postgres$ ]]; then
+    break
+  fi
+  if [[ "$SUPABASE_DB_URL" == *"pooler.supabase.com"* || "$SUPABASE_DB_URL" == *".supabase.co"* ]]; then
+    if printf '%s' "$SUPABASE_DB_URL" | grep -qE 'postgres(ql)?://.*postgres.*://'; then
+      warn "Chuỗi bị dán 2 lần nối liền nhau — paste lại CHỈ MỘT lần."
+      continue
+    fi
+  fi
+  if [[ "$SUPABASE_DB_URL" == *"@db."*".supabase.co"* ]]; then
+    warn "Đây là host trực tiếp db.<ref>.supabase.co (IPv6-only) — GitHub chạy không nổi. Dùng chuỗi Session pooler."
+  else
+    warn "Định dạng chưa đúng. Mong đợi: postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+  fi
+done
 write_env SUPABASE_DB_URL "$SUPABASE_DB_URL"
 set_secret SUPABASE_DB_URL "$SUPABASE_DB_URL"
-note "Chuỗi này chứa password DB — chỉ nằm ở .env.ops-wizard (đã git-ignore) và GitHub secret."
+note "Chuỗi chứa password DB — chỉ nằm ở .env.ops-wizard (đã git-ignore) và GitHub secret."
+note "Nếu password chứa ký tự đặc biệt (kể cả @), dashboard sẽ tự URL-encode trong chuỗi URI — copy nguyên văn."
 
 # ── Stage 3: Supabase service_role key ────────────────────────────────────
 stage "Supabase — service_role key"
@@ -252,19 +275,29 @@ note "Nếu NEXT_PUBLIC_SUPABASE_URL / keys / SUPABASE_SERVICE_ROLE_KEY chưa c�
 stage "PROD_BASE_URL — URL production sau deploy đầu"
 say "Monitor cần URL thật để ping /api/health + storefront mỗi 15 phút."
 say "Nếu bạn chưa deploy lần nào: chạy theo docs/ops/DEPLOY.md rồi quay lại wizard này."
-step "Mở Vercel dashboard → project TechStore → copy production URL (https://…vercel.app hoặc domain riêng)."
+step "Mở Vercel dashboard → project TechStore → copy production URL (https://<app>.vercel.app hoặc domain riêng)."
+warn "KHÔNG paste URL dashboard (vercel.com/…) hay link Settings — phải là URL app."
 open_url "https://vercel.com/dashboard"
-ask PROD_BASE_URL "Paste URL production (https://…):"
+while true; do
+  ask PROD_BASE_URL "Paste URL production app (https://…):"
+  [[ "$PROD_BASE_URL" =~ ^https://[a-z0-9.-]+$ ]] || { warn "URL phải dạng https://<host> (không có dấu cách, không path)."; continue; }
+  if [[ "$PROD_BASE_URL" == *"vercel.com/"* ]]; then
+    warn "Đây là URL dashboard Vercel, không phải app. Copy từ phần Domains của project."
+    continue
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    body=$(curl -sS --max-time 15 "$PROD_BASE_URL/api/health" 2>/dev/null || true)
+    if printf '%s' "$body" | grep -q '"service":"techstore"'; then
+      printf '  %s✓ /api/health trả JSON techstore — deployment đúng là TechStore%s\n' "$GREEN" "$RESET"
+      break
+    fi
+    warn "/api/health không trả JSON techstore ('${body:0:80}…') — chưa phải app TechStore (chưa deploy, sai project, hoặc env thiếu). Thử lại."
+  else
+    break
+  fi
+done
 write_env PROD_BASE_URL "$PROD_BASE_URL"
 set_secret PROD_BASE_URL "$PROD_BASE_URL"
-if command -v curl >/dev/null 2>&1 && [[ -n "${PROD_BASE_URL:-}" ]]; then
-  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$PROD_BASE_URL/api/health" || true)
-  if [[ "$code" = "200" ]]; then
-    printf '  %s✓ /api/health trả 200 — deployment đang sống%s\n' "$GREEN" "$RESET"
-  else
-    warn "/api/health trả '$code' — deploy chưa lên hoặc URL sai; quay lại stage này sau."
-  fi
-fi
 
 # ── Stage 6: Telegram alert ──────────────────────────────────────────────
 stage "Telegram — bot cảnh báo"
