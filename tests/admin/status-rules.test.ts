@@ -16,10 +16,14 @@ describe('admin order status rules', () => {
 
   it('blocks terminal self-transitions and gates the return flow', () => {
     expect(canTransitionOrderStatus('cancelled', 'completed')).toBe(false)
-    expect(isTerminalOrderStatus('completed')).toBe(false)
+    // Returns go through request_order_return / admin_decide_return, never
+    // through admin_update_order — so no status button may offer them.
+    expect(canTransitionOrderStatus('shipping', 'return_requested')).toBe(false)
+    expect(canTransitionOrderStatus('completed', 'return_requested')).toBe(false)
+    expect(isTerminalOrderStatus('completed')).toBe(true)
     expect(isTerminalOrderStatus('returned')).toBe(true)
-    expect(allowedNextOrderStatuses('shipping')).toEqual(['completed', 'return_requested'])
-    expect(allowedNextOrderStatuses('completed')).toEqual(['return_requested'])
+    expect(allowedNextOrderStatuses('shipping')).toEqual(['completed'])
+    expect(allowedNextOrderStatuses('completed')).toEqual([])
     expect(allowedNextOrderStatuses('return_requested')).toEqual(['returned'])
   })
 

@@ -5,8 +5,8 @@ const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   awaiting_payment: ['confirmed', 'cancelled', 'expired'],
   confirmed: ['packing', 'cancelled'],
   packing: ['shipping', 'cancelled'],
-  shipping: ['completed', 'return_requested'],
-  completed: ['return_requested'],
+  shipping: ['completed'],
+  completed: [],
   return_requested: ['returned'],
   // Returns are decided through admin_decide_return, which either
   // restocks (returned) or restores the previous state server-side.

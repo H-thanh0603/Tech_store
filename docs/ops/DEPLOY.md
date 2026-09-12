@@ -77,6 +77,14 @@ supabase db reset --linked
 | `VIETQR_BANK_ID` | demo bank BIN | Optional demo |
 | `VIETQR_ACCOUNT_NO` | demo account | Optional demo |
 | `VIETQR_ACCOUNT_NAME` | `TECHSTORE` | Optional demo |
+| `VNPAY_TMN_CODE` / `VNPAY_SECRET` | VNPay merchant creds | Optional; without them checkout hides VNPay |
+| `VNPAY_SECRET_REFUND` | VNPay refund secret | Optional; without it returns stay manual (mock receipts) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Resend key + sender | Optional; without key order emails stay `pending` in outbox |
+| `CRON_SECRET` | `openssl rand -hex 32` | Required for `/api/cron/*` + monitor workflow |
+| `SENTRY_DSN` (+ ORG/PROJECT) | Sentry client key | Optional; without it Sentry is disabled |
+| `GHN_TOKEN` / `GHN_SHOP_ID` | GHN contract creds | Optional; without them shipping uses internal rates, tracking is mock |
+| `GHTK_TOKEN` | GHTK token | Optional; same fallback as GHN |
+| `ANTHROPIC_API_KEY` (or DeepSeek) | Shopping assistant | Optional pilot; without it widget replies unconfigured |
 
 4. Tạo user đầu tiên trong Supabase Auth, rồi thêm UUID đó vào `admin_users` với role `admin` và `is_active = true`.
 5. Deploy → wait for build green.

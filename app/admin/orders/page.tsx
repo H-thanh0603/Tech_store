@@ -59,7 +59,7 @@ export default async function AdminOrdersPage({
       : 'all'
   ) as PaymentStatus | 'all'
   const paymentMethod = (
-    ['all', 'cod', 'bank_transfer'].includes(get('paymentMethod'))
+    ['all', 'cod', 'bank_transfer', 'vnpay'].includes(get('paymentMethod'))
       ? get('paymentMethod')
       : 'all'
   ) as PaymentMethod | 'all'
@@ -196,6 +196,7 @@ export default async function AdminOrdersPage({
             <option value="all">Mọi method</option>
             <option value="cod">COD</option>
             <option value="bank_transfer">Chuyển khoản</option>
+            <option value="vnpay">VNPay</option>
           </select>
           <input
             type="date"

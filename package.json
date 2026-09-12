@@ -18,7 +18,10 @@
     "security:check": "node scripts/check-secret-hygiene.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "perf:audit": "node scripts/perf-audit.mjs"
+    "perf:audit": "node scripts/perf-audit.mjs",
+    "load:browse": "k6 run k6/browse.js",
+    "load:suggest": "k6 run k6/suggest.js",
+    "load:checkout": "k6 run k6/checkout-mix.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",

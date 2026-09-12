@@ -149,3 +149,30 @@ theo quy định thuế VN nếu đăng ký kinh doanh có phát hành hóa đơ
 6. 2FA cho GitHub/Vercel/Supabase/Resend/Sentry/VNPay.
 7. Branch protection main + Dependabot/secret scanning bật.
 8. Tạo Sentry project + DSN nếu muốn error tracking.
+
+## F. ĐÃ LÀM (2026-09-12, session bàn giao)
+
+- **Ship fee:** `place_order_internal` hết hard-code `shipping_total = 0`
+  (migration `202609120001`) — DB tính ship cùng công thức
+  `calculate_shipping`, 0đ cho pickup; tổng hiển thị == tổng charge VNPay.
+- **Admin orders:** filter thêm `vnpay` (`app/admin/orders/page.tsx`).
+- **Status rules:** `shipping/completed → return_requested` bỏ khỏi
+  `admin_update_order` (`lib/admin/status-rules.ts`) — trả hàng chỉ đi đường
+  `request_order_return` / `admin_decide_return` (khớp DB, test đã cập nhật).
+- **Khung carrier GHN/GHTK** (`lib/shipping/`): env-gated, mock flagged
+  `isMock` khi chưa có key; `orders` thêm `carrier/tracking_code/ship_state`
+  (migration `202609120002`). Live quote cần mapping mã địa chỉ hãng.
+- **Khung refund VNPay** (`lib/commerce/vnpay-refund.ts` + bảng
+  `payment_refunds`, migration `202609120003`): chưa key thì receipt mock,
+  luồng duyệt tay giữ nguyên.
+- **Hóa đơn nội bộ** (`lib/billing/invoice.ts` + bảng `invoices`, migration
+  `202609120004`): đánh số `INV-YYYYMMDD-######`, tách VAT 10%; e-invoice
+  nhà cung cấp (Viettel/MISA) vẫn là scope mới.
+- **E2E mới:** `admin-returns` (full lifecycle), `admin-csv-import`,
+  `admin-bulk-price` — tổng 90 tests / 6 files. Chạy với Supabase local +
+  `npm run admin:seed`.
+- **k6:** `k6/browse.js`, `k6/suggest.js`, `k6/checkout-mix.js` +
+  `npm run load:*` (cần cài k6; checkout-mix chỉ chạy local).
+- **DEPLOY.md:** bảng env liệt kê đủ VNPay/refund/Resend/Cron/Sentry/GHN/GHTK.
+- Chưa verify DB local (Docker daemon không chạy lúc làm): trước khi
+  `db push` cloud, chạy `supabase db reset && supabase test db` local.
