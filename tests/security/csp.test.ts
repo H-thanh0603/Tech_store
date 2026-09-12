@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest'
 import { proxy } from '@/proxy'
 
 describe('Content Security Policy', () => {
-  it('uses a per-request script nonce without unsafe script directives', async () => {
+  it('allows inline scripts (no nonce): ISR cache and per-request nonces are incompatible', async () => {
+    // Verified on production 2026-09-12: cached HTML carries the render-time
+    // nonce while the next request sends a fresh one, so the browser blocks
+    // every hydration script and the page stays a skeleton (proxy.ts NOTE).
     const response = await proxy(new NextRequest('https://techstore.test/products'))
     const csp = response.headers.get('content-security-policy') ?? ''
 
-    expect(csp).toMatch(/script-src 'self' 'nonce-[^']+'/)
-    expect(csp).not.toContain("script-src 'self' 'unsafe-inline'")
+    expect(csp).toMatch(/script-src 'self' 'unsafe-inline'/)
+    expect(csp).not.toMatch(/script-src[^;]*nonce-/)
     expect(csp).not.toContain("'unsafe-eval'")
   })
 
