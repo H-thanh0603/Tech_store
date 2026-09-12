@@ -65,7 +65,10 @@ jobs:
         run: |
           set -euo pipefail
           body=$(curl -sS --max-time 30 "${{ secrets.PROD_BASE_URL }}/")
-          echo "$body" | grep -q '<html' || { echo 'storefront did not render'; exit 1; }
+          # NOTE: use a herestring, not `echo | grep`, so grep -q exiting on
+          # first match cannot SIGPIPE the producer under `pipefail` (which
+          # reported a false "did not render" on a healthy 588KB page).
+          grep -q '<html' <<<"$body" || { echo 'storefront did not render'; exit 1; }
 
   crons:
     name: Cron self-check
