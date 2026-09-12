@@ -153,7 +153,8 @@ theo quy định thuế VN nếu đăng ký kinh doanh có phát hành hóa đơ
 ## F. ĐÃ LÀM (2026-09-12, session bàn giao)
 
 - **Ship fee:** `place_order_internal` hết hard-code `shipping_total = 0`
-  (migration `202609120001`) — DB tính ship cùng công thức
+  (migration `202609130001`, đã verify sống trên DB local: subtotal
+  4.490.000 + ship 30.000 = total 4.520.000) — DB tính ship cùng công thức
   `calculate_shipping`, 0đ cho pickup; tổng hiển thị == tổng charge VNPay.
 - **Admin orders:** filter thêm `vnpay` (`app/admin/orders/page.tsx`).
 - **Status rules:** `shipping/completed → return_requested` bỏ khỏi
@@ -161,12 +162,12 @@ theo quy định thuế VN nếu đăng ký kinh doanh có phát hành hóa đơ
   `request_order_return` / `admin_decide_return` (khớp DB, test đã cập nhật).
 - **Khung carrier GHN/GHTK** (`lib/shipping/`): env-gated, mock flagged
   `isMock` khi chưa có key; `orders` thêm `carrier/tracking_code/ship_state`
-  (migration `202609120002`). Live quote cần mapping mã địa chỉ hãng.
+  (migration `202609130002`). Live quote cần mapping mã địa chỉ hãng.
 - **Khung refund VNPay** (`lib/commerce/vnpay-refund.ts` + bảng
-  `payment_refunds`, migration `202609120003`): chưa key thì receipt mock,
+  `payment_refunds`, migration `202609130003`): chưa key thì receipt mock,
   luồng duyệt tay giữ nguyên.
 - **Hóa đơn nội bộ** (`lib/billing/invoice.ts` + bảng `invoices`, migration
-  `202609120004`): đánh số `INV-YYYYMMDD-######`, tách VAT 10%; e-invoice
+  `202609130004`): đánh số `INV-YYYYMMDD-######`, tách VAT 10%; e-invoice
   nhà cung cấp (Viettel/MISA) vẫn là scope mới.
 - **E2E mới:** `admin-returns` (full lifecycle), `admin-csv-import`,
   `admin-bulk-price` — tổng 90 tests / 6 files. Chạy với Supabase local +
