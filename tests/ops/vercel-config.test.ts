@@ -8,10 +8,13 @@ describe('Vercel operations config', () => {
       crons?: Array<{ path: string; schedule: string }>
     }
 
-    // Vercel Hobby allows max 2 crons (OPS-002). Health job inlines
-    // release + notifications + abandoned, so we keep only 2 schedules.
+    // Vercel Hobby allows max 2 crons, daily cadence only (OPS-002, verified
+    // 2026-09-12: deploy rejects "*/5 * * * *" on Hobby). The 15-minute
+    // cadence for health/inline tasks comes from .github/workflows/monitor.yml
+    // (cron */15 pinging /api/cron/health with CRON_SECRET); the Vercel
+    // schedules below are daily fallbacks only.
     expect(config.crons).toEqual([
-      { path: '/api/cron/health', schedule: '*/5 * * * *' },
+      { path: '/api/cron/health', schedule: '0 6 * * *' },
       { path: '/api/cron/purge-logs', schedule: '0 18 * * *' },
     ])
     expect((config.crons?.length ?? 0) <= 2).toBe(true)

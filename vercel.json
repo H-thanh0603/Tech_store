@@ -3,7 +3,7 @@
   "framework": "nextjs",
   "regions": ["sin1"],
   "crons": [
-    { "path": "/api/cron/health", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/health", "schedule": "0 6 * * *" },
     { "path": "/api/cron/purge-logs", "schedule": "0 18 * * *" }
   ]
 }
