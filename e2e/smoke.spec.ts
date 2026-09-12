@@ -68,6 +68,36 @@ test.describe('storefront smoke', () => {
     expect(body.ok).toBe(true)
     expect(body.service).toBe('techstore')
   })
+
+  test('agent layer responds: llms.txt and v1 manifest', async ({ request }) => {
+    const llms = await request.get('/llms.txt')
+    expect(llms.ok()).toBeTruthy()
+    expect(llms.headers()['content-type']).toContain('text/plain')
+    const llmsBody = await llms.text()
+    expect(llmsBody).toContain('# TechStore')
+    expect(llmsBody).toContain('/api/v1/agents/products')
+
+    const manifest = await request.get('/api/v1/agents/manifest')
+    expect(manifest.ok()).toBeTruthy()
+    const manifestBody = await manifest.json()
+    expect(manifestBody.name).toBe('TechStore')
+    expect(manifestBody.capabilities.searchProducts.endpoint).toContain(
+      '/api/v1/agents/products',
+    )
+  })
+
+  test('agent catalog search returns the product envelope', async ({ request }) => {
+    const res = await request.get('/api/v1/agents/products?q=laptop')
+    // 200 with products, or an explicit coded error — never an HTML error page.
+    expect([200, 500]).toContain(res.status())
+    const body = await res.json()
+    expect(Array.isArray(body.products)).toBeTruthy()
+    if (body.products.length > 0) {
+      expect(body.products[0]).toHaveProperty('slug')
+      expect(body.products[0]).toHaveProperty('url')
+      expect(body.products[0]).not.toHaveProperty('availableStock')
+    }
+  })
 })
 
 test.describe('admin security', () => {

@@ -9,6 +9,7 @@
 | Admin kernel | `lib/admin/*` | only place allowed to use `getSupabaseAdminClient()` (service_role) |
 | Commerce server | `lib/commerce/*`, `app/api/*` | may use admin client in route handlers / RPC wrappers only |
 | AI assistants | `lib/assistant/*`, `app/api/v1/assistant/*`, `components/{assistant,admin/assistant}` | shopping pilot reads `lib/catalog|commerce(public)`; merchant pilot reads admin kernel + executes via existing Server Actions only. Keys never leave server. Details: `docs/ASSISTANT.md` |
+| Agent layer (public) | `app/api/agents/*` + `app/api/v1/agents/*` re-exports, `app/llms.txt`, `lib/agents/*` | read-only catalog/orders/policies for external AI agents, rate-limited per IP. No writes, no PII, no stock counts. Details: `docs/AGENT_LAYER.md` |
 
 ## Barrel rules
 
