@@ -39,7 +39,18 @@ jobs:
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo 'skip: SUPABASE_DB_URL secret not set — no production database linked yet'
             echo 'skipped=true' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # GitHub runners are IPv4-only; the direct db.<ref>.supabase.co host
+          # resolves IPv6-only on newer Supabase projects and fails with
+          # "Network is unreachable" 30s into the dump. Fail fast with the fix
+          # instead: the session pooler string (Connect > Session pooler).
+          case "$SUPABASE_DB_URL" in
+            *"@db."*".supabase.co"*)
+              echo "::error::SUPABASE_DB_URL uses the direct db.<ref>.supabase.co host, which is IPv6-only and unreachable from GitHub runners. Set the secret to the Session pooler connection string instead: Supabase dashboard → Connect → Session pooler (postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres)."
+              exit 1
+              ;;
+          esac
 
       - uses: supabase/setup-cli@v1
         if: steps.guard.outputs.skipped != 'true'
@@ -63,9 +74,11 @@ jobs:
       # Storage API — no dashboard trip needed — and uploads use x-upsert so
       # a same-day rerun overwrites rather than duplicates.
       #
-      # The project ref is parsed from SUPABASE_DB_URL
-      # (postgresql://postgres:[pw]@db.<ref>.supabase.co:5432/postgres);
-      # storage steps skip gracefully when the service key is unset.
+      # The project ref is parsed from SUPABASE_DB_URL, which may be either
+      # the direct host (postgresql://postgres:[pw]@db.<ref>.supabase.co...)
+      # or — required for IPv4-only CI runners — the session pooler
+      # (postgresql://postgres.<ref>:[pw]@aws-0-<region>.pooler.supabase.co...).
+      # Storage steps skip gracefully when the service key is unset.
       - name: Ensure backups bucket exists
         if: steps.guard.outputs.skipped != 'true'
         shell: bash
@@ -75,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
+          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n -e 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p' -e 's#postgresql://postgres\.\([^.]*\):.*#\1#p' -e 's#postgres://postgres\.\([^.]*\):.*#\1#p')
           [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 1; }
           base="https://${ref}.supabase.co"
           code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
@@ -100,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
+          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n -e 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p' -e 's#postgresql://postgres\.\([^.]*\):.*#\1#p' -e 's#postgres://postgres\.\([^.]*\):.*#\1#p')
           [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 1; }
           curl -sS -f --max-time 120 -X POST \
             "https://${ref}.supabase.co/storage/v1/object/backups/db-$(date +%F).sql.gz" \
@@ -182,7 +195,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
-          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p')
+          ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n -e 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p' -e 's#postgresql://postgres\.\([^.]*\):.*#\1#p' -e 's#postgres://postgres\.\([^.]*\):.*#\1#p')
           [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 0; }
           base="https://${ref}.supabase.co"
           cutoff=$(date -u -d '90 days ago' +%s)

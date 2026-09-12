@@ -33,3 +33,5 @@ dev-server.log
 
 # ops-bootstrap wizard secrets (one-time go-live run)
 .env.ops-wizard
+# MFA recovery codes — never commit
+recovery-codes.txt
