@@ -4,7 +4,36 @@ import { updateSession } from '@/lib/supabase/middleware'
 
 // Admin authorization is enforced by server-side guards (require-admin.ts)
 // against Supabase Auth + admin_users; the proxy only refreshes sessions.
+
+// Vercel Preview deployments share the production Supabase project unless a
+// staging project is wired up (docs/ops/STAGING.md, OPS-003). Read-only
+// previews are safe; any write from a PR preview (checkout, server action,
+// admin CRUD) would land in the production database. Block writes at this
+// chokepoint until ALLOW_PREVIEW_WRITES is deliberately set to 1.
+function previewWriteBlocked(request: NextRequest): boolean {
+  if (process.env.VERCEL_ENV !== 'preview') return false
+  if (process.env.ALLOW_PREVIEW_WRITES === '1') return false
+  if (request.method === 'GET' || request.method === 'HEAD') return false
+  // Next.js server actions surface as POSTs to the current page path; API
+  // route writes are POST/PUT/PATCH/DELETE — both fall through to the block.
+  return true
+}
+
 export async function proxy(request: NextRequest) {
+  if (previewWriteBlocked(request)) {
+    return new Response(
+      JSON.stringify({
+        code: 'PREVIEW_READ_ONLY',
+        message:
+          'Preview deployment đang ở chế độ chỉ đọc để bảo vệ database production (OPS-003). Đặt ALLOW_PREVIEW_WRITES=1 ở Vercel preview env nếu cần test ghi, hoặc dùng staging project — xem docs/ops/STAGING.md.',
+      }),
+      {
+        status: 403,
+        headers: { 'content-type': 'application/json; charset=utf-8', 'x-request-id': crypto.randomUUID() },
+      },
+    )
+  }
+
   const nonce = crypto.randomUUID()
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
   const development = process.env.NODE_ENV === 'development'
