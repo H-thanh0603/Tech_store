@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { decideReturn } from '@/lib/admin/order-actions'
 import type { AdminActionState } from '@/lib/admin/types'
 
-interface ReturnRow {
+export interface ReturnRow {
   id: string
   orderCode: string
   orderStatus: string
@@ -181,6 +181,12 @@ function DecideForm({
           placeholder={String(Math.round(Number(row.orderTotal)))}
           className="mt-1 min-h-11 w-full max-w-64 rounded-(--radius-md) border border-border bg-bg-primary px-3 text-(length:--text-sm) text-fg"
         />
+        {row.paymentMethod === 'vnpay' ? (
+          <p className="mt-2 text-(length:--text-xs) text-warning">
+            Đơn thanh toán qua VNPay: hệ thống chỉ ghi nhận số tiền hoàn — bạn phải
+            chuyển tiền cho khách qua dashboard merchant.vnpayment.vn rồi mới bấm duyệt.
+          </p>
+        ) : null}
       </div>
       <div>
         <label htmlFor="adminNote" className="block text-(length:--text-sm) font-medium text-fg">
