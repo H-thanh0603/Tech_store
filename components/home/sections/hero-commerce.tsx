@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { HeroSlider, type HeroSlideItem } from '@/components/home/hero-slider'
 import { bannersFor, type SectionProps } from '@/components/home/sections/types'
 import { IconChevronRight, navIcon } from '@/components/ui/icons'
 import { formatPrice } from '@/lib/format'
@@ -9,42 +10,127 @@ import type { Banner } from '@/lib/content/types'
 /**
  * Hero commerce zone (DESIGN_CELLPHONES_INSPIRED.md §4.1).
  *
- * Desktop is the retail three-column layout: category rail, main banner, side
- * cards. Mobile drops the rail to a scrollable category row and stacks the rest,
- * because a 260px sidebar on a phone is just noise.
- *
- * Banners may have no creative yet (the seed ships none), so every card degrades
- * to a typographic panel instead of rendering a broken image or a fake mockup.
- * The image slot keeps a fixed aspect ratio either way, so there is no layout
- * shift when an editor adds artwork.
+ * Desktop is the retail three-column layout: category rail, enlarged hero slider
+ * with multiple auto-rotating product showcase slides, and side cards.
+ * Mobile drops the rail to a scrollable category row and stacks the rest.
  */
 export function HeroCommerceSection({ section, context }: SectionProps) {
-  const [mainBanner] = bannersFor(context, section.config.bannerSlot ?? 'home_hero', 1)
+  const heroBanners = bannersFor(context, section.config.bannerSlot ?? 'home_hero', 5)
   const sideBanners = bannersFor(
     context,
     section.config.sideBannerSlot ?? 'home_promo_grid',
     section.config.sideLimit ?? 3,
   )
-  const categories = context.navEntries.slice(0, 8)
+  const categories = context.navEntries.slice(0, 10)
   const heroProduct = context.products[0] ?? null
   const ctaHref = typeof section.config.ctaHref === 'string' ? section.config.ctaHref : '/products'
   const ctaLabel =
     typeof section.config.ctaLabel === 'string' ? section.config.ctaLabel : 'Khám phá catalog'
   const showStats = section.config.showStats === true
 
+  // Primary banner or section title fallback
+  const mainBanner = heroBanners[0] ?? null
   const title = mainBanner?.title ?? section.title ?? 'Công nghệ chọn lọc'
   const subtitle = mainBanner?.subtitle ?? section.subtitle
-  const href = mainBanner?.href ?? ctaHref
+  const href = mainBanner?.href ?? (heroProduct ? `/products/${heroProduct.slug}` : ctaHref)
+
+  // Build slides: Banner(s) + Top products with images for auto-transition
+  const slides: HeroSlideItem[] = []
+
+  // Slide 0: Primary banner or fallback
+  slides.push({
+    id: mainBanner?.id ?? 'slide-hero-main',
+    title,
+    subtitle:
+      subtitle ??
+      (heroProduct
+        ? 'Sản phẩm cao cấp được tin dùng nhất hôm nay với ưu đãi hấp dẫn.'
+        : 'Giá VND minh bạch, tồn kho thật, giao hàng nhanh toàn quốc.'),
+    eyebrow: section.eyebrow ?? (mainBanner ? 'ƯU ĐÃI ĐẶC QUYỀN' : 'CÔNG NGHỆ CHỌN LỌC'),
+    href,
+    ctaLabel,
+    imageUrl: mainBanner?.imageDesktopUrl ?? heroProduct?.imageUrl ?? null,
+    imageAlt: mainBanner?.title ?? heroProduct?.imageAlt ?? heroProduct?.name ?? title,
+    price: heroProduct?.minPrice ?? null,
+    badge: 'HOT DEAL',
+    isProduct: !mainBanner?.imageDesktopUrl && Boolean(heroProduct?.imageUrl),
+    tabTitle: mainBanner?.title ?? heroProduct?.name ?? title,
+    tabDesc: heroProduct?.minPrice ? formatPrice(heroProduct.minPrice) : 'Khám phá ngay',
+  })
+
+  const usedHrefs = new Set<string>([href])
+  const usedImages = new Set<string>()
+  if (slides[0].imageUrl) {
+    usedImages.add(slides[0].imageUrl)
+  }
+
+  // Add additional banners if configured in home_hero
+  for (const b of heroBanners.slice(1)) {
+    if (b.href && !usedHrefs.has(b.href)) {
+      usedHrefs.add(b.href)
+      if (b.imageDesktopUrl) usedImages.add(b.imageDesktopUrl)
+      slides.push({
+        id: b.id,
+        title: b.title ?? b.name,
+        subtitle: b.subtitle,
+        eyebrow: 'KHUYẾN MÃI HOT',
+        href: b.href,
+        ctaLabel,
+        imageUrl: b.imageDesktopUrl,
+        imageAlt: b.title ?? b.name,
+        isProduct: false,
+        tabTitle: b.title ?? b.name,
+        tabDesc:
+          b.subtitle && b.subtitle.length > 25 ? b.subtitle.slice(0, 24) + '...' : (b.subtitle ?? 'Ưu đãi hot'),
+      })
+    }
+  }
+
+  // Add distinct products with images for rotating showcase (up to 6 total slides)
+  for (const p of context.products) {
+    if (slides.length >= 6) break
+    const productHref = `/products/${p.slug}`
+    if (p.imageUrl && !usedHrefs.has(productHref) && !usedImages.has(p.imageUrl)) {
+      usedHrefs.add(productHref)
+      usedImages.add(p.imageUrl)
+      slides.push({
+        id: p.id,
+        title: p.name,
+        subtitle: p.brandName
+          ? `${p.brandName} chính hãng · Bảo hành 12 tháng tận tâm`
+          : 'Sản phẩm công nghệ hàng đầu · Cam kết chất lượng',
+        eyebrow: p.brandName ? `${p.brandName.toUpperCase()} · CHÍNH HÃNG` : 'SIÊU PHẨM BÁN CHẠY',
+        href: productHref,
+        ctaLabel: 'Xem chi tiết',
+        imageUrl: p.imageUrl,
+        imageAlt: p.imageAlt ?? p.name,
+        price: p.minPrice,
+        brandName: p.brandName,
+        badge: p.hasDiscount ? 'GIẢM SỐC' : 'BÁN CHẠY',
+        isProduct: true,
+        tabTitle: p.name,
+        tabDesc: formatPrice(p.minPrice),
+      })
+    }
+  }
+
+  const hasSideBanners = sideBanners.length > 0
 
   return (
     <section aria-labelledby="hero-heading" className="surface-hero border-b border-border">
-      <div className="container-store relative z-10 grid gap-4 py-6 lg:grid-cols-[15rem_minmax(0,1fr)_18rem] lg:gap-4 lg:py-8">
+      <div
+        className={`relative z-10 mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 grid gap-4 lg:gap-5 ${
+          hasSideBanners
+            ? 'lg:grid-cols-[13rem_minmax(0,1fr)_14rem] xl:grid-cols-[13.5rem_minmax(0,1fr)_14.5rem]'
+            : 'lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)]'
+        }`}
+      >
         {/* Category rail — desktop only; mobile uses the row below the banner. */}
         <nav
           aria-label="Danh mục nổi bật"
-          className="hidden rounded-(--radius-lg) border border-border bg-bg-elevated/95 p-2 shadow-sm lg:block"
+          className="hidden rounded-(--radius-lg) border border-border bg-bg-elevated/95 p-2.5 shadow-sm lg:flex lg:flex-col lg:justify-between"
         >
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-1">
             {categories.map((entry) => {
               const Icon = navIcon(entry.iconKey)
               return (
@@ -63,55 +149,9 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
           </ul>
         </nav>
 
-        {/* Main banner */}
-        <div className="flex flex-col gap-3">
-          <Link
-            href={href}
-            className="group relative flex flex-1 flex-col justify-end overflow-hidden rounded-(--radius-xl) border border-border bg-bg-elevated shadow-md transition-all hover:shadow-lg hover:border-brand/40"
-          >
-            <div className="relative aspect-[16/9] w-full sm:aspect-[2/1] lg:aspect-[21/9]">
-              {mainBanner?.imageDesktopUrl ? (
-                <Image
-                  src={mainBanner.imageDesktopUrl}
-                  alt={mainBanner.title ?? ''}
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 60vw"
-                  className="object-cover transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.02]"
-                />
-              ) : heroProduct?.imageUrl ? (
-                <Image
-                  src={heroProduct.imageUrl}
-                  alt={heroProduct.imageAlt ?? heroProduct.name}
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 60vw"
-                  className="object-cover opacity-85 transition-transform duration-(--duration-slow) ease-(--ease-out-expo) group-hover:scale-[1.02]"
-                />
-              ) : null}
-              <div className="absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent p-5 sm:p-7">
-                {section.eyebrow ? (
-                  <span className="inline-flex w-fit rounded-full bg-brand-soft/90 px-3 py-1 text-(length:--text-xs) font-bold uppercase tracking-[0.14em] text-brand border border-brand/20">
-                    {section.eyebrow}
-                  </span>
-                ) : null}
-                <h1
-                  id="hero-heading"
-                  className="max-w-2xl text-balance font-display text-(length:--text-hero) font-extrabold leading-[1.06] tracking-tight text-white drop-shadow-sm"
-                >
-                  {title}
-                </h1>
-                {subtitle ? (
-                  <p className="max-w-xl text-(length:--text-base) leading-relaxed text-white/90 font-medium">
-                    {subtitle}
-                  </p>
-                ) : null}
-                <span className="mt-2 inline-flex w-fit min-h-11 items-center rounded-(--radius-md) bg-brand px-5 text-(length:--text-sm) font-bold text-white shadow-md transition-all group-hover:bg-brand-hover group-hover:shadow-lg">
-                  {ctaLabel} →
-                </span>
-              </div>
-            </div>
-          </Link>
+        {/* Main hero slider zone */}
+        <div className="flex flex-col gap-3 min-w-0">
+          <HeroSlider slides={slides} />
 
           {showStats ? (
             <dl className="grid grid-cols-3 gap-2 rounded-(--radius-lg) border border-border bg-bg-elevated/95 px-4 py-3 shadow-sm">
@@ -133,7 +173,7 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
 
         {/* Side cards: stacked on desktop, a horizontal rail on mobile. */}
         {sideBanners.length > 0 ? (
-          <ul className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
+          <ul className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0 lg:h-full lg:justify-between">
             {sideBanners.map((banner) => (
               <li key={banner.id} className="w-64 shrink-0 snap-start lg:w-auto lg:flex-1">
                 <SideBannerCard banner={banner} />
@@ -164,7 +204,7 @@ export function HeroCommerceSection({ section, context }: SectionProps) {
       </div>
 
       {heroProduct ? (
-        <div className="container-store relative z-10 pb-6 text-(length:--text-sm) text-fg-muted lg:pb-8">
+        <div className="relative z-10 mx-auto w-full max-w-[88rem] px-4 pb-6 text-(length:--text-sm) text-fg-muted sm:px-6 lg:px-8 lg:pb-8">
           Nổi bật:{' '}
           <Link
             href={`/products/${heroProduct.slug}`}
@@ -186,7 +226,7 @@ function SideBannerCard({ banner }: { banner: Banner }) {
       className="group flex h-full flex-col justify-between gap-2 overflow-hidden rounded-(--radius-lg) border border-border bg-bg-elevated p-4 shadow-sm transition-all hover:border-brand/50 hover:shadow-md"
     >
       {banner.imageDesktopUrl ? (
-        <span className="relative block aspect-[16/9] overflow-hidden rounded-(--radius-md) bg-bg-secondary">
+        <span className="relative block aspect-[16/10] overflow-hidden rounded-(--radius-md) bg-bg-secondary">
           <Image
             src={banner.imageDesktopUrl}
             alt={banner.title ?? ''}

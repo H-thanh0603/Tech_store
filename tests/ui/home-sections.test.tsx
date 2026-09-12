@@ -132,6 +132,34 @@ describe('HeroCommerceSection', () => {
     expect(screen.getByText('Trả góp 0%')).toBeInTheDocument()
     expect(screen.queryByText('Vượt quá sideLimit')).not.toBeInTheDocument()
   })
+
+  it('renders multi-product rotating showcase and switches slides on tab click', async () => {
+    const user = userEvent.setup()
+    const product1 = { ...product('p1', 'MacBook Air M3'), imageUrl: '/macbook.jpg' }
+    const product2 = { ...product('p2', 'Galaxy S24 Ultra'), imageUrl: '/galaxy.jpg' }
+
+    render(
+      <HeroCommerceSection
+        section={section('hero', { title: 'MacBook Air M3', config: { bannerSlot: 'home_hero' } })}
+        context={context({
+          products: [product1, product2],
+        })}
+      />,
+    )
+
+    // Initially active slide is product 1
+    expect(screen.getByRole('heading', { level: 1, name: 'MacBook Air M3' })).toBeInTheDocument()
+
+    // Tabs for products are rendered
+    const galaxyTab = screen.getByRole('button', { name: /Galaxy S24 Ultra/i })
+    expect(galaxyTab).toBeInTheDocument()
+
+    // Click tab for product 2
+    await user.click(galaxyTab)
+
+    // Now active slide switches to product 2
+    expect(screen.getByRole('heading', { level: 1, name: 'Galaxy S24 Ultra' })).toBeInTheDocument()
+  })
 })
 
 describe('CategoryGridSection', () => {

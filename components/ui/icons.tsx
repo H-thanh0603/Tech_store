@@ -178,6 +178,14 @@ export function IconChevronRight(props: IconProps) {
   )
 }
 
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.5 18l-5.5-6 5.5-6" />
+    </Svg>
+  )
+}
+
 export function IconShieldCheck(props: IconProps) {
   return (
     <Svg {...props}>
