@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
+import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/cart'
+import { loadMemoryFacts, sessionKeyHash, updateMemory } from '@/lib/assistant/memory'
 import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import { streamToSSE } from '@/lib/assistant/sse'
+import { sha256Hex } from '@/lib/commerce/tokens'
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -13,6 +16,8 @@ const messageSchema = z.object({
 const bodySchema = z.object({
   messages: z.array(messageSchema).min(1).max(10),
   stream: z.boolean().optional(),
+  /** Client-generated chat session id (localStorage) for memory. Optional. */
+  sessionId: z.string().min(8).max(128).optional(),
 })
 
 /**
@@ -56,15 +61,35 @@ export async function POST(request: Request) {
     )
   }
 
+  // The widget shares the storefront guest cart: reuse the browser's cart
+  // cookie when present, otherwise mint one and set it on the response so
+  // cart tools act on the same cart the website shows.
+  const { token: cartToken, isNew: isNewCart } = ensureCartToken(
+    parseCartToken(request.headers.get('cookie')),
+  )
+  const cartTokenHash = await sha256Hex(cartToken)
+
+  // Memory (update_memory after the turn): rule-based prefs keyed by the
+  // client's session id. Fail-closed — chat works without it.
+  const sessionKey = parsed.data.sessionId ? await sessionKeyHash(parsed.data.sessionId) : null
+  const memory = sessionKey ? await loadMemoryFacts(sessionKey) : {}
+  const userTexts = history.filter((m) => m.role === 'user').map((m) => m.content)
+
   if (parsed.data.stream) {
-    return streamToSSE(streamAssistantTurn(history))
+    if (sessionKey) void updateMemory(sessionKey, userTexts).catch(() => {})
+    const streamResponse = streamToSSE(streamAssistantTurn(history, { cartTokenHash, memory }))
+    if (isNewCart) streamResponse.headers.set('set-cookie', cartSetCookie(cartToken))
+    return streamResponse
   }
 
-  const result = await runAssistantTurn(history)
-  return NextResponse.json({
+  const result = await runAssistantTurn(history, { cartTokenHash, memory })
+  if (sessionKey) void updateMemory(sessionKey, userTexts).catch(() => {})
+  const response = NextResponse.json({
     reply: result.reply,
     cards: result.cards,
     suggestions: result.suggestions,
     disabled: result.disabled ?? false,
   })
+  if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))
+  return response
 }

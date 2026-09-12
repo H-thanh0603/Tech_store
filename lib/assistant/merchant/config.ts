@@ -2,9 +2,9 @@
  * Pilot config for the TechStore merchant assistant (TypeScript port of the
  * `commerce-agents` merchant agent, Messages-API path).
  *
- * Pilot scope: performance reads + inventory/order alerts + listing reads +
- * staged publish/price/stock changes with host approval. Campaigns and the
- * SQL analysis delegate are OFF — see limitations() and docs/ASSISTANT.md.
+ * Full scope: performance reads + inventory/order alerts + listing reads +
+ * staged publish/price/stock changes with host approval + campaign briefs +
+ * analysis delegate + scheduled digest.
  */
 
 export interface MerchantPilotConfig {
@@ -40,24 +40,19 @@ export const merchantConfig: MerchantPilotConfig = {
   enableListingReads: true,
   enableInventory: true,
   enablePricing: true,
-  enableCampaigns: false,
-  enableAnalysis: false,
+  enableCampaigns: true,
+  enableAnalysis: true,
 
   maxItemsPerChange: 10,
   maxPriceDeltaPct: 20,
   maxRestockQuantity: 1000,
 }
 
-/** Systems the pilot cannot supply (merchant-context limitations). */
+/** Systems the merchant assistant cannot supply (kept for honesty). */
 export function limitations(): string[] {
-  const out: string[] = []
-  if (!merchantConfig.enableCampaigns) {
-    out.push('Chiến dịch marketing: TechStore chưa có hệ thống campaign — trợ lý chỉ tư vấn bằng lời, không stage thay đổi.')
-  }
-  if (!merchantConfig.enableAnalysis) {
-    out.push('Phân tích SQL tự do: chưa hỗ trợ — số liệu lấy từ snapshot và báo cáo có sẵn.')
-  }
-  return out
+  return [
+    'Duyệt brief chiến dịch không tự tạo coupon/flash sale — người vận hành thực hiện tay theo hướng dẫn trong brief.',
+  ]
 }
 
 /** Vietnamese intent lexicon for the metrics grounding gate. */

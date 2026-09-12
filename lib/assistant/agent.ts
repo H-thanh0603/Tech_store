@@ -20,7 +20,9 @@ import {
   TOOL_SEARCH_POLICIES,
   type DispatchContext,
 } from './tools'
+import type { CartRpcClient } from './cart'
 import type { CardSummary } from './backend'
+import type { MemoryFacts } from './memory'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -94,7 +96,7 @@ const DISABLED_REPLY =
 
 export async function runAssistantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date },
+  deps?: { client?: MessagesClient; now?: Date; cartTokenHash?: string | null; cartRpc?: CartRpcClient; memory?: MemoryFacts },
 ): Promise<TurnResult> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
@@ -105,10 +107,14 @@ export async function runAssistantTurn(
   if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
     return { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [] }
   }
-  const ctx: DispatchContext = createDispatchContext()
+  const ctx: DispatchContext = createDispatchContext({
+    cartTokenHash: deps?.cartTokenHash ?? null,
+    cartRpc: deps?.cartRpc,
+  })
   const userText = lastUserText(history)
   const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {
     orderHint: config.enableOrders && wantsOrderGrounding(userText),
+    memory: deps?.memory,
   })}`
   const tools = buildAnthropicTools()
   const messages = toAnthropicHistory(history)
@@ -196,7 +202,7 @@ export type ShoppingStreamEvent = StreamEvent<TurnResult>
  */
 export async function* streamAssistantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date },
+  deps?: { client?: MessagesClient; now?: Date; cartTokenHash?: string | null; cartRpc?: CartRpcClient; memory?: MemoryFacts },
 ): AsyncGenerator<ShoppingStreamEvent> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
@@ -205,10 +211,14 @@ export async function* streamAssistantTurn(
   }
 
   const config = assistantConfig
-  const ctx: DispatchContext = createDispatchContext()
+  const ctx: DispatchContext = createDispatchContext({
+    cartTokenHash: deps?.cartTokenHash ?? null,
+    cartRpc: deps?.cartRpc,
+  })
   const userText = lastUserText(history)
   const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {
     orderHint: config.enableOrders && wantsOrderGrounding(userText),
+    memory: deps?.memory,
   })}`
 
   yield* streamTurn<TurnResult>(client, {

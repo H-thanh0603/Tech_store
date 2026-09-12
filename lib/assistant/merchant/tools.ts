@@ -13,6 +13,9 @@ import {
   orderIssues,
   searchListings,
 } from './backend'
+import { ANALYSIS_TEMPLATES, runAnalysis } from './analysis'
+import { draftCampaignBrief, listCampaignBriefs } from './campaigns'
+import { latestDigest } from './digest'
 import { fencePayload } from '../fencing'
 import { merchantConfig } from './config'
 import { stagePrice, stagePublish, stageStock } from './stage'
@@ -29,6 +32,10 @@ export const TOOL_STAGE_PUBLISH = 'stage_publish_change'
 export const TOOL_STAGE_PRICE = 'stage_price_change'
 export const TOOL_STAGE_STOCK = 'stage_stock_change'
 export const TOOL_PENDING = 'get_pending_changes'
+export const TOOL_DRAFT_CAMPAIGN = 'draft_campaign_brief'
+export const TOOL_LIST_CAMPAIGNS = 'list_campaign_briefs'
+export const TOOL_RUN_ANALYSIS = 'run_analysis'
+export const TOOL_GET_DIGEST = 'get_latest_digest'
 export const TOOL_PRESENT_SUGGESTIONS = 'present_suggestions'
 
 export interface MerchantDispatchContext {
@@ -146,6 +153,55 @@ export function buildMerchantTools(): Anthropic.Tool[] {
     description: 'Liệt kê change đang chờ duyệt (đã stage nhưng chưa áp dụng/bỏ).',
     input_schema: { type: 'object' as const, properties: {} },
   })
+  if (cfg.enableCampaigns) {
+    tools.push(
+      {
+        name: TOOL_DRAFT_CAMPAIGN,
+        description:
+          'Soạn brief chiến dịch khuyến mãi (tư vấn, không tự áp dụng). Brief chờ người duyệt ở trang chiến dịch rồi thực hiện tay qua coupon/flash sale.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            title: { type: 'string', description: 'Tên chiến dịch 4–120 ký tự' },
+            mechanic: { type: 'string', enum: ['percent_off', 'fixed_off', 'bundle', 'free_shipping', 'flash_sale'] },
+            discount_pct: { type: 'number', description: 'Phần trăm giảm, tối đa 50' },
+            starts_at: { type: 'string', description: 'Ngày bắt đầu YYYY-MM-DD' },
+            ends_at: { type: 'string', description: 'Ngày kết thúc YYYY-MM-DD' },
+            rationale: { type: 'string', description: 'Vì sao chạy chiến dịch này' },
+            execution: { type: 'string', description: 'Hướng dẫn thực hiện tay (tạo coupon/flash nào)' },
+          },
+          required: ['title', 'mechanic', 'execution'],
+        },
+      },
+      {
+        name: TOOL_LIST_CAMPAIGNS,
+        description: 'Liệt kê brief chiến dịch đang chờ duyệt.',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+    )
+  }
+  if (cfg.enableAnalysis) {
+    tools.push(
+      {
+        name: TOOL_RUN_ANALYSIS,
+        description:
+          'Chạy phân tích theo mẫu có sẵn trên số liệu live (không SQL tự do): snapshot, low_stock, open_orders, revenue_by_payment, category_mix.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            template: { type: 'string', enum: ['snapshot', 'low_stock', 'open_orders', 'revenue_by_payment', 'category_mix'] },
+            limit: { type: 'number', description: 'Số dòng tối đa 1–50' },
+          },
+          required: ['template'],
+        },
+      },
+      {
+        name: TOOL_GET_DIGEST,
+        description: 'Đọc bản tin vận hành gần nhất (cron tổng hợp mỗi sáng).',
+        input_schema: { type: 'object' as const, properties: {} },
+      },
+    )
+  }
   tools.push({
     name: TOOL_PRESENT_SUGGESTIONS,
     description: 'Tối đa 4 gợi ý bước tiếp theo, kết thúc lượt.',
@@ -267,6 +323,45 @@ export async function dispatchMerchantTool(
             })),
           }),
         }
+      }
+      case TOOL_DRAFT_CAMPAIGN: {
+        const { brief, error } = await draftCampaignBrief(
+          {
+            title: String(input.title ?? ''),
+            mechanic: String(input.mechanic ?? ''),
+            discount_pct: typeof input.discount_pct === 'number' ? input.discount_pct : undefined,
+            starts_at: typeof input.starts_at === 'string' ? input.starts_at : undefined,
+            ends_at: typeof input.ends_at === 'string' ? input.ends_at : undefined,
+            rationale: typeof input.rationale === 'string' ? input.rationale : undefined,
+            execution: String(input.execution ?? ''),
+          },
+          ctx.actorUserId,
+        )
+        if (!brief) return { text: fencePayload({ result: 'held', hint: error ?? 'Brief không hợp lệ.' }) }
+        return { text: fencePayload({ result: 'staged', brief }) }
+      }
+      case TOOL_LIST_CAMPAIGNS: {
+        return { text: fencePayload({ result: 'ok', briefs: await listCampaignBriefs() }) }
+      }
+      case TOOL_RUN_ANALYSIS: {
+        if (!ANALYSIS_TEMPLATES.includes(String(input.template ?? '') as (typeof ANALYSIS_TEMPLATES)[number])) {
+          return {
+            text: fencePayload({ result: 'held', hint: `template phải một trong: ${ANALYSIS_TEMPLATES.join(', ')}.` }),
+          }
+        }
+        const { result, error } = await runAnalysis(
+          String(input.template),
+          typeof input.limit === 'number' ? input.limit : 10,
+        )
+        if (!result) return { text: fencePayload({ result: 'error', hint: error ?? 'Phân tích thất bại.' }) }
+        return { text: fencePayload({ result: 'ok', analysis: result }) }
+      }
+      case TOOL_GET_DIGEST: {
+        const digest = await latestDigest()
+        if (!digest) {
+          return { text: fencePayload({ result: 'empty', hint: 'Chưa có bản tin nào — cron digest chạy mỗi sáng.' }) }
+        }
+        return { text: fencePayload({ result: 'ok', digest }) }
       }
       case TOOL_PRESENT_SUGGESTIONS: {
         const raw = Array.isArray(input.suggestions) ? input.suggestions : []

@@ -2,11 +2,10 @@
  * Pilot config for the TechStore shopping assistant (TypeScript port of the
  * `commerce-agents` shopping agent, Messages-API path).
  *
- * Pilot scope: catalog search + product details + order tracking + policies.
- * Cart writes, order history, fulfillment and memory extraction are OFF —
- * see `absentTools()` and docs/ASSISTANT.md.
+ * Scope: catalog search + details + compare + plans + cart (shared guest
+ * cart) + order tracking + policies. Fulfillment options and memory
+ * extraction are ON — see docs/ASSISTANT.md.
  */
-
 export interface AssistantConfig {
   assistantName: string
   brandName: string
@@ -37,10 +36,10 @@ export const assistantConfig: AssistantConfig = {
   maxToolIterations: 5,
   searchLimit: 6,
 
-  enableCart: false,
+  enableCart: true,
   enableOrders: true,
   enablePolicies: true,
-  enableFulfillment: false,
+  enableFulfillment: true,
 }
 
 /** Tool names the pilot leaves out for systems switched off above. */

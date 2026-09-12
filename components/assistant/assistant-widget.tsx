@@ -40,13 +40,28 @@ async function postChat(
   const res = await fetch('/api/v1/assistant/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ messages: messages.slice(-10), stream: true }),
+    body: JSON.stringify({ messages: messages.slice(-10), stream: true, sessionId: assistantSessionId() }),
   })
   return readChatStream<{
     reply: string
     cards: AssistantCard[]
     suggestions: string[]
   }>(res, onText)
+}
+
+/** Stable per-browser chat session id for memory (regenerated if missing). */
+function assistantSessionId(): string {
+  try {
+    const key = 'ts_assistant_session'
+    let id = window.localStorage.getItem(key)
+    if (!id || id.length < 8) {
+      id = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('')
+      window.localStorage.setItem(key, id)
+    }
+    return id
+  } catch {
+    return `fallback-${Date.now()}`
+  }
 }
 
 function ProductMiniCard({ card }: { card: AssistantCard }) {

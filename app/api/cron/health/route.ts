@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
+import { composeDigest, latestDigest } from '@/lib/assistant/merchant/digest'
 import { isCronAuthorized, reportCronError } from '@/lib/cron'
 import { processPendingNotifications } from '@/lib/commerce/notify'
 
@@ -76,6 +77,18 @@ export async function GET(request: Request) {
     },
   )
   results.push(abandoned)
+
+  // Merchant digest once a day (same 2-cron Hobby constraint as above):
+  // compose only when the latest digest is older than 20h, otherwise skip.
+  const digest = await runWithTiming('merchant-digest', async () => {
+    const latest = await latestDigest()
+    const ageH = latest ? (Date.now() - new Date(latest.created_at).getTime()) / 3_600_000 : Infinity
+    if (ageH < 20) return { skipped: true, ageH: Math.round(ageH) }
+    const composed = await composeDigest()
+    if (!composed.ok) throw new Error(composed.error ?? 'digest failed')
+    return { id: composed.id }
+  })
+  results.push(digest)
 
   const allOk = results.every((r) => r.ok)
   return NextResponse.json(

@@ -8,13 +8,13 @@ import {
 } from '@/lib/assistant/config'
 
 describe('assistant pilot config', () => {
-  it('keeps cart and fulfillment switched off', () => {
-    expect(assistantConfig.enableCart).toBe(false)
-    expect(assistantConfig.enableFulfillment).toBe(false)
+  it('keeps cart and fulfillment switched on (full commerce-agents scope)', () => {
+    expect(assistantConfig.enableCart).toBe(true)
+    expect(assistantConfig.enableFulfillment).toBe(true)
     const absent = absentTools(assistantConfig)
-    expect(absent.has('add_to_cart')).toBe(true)
-    expect(absent.has('checkout')).toBe(true)
-    expect(absent.has('get_fulfillment_options')).toBe(true)
+    expect(absent.has('add_to_cart')).toBe(false)
+    expect(absent.has('checkout')).toBe(false)
+    expect(absent.has('get_fulfillment_options')).toBe(false)
   })
 
   it('keeps search, details, order tracking and policies on', () => {

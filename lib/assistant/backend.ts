@@ -108,6 +108,94 @@ export function policyResults(query: string): PolicyPassage[] {
   return searchPolicies(query, 3)
 }
 
+export interface FulfillmentOptions {
+  delivery: {
+    rate_name: string
+    base_rate: number
+    per_item_rate: number
+    free_threshold: number
+    quote: { fee: number; is_free: boolean } | null
+  } | null
+  pickup_stores: Array<{
+    id: string
+    name: string
+    phone: string | null
+    province: string
+    district: string
+    address: string
+    opening_hours: string
+  }>
+  carriers: string[]
+  note: string
+}
+
+/**
+ * Fulfillment options flow: live delivery rate + pickup stores + configured
+ * carriers. An exact per-order fee still comes from checkout (cart-aware);
+ * this tool answers "ship bao nhiêu / lấy ở đâu" from live systems.
+ */
+export async function fulfillmentOptions(input?: {
+  subtotal?: number
+  itemCount?: number
+}): Promise<FulfillmentOptions> {
+  const db = getSupabaseAdminClient()
+  const [rateRes, storeRes] = await Promise.all([
+    db
+      .from('shipping_rates')
+      .select('name, base_rate, per_item_rate, free_threshold')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from('stores')
+      .select('id, name, phone, province, district, street_address, opening_hours')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .limit(20),
+  ])
+  const rate = (rateRes?.data ?? null) as {
+    name?: unknown
+    base_rate?: unknown
+    per_item_rate?: unknown
+    free_threshold?: unknown
+  } | null
+  const subtotal = typeof input?.subtotal === 'number' && Number.isFinite(input.subtotal) ? Math.max(0, Math.floor(input.subtotal)) : null
+  const itemCount = typeof input?.itemCount === 'number' && Number.isFinite(input.itemCount) ? Math.max(0, Math.floor(input.itemCount)) : null
+  const baseRate = Number(rate?.base_rate ?? 0)
+  const perItemRate = Number(rate?.per_item_rate ?? 0)
+  const freeThreshold = Number(rate?.free_threshold ?? 0)
+  return {
+    delivery:
+      rate == null
+        ? null
+        : {
+            rate_name: String(rate.name ?? 'Tiêu chuẩn'),
+            base_rate: baseRate,
+            per_item_rate: perItemRate,
+            free_threshold: freeThreshold,
+            quote:
+              subtotal != null && itemCount != null && itemCount > 0
+                ? {
+                    fee: freeThreshold > 0 && subtotal >= freeThreshold ? 0 : baseRate + perItemRate * Math.max(itemCount - 1, 0),
+                    is_free: freeThreshold > 0 && subtotal >= freeThreshold,
+                  }
+                : null,
+          },
+    pickup_stores: ((storeRes?.data ?? []) as Array<Record<string, unknown>>).map((s) => ({
+      id: String(s.id ?? ''),
+      name: String(s.name ?? ''),
+      phone: s.phone == null ? null : String(s.phone),
+      province: String(s.province ?? ''),
+      district: String(s.district ?? ''),
+      address: String(s.street_address ?? ''),
+      opening_hours: String(s.opening_hours ?? ''),
+    })),
+    carriers: ['internal', 'ghn', 'ghtk'],
+    note: 'Phí ship chính xác theo giỏ hiện ở bước thanh toán; nhận tại cửa hàng luôn miễn phí.',
+  }
+}
+
 /**
  * Phone-verified, read-only order lookup. Mirrors the verification the
  * `order_track` RPC performs (code + phone must match) but mints no access
@@ -146,5 +234,167 @@ export async function trackOrder(
     total: Number(order.total ?? 0),
     itemCount,
     createdAt: String(order.created_at ?? ''),
+  }
+}
+
+const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Provenance gate (port of commerce-agents gates.py): opaque internal ids
+ * are only usable when a tool returned them in this conversation. Slugs are
+ * public and always resolvable; unknown slugs are reported, never guessed.
+ * Returns the slug to resolve, or null when the identifier is rejected.
+ */
+export function resolveSeenOrSlug(
+  identifier: string,
+  seenIdToSlug?: Map<string, string>,
+): string | null {
+  const id = identifier.trim().slice(0, 160)
+  if (!id) return null
+  const seen = seenIdToSlug?.get(id)
+  if (seen) return seen
+  if (UUID_LIKE.test(id)) return null
+  return id.toLowerCase()
+}
+
+export interface CompareRow {
+  product_id: string
+  slug: string
+  name: string
+  brand: string
+  min_price: number
+  has_discount: boolean
+  in_stock: boolean
+  available_stock: number
+  variant_count: number
+  key_specs: Array<{ label: string; value: string }>
+  url: string
+}
+
+export interface CompareResult {
+  rows: CompareRow[]
+  unknownIdentifiers: string[]
+  summary: { cheapest: { slug: string; min_price: number } | null; inStock: string[] }
+}
+
+/** Side-by-side comparison of 2–4 products for the compare flow. */
+export async function compareProducts(
+  identifiers: string[],
+  seenIdToSlug?: Map<string, string>,
+): Promise<CompareResult> {
+  const unique = [...new Set(identifiers.map((s) => String(s ?? '').trim()).filter(Boolean))].slice(0, 4)
+  const rows: CompareRow[] = []
+  const unknownIdentifiers: string[] = []
+  for (const raw of unique) {
+    const slug = resolveSeenOrSlug(raw, seenIdToSlug)
+    const detail = slug ? await getProductBySlug(slug) : null
+    if (!detail) {
+      unknownIdentifiers.push(raw)
+      continue
+    }
+    rows.push({
+      product_id: detail.id,
+      slug: detail.slug,
+      name: detail.name,
+      brand: detail.brandName ?? '',
+      min_price: detail.minPrice,
+      has_discount: detail.hasDiscount,
+      in_stock: detail.inStock,
+      available_stock: detail.availableStock,
+      variant_count: detail.variants.length,
+      key_specs: detail.specs.slice(0, 6).map((s) => ({ label: s.label, value: s.value })),
+      url: `/products/${detail.slug}`,
+    })
+  }
+  const byPrice = [...rows].sort((a, b) => a.min_price - b.min_price)
+  return {
+    rows,
+    unknownIdentifiers,
+    summary: {
+      cheapest: byPrice.length > 0 ? { slug: byPrice[0].slug, min_price: byPrice[0].min_price } : null,
+      inStock: rows.filter((r) => r.in_stock).map((r) => r.slug),
+    },
+  }
+}
+
+export interface PlanLineInput {
+  identifier: string
+  quantity: number
+}
+
+export interface PlanDraft {
+  title: string
+  lines: Array<{
+    product_id: string
+    slug: string
+    name: string
+    unit_price: number
+    quantity: number
+    line_total: number
+    url: string
+  }>
+  total: number
+  budget: number | null
+  overBudget: boolean
+  rejected: Array<{ identifier: string; reason: string }>
+}
+
+export const MAX_PLAN_LINES = 6
+export const MAX_PLAN_QTY = 10
+
+/**
+ * Shopping plan flow: validate a shortlist (provenance + stock + quantity
+ * caps) and price it against an optional budget. The plan hands off to cart
+ * tools — it never reserves stock.
+ */
+export async function buildShoppingPlan(
+  input: { title?: string; budget?: number; lines: PlanLineInput[] },
+  seenIdToSlug?: Map<string, string>,
+): Promise<PlanDraft> {
+  const lines: PlanDraft['lines'] = []
+  const rejected: PlanDraft['rejected'] = []
+  let total = 0
+  for (const line of (input.lines ?? []).slice(0, MAX_PLAN_LINES)) {
+    const qty = Math.floor(Number(line.quantity))
+    if (!Number.isFinite(qty) || qty < 1 || qty > MAX_PLAN_QTY) {
+      rejected.push({ identifier: String(line.identifier ?? ''), reason: `Số lượng phải 1–${MAX_PLAN_QTY}.` })
+      continue
+    }
+    const slug = resolveSeenOrSlug(String(line.identifier ?? ''), seenIdToSlug)
+    if (!slug) {
+      rejected.push({ identifier: String(line.identifier ?? ''), reason: 'Chỉ dùng id do tool trả về trong cuộc trò chuyện.' })
+      continue
+    }
+    const detail = await getProductBySlug(slug)
+    if (!detail) {
+      rejected.push({ identifier: String(line.identifier ?? ''), reason: 'Không tìm thấy sản phẩm.' })
+      continue
+    }
+    if (!detail.inStock) {
+      rejected.push({ identifier: detail.slug, reason: 'Sản phẩm đang hết hàng.' })
+      continue
+    }
+    const lineTotal = detail.minPrice * qty
+    total += lineTotal
+    lines.push({
+      product_id: detail.id,
+      slug: detail.slug,
+      name: detail.name,
+      unit_price: detail.minPrice,
+      quantity: qty,
+      line_total: lineTotal,
+      url: `/products/${detail.slug}`,
+    })
+  }
+  const budget = typeof input.budget === 'number' && Number.isFinite(input.budget) && input.budget > 0
+    ? Math.floor(input.budget)
+    : null
+  return {
+    title: (input.title ?? 'Kế hoạch mua sắm').slice(0, 120),
+    lines,
+    total,
+    budget,
+    overBudget: budget != null && total > budget,
+    rejected,
   }
 }

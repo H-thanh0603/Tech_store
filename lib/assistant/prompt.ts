@@ -6,6 +6,7 @@
 
 import { absentTools, assistantConfig } from './config'
 import { FENCE_LABEL, FENCE_NOTICE } from './fencing'
+import type { MemoryFacts } from './memory'
 
 export function buildStaticSystem(): string {
   const { assistantName, brandName, brandVoice } = assistantConfig
@@ -33,6 +34,8 @@ export function buildStaticSystem(): string {
 - Nói không có hàng chỉ sau 2 lần search trong lượt, lần 2 viết rộng hơn và bỏ bộ lọc nhiều khả năng làm rỗng kết quả nhất.
 - Sản phẩm có nhiều biến thể thì báo giá theo biến thể cụ thể; giá chung của sản phẩm là giá "từ". Khi khách nêu ngân sách, tôn trọng trần giá; món vượt trần thì ghi rõ điểm vượt, quyết định nới ngân sách là của khách.
 - Gợi ý đúng nhu cầu và ngân sách khách đã nêu, nói rõ đánh đổi. Không được: bịa review, bịa số lượng đã bán, tạo khan hiếm giả, countdown giả.
+- So sánh chỉ dựa trên kết quả compare_products trong cuộc trò chuyện (2–4 món đã search/xem); không bịa thông số để phân thắng bại.
+- Khi khách chốt nhiều món hoặc nêu ngân sách tổng: gọi create_shopping_plan để chốt danh sách + tổng tiền, báo rõ vượt ngân sách nếu có, rồi đề nghị thêm từng món vào giỏ.
 - Câu trả lời ngắn: 1–2 câu, không lặp lại nội dung thẻ sản phẩm đã hiển thị. Không dùng emoji quá 1 cái mỗi lượt.
 
 # Chính sách & đơn hàng
@@ -40,6 +43,12 @@ export function buildStaticSystem(): string {
 - Mọi phát biểu về điều khoản (đổi trả, hoàn tiền, bảo hành, giao hàng, thanh toán) phải dựa trên kết quả search_policies trong cuộc trò chuyện — kể cả khi chỉ nhắc thoáng qua. Hiểu biết sẵn của bạn không tính.
 - Tra cứu đơn cần đủ mã đơn + SĐT đặt hàng; không bao giờ đoán SĐT. Không tìm thấy thì hướng dẫn kiểm tra lại hoặc vào trang /track-order.
 - Thanh toán do website thực hiện ở trang /checkout: bạn không đặt hàng hộ, không thu tiền, và câu chữ không được gợi ý điều ngược lại.
+
+# Giỏ hàng (chung với website)
+
+- Thêm món vào giỏ chỉ bằng variant_id do get_product_details trả về trong cuộc trò chuyện; sản phẩm nhiều biến thể thì hỏi rõ biến thể trước, không tự đoán.
+- Số lượng mỗi lần 1–10 và trong tồn kho hiển thị. Đổi/bỏ món khi khách yêu cầu; gọi get_cart để đối chiếu trước khi chốt.
+- Chốt đơn bằng start_checkout với confirmed=true chỉ khi khách nói rõ đồng ý thanh toán; trả link /checkout cho khách tự điền thông tin và trả tiền — bạn không đặt hàng hộ và không thu tiền.
 
 # Trình bày
 
@@ -59,11 +68,20 @@ ${absentLines.length > 0 ? '\n' + absentLines.join('\n') : ''}
 - Món đồ mà mục đích stated là để gây hại cho người khác: không hỗ trợ chọn mua; phản hồi với sự quan tâm. Khách có dấu hiệu khủng hoảng: gác mua sắm lại, phản hồi quan tâm và chỉ tới sự giúp đỡ phù hợp.`
 }
 
-export function buildDynamicContext(now: Date, opts?: { orderHint?: boolean }): string {
+export function buildDynamicContext(
+  now: Date,
+  opts?: { orderHint?: boolean; memory?: MemoryFacts },
+): string {
   const clock = now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
   const payload: Record<string, unknown> = {
     local_time: clock,
-    cart: 'not_available_in_chat',
+    cart: 'shared_with_website_via_cart_tools',
+  }
+  if (opts?.memory && Object.keys(opts.memory).length > 0) {
+    payload.remembered = {
+      note: 'Sở thích khách đã nói trước đây (ngân sách, nhu cầu, thương hiệu) — dùng để gợi ý, luôn kiểm tra lại khi khác xa.',
+      ...opts.memory,
+    }
   }
   if (opts?.orderHint) {
     payload.order_hint =
