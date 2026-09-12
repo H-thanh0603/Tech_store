@@ -53,9 +53,17 @@ export async function proxy(request: NextRequest) {
       : []),
   ]
 
+  // NOTE (2026-09-12, verified on production): script-src MUST NOT use a
+  // per-request nonce. `/` and product pages are ISR-cached, so the HTML in
+  // the cache carries the nonce baked at render time while the next request
+  // sends a fresh nonce in the header — the browser then blocks every Next.js
+  // hydration/flight inline script and the page stays a skeleton forever
+  // (React #412). Nonce + ISR cache are fundamentally incompatible, so inline
+  // scripts are allowed here; external scripts are still restricted to 'self'
+  // and exfiltration is still bounded by connect-src + object-src + reporting.
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'${development ? " 'unsafe-eval'" : ''}`,
+    `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ''}`,
     `style-src 'self' 'nonce-${nonce}'`,
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
