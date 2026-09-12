@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useActionState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -41,12 +40,15 @@ export function AdminMfaSetupForm() {
   return (
     <div className="mx-auto w-full max-w-md space-y-5">
       <div className="mx-auto w-fit rounded-(--radius-lg) border border-border bg-white p-3">
-        <Image
+        {/* Plain <img>: the Supabase enrollment QR is a data:image/svg+xml URL,
+            which next/image rejects on Next 16 even with dangerouslyAllowSVG.
+            No optimization is needed for a generated QR code. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={enrollment.data.qrCode}
           alt="Mã QR để đăng ký xác thực hai bước"
           width={220}
           height={220}
-          unoptimized
         />
       </div>
       <div className="space-y-1 text-(length:--text-sm)">
