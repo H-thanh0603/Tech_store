@@ -134,7 +134,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           categorySlug: product.categorySlug,
         }}
       />
-      <JsonLd data={productJsonLd(product)} nonce={nonce} />
+      <JsonLd data={productJsonLd(product, reviewSummary)} nonce={nonce} />
       <JsonLd
         nonce={nonce}
         data={breadcrumbJsonLd([

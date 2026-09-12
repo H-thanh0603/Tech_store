@@ -1,14 +1,32 @@
 import type { ProductDetail } from '@/lib/catalog/types'
 import { getSiteUrl } from '@/lib/site'
 
-export function productJsonLd(product: ProductDetail) {
+export function productJsonLd(
+  product: ProductDetail,
+  rating?: { average: number; count: number },
+) {
   const site = getSiteUrl()
   const url = `${site}/products/${product.slug}`
   const image = product.images[0]?.url
   const prices = product.variants.map((v) => v.salePrice ?? v.regularPrice)
-  const low = Math.min(...prices)
-  const high = Math.max(...prices)
-  const inStock = product.variants.some((v) => v.availableStock > 0)
+  const low = prices.length ? Math.min(...prices) : 0
+  const high = prices.length ? Math.max(...prices) : 0
+
+  // Per-variant offers: Google Rich Results and external AI agents consume
+  // SKU-level price + availability; the aggregate stays for price-range display.
+  const offers = product.variants.map((v) => ({
+    '@type': 'Offer',
+    url: `${url}?sku=${encodeURIComponent(v.sku)}`,
+    sku: v.sku,
+    priceCurrency: 'VND',
+    price: v.salePrice ?? v.regularPrice,
+    itemCondition: 'https://schema.org/NewCondition',
+    availability:
+      v.availableStock > 0
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+    seller: { '@type': 'Organization', name: 'TechStore' },
+  }))
 
   return {
     '@context': 'https://schema.org',
@@ -20,17 +38,33 @@ export function productJsonLd(product: ProductDetail) {
     brand: product.brandName
       ? { '@type': 'Brand', name: product.brandName }
       : undefined,
-    offers: {
-      '@type': 'AggregateOffer',
-      url,
-      priceCurrency: 'VND',
-      lowPrice: low,
-      highPrice: high,
-      offerCount: product.variants.length,
-      availability: inStock
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock',
-    },
+    aggregateRating:
+      rating && rating.count > 0
+        ? {
+            '@type': 'AggregateRating',
+            ratingValue: rating.average,
+            reviewCount: rating.count,
+          }
+        : undefined,
+    offers:
+      offers.length > 1
+        ? {
+            '@type': 'AggregateOffer',
+            url,
+            priceCurrency: 'VND',
+            lowPrice: low,
+            highPrice: high,
+            offerCount: offers.length,
+            offers,
+          }
+        : (offers[0] ?? {
+            '@type': 'AggregateOffer',
+            url,
+            priceCurrency: 'VND',
+            lowPrice: low,
+            highPrice: high,
+            offerCount: product.variants.length,
+          }),
   }
 }
 

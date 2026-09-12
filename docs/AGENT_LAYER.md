@@ -36,8 +36,10 @@ TechStore được nâng cấp theo mô hình **hai lớp**, cùng một hệ th
 | `GET /api/v1/agents/manifest` | Tool manifest JSON tự mô tả: endpoints, tham số, cả `notCapabilities` | cache 5 phút |
 | `GET /api/v1/agents/products` | Tìm kiếm/lọc catalog (q, category, brand, useCase, minPrice, maxPrice, inStock, sort, page) | 60 / 15 phút |
 | `GET /api/v1/agents/products/{slug}` | Chi tiết sản phẩm: biến thể, thông số, ảnh | 60 / 15 phút |
+| `GET /api/v1/agents/compare?slugs=a,b` | So sánh 2–4 sản phẩm + tóm tắt rẻ nhất/còn hàng | 60 / 15 phút |
 | `GET /api/v1/agents/orders` | Tra cứu đơn: `order_code` + `phone` (phone-verified) | 20 / 15 phút |
 | `GET /api/v1/agents/policies` | Chính sách đã công bố (đổi trả, bảo hành...) | — |
+| `POST /api/v1/agents/intents` | Stage đơn hộ khách (Bearer `tsa_…`, scope `cart:write`) → trả `approvalUrl` cho người duyệt | 30 / 15 phút / token |
 
 Canonical implementation nằm ở `app/api/agents/*`; các đường dẫn
 `app/api/v1/agents/*` chỉ re-export, theo convention versioning của repo
@@ -45,16 +47,17 @@ Canonical implementation nằm ở `app/api/agents/*`; các đường dẫn
 
 ## Nguyên tắc thiết kế
 
-1. **Chỉ đọc, không hành động thay con người.** Không có endpoint đặt hàng,
-   thêm giỏ, thanh toán. Đây là ranh giới tin cậy cố ý: bài học từ WebMCP —
-   cho AI quyền gọi function là mở một security boundary mới (tool spoofing,
-   prompt injection, consequential actions — arXiv:2608.24017, 2511.20597).
-   Hành động có hậu quả (mua hàng, trả tiền) thuộc về human-in-the-loop trên
-   website.
-2. **Không bịa, không leak.** API trả về đúng dữ liệu storefront render.
+1. **Đọc tự do, viết qua intent có người duyệt.** Agent được stage order intent
+   (slug + SKU + số lượng) nhưng đơn thật và tiền chỉ xảy ra khi con người mở
+   `approvalUrl`, bấm duyệt, rồi checkout trên website. Tồn kho không giữ lúc
+   stage — kiểm tra live lúc duyệt (fail-closed: hết hàng thì intent giữ nguyên).
+2. **Token phân quyền.** Bearer `tsa_…` do chủ shop mint out-of-band
+   (`scripts/mint-agent-token.mjs`), lưu SHA-256, scope duy nhất `cart:write`,
+   rate-limit riêng theo token. Hành động không có token → 401, sai scope → 403.
+3. **Không bịa, không leak.** API trả về đúng dữ liệu storefront render.
    Số tồn kho chính xác không expose — chỉ `inStock`/`lowStock` (ngưỡng
    "còn ≤ 5" giống UI), chống scraper đánh giá tồn kho hàng loạt. Variant id
-   internal bị bỏ; agent tham chiếu sản phẩm bằng slug.
+   internal bị bỏ ở lớp đọc; agent tham chiếu sản phẩm bằng slug (+ SKU khi stage).
 3. **Tra cứu đơn giữ đúng trust boundary cũ**: code + phone phải khớp, mints
    no token (tái dùng `trackOrder` của shopping assistant).
 4. **Rate-limit per IP** qua RPC `check_rate_limit` có sẵn (fail-open khi
@@ -73,9 +76,21 @@ TechStore"):
 ```text
 Agent đọc /llms.txt hoặc /api/v1/agents/manifest
   → GET /api/v1/agents/products?q=laptop&maxPrice=20000000
-  → GET /api/v1/agents/products/{slug} cho món được chọn
+  → GET /api/v1/agents/compare?slugs=a,b cho 2–3 món được chọn
   → trả lời kèm link về /products/{slug} cho khách tự đặt hàng
 ```
+
+**Agent stage đơn (cần token `cart:write` do chủ shop cấp):**
+
+```text
+Agent POST /api/v1/agents/intents {items:[{slug, sku, quantity}]}
+  → nhận approvalUrl (hết hạn 30 phút)
+  → KHÁCH mở link, thấy món + tổng tiền, bấm "Duyệt — chuyển vào giỏ & thanh toán"
+  → món vào giỏ của khách, sang /checkout, khách tự trả tiền như bình thường
+```
+
+Mỗi bước ghi audit (`agent:<tên>` lúc stage, `human-approval` lúc duyệt/từ
+chối) — chủ shop truy vết được "đơn này do AI nào gợi ý".
 
 **Trợ lý TechStore trong web**: tiếp tục dùng tools server-side nội bộ
 (`lib/assistant/*`) — không thay đổi. Lớp agent công khai bổ sung, không
@@ -89,21 +104,29 @@ app/api/agents/
   manifest/route.ts                    tool manifest JSON
   products/route.ts                    search/lọc
   products/[slug]/route.ts             chi tiết
+  compare/route.ts                     so sánh 2–4 sản phẩm
   orders/route.ts                      tra cứu đơn (phone-verified)
   policies/route.ts                    chính sách
+  intents/route.ts                     stage đơn (Bearer cart:write) → approvalUrl
+app/intent/[token]/page.tsx            trang người duyệt intent → chuyển vào giỏ
 app/api/v1/agents/...                  re-export versioned (external pin vào đây)
 lib/agents/public-api.ts               rate-limit + IP + DTO mappers dùng chung
+lib/agents/tokens.ts                   verify Bearer token + bucket per-token
+scripts/mint-agent-token.mjs           mint token out-of-band (in plaintext 1 lần)
 supabase/migrations/202609120001_agent_rate_limit_buckets.sql
+supabase/migrations/202609120002_agent_write_layer.sql   agent_tokens + intents + bucket
 supabase/tests/agent_rate_limit.sql   pgTAP
-tests/api/agent-layer.test.ts          13 unit tests
+supabase/tests/agent_write_layer.sql  pgTAP (RLS, scope check, bucket)
+tests/api/agent-layer.test.ts          17 unit tests
+tests/api/agent-intents.test.ts        8 unit tests (token + intents)
 ```
 
 ## Khi nào mở rộng
 
 - **WebMCP / A2A lên chuẩn thật**: bọc manifest này thành MCP server là việc
   nhỏ — interface đã sẵn; chỉ đổi lớp transport, không đổi logic đọc.
-- **Write-capabilities** (add-to-cart qua agent): chỉ cân nhắc khi có
-  human-approval flow tương đương checkpoint thanh toán; đến lúc đó tách
-  bucket rate-limit riêng và trình duyệt review security như các nguồn W3C
-  đang làm với consequential actions.
+- **Đã làm (09/2026): write-capabilities qua intent + human approval** (task
+  4–5): token `cart:write`, intent 30 phút, duyệt → giỏ → checkout người trả
+  tiền. Muốn agent giữ hàng thật (hold inventory lúc stage) thì thêm RPC
+  reservation + bồi thường khi intent hết hạn — cân nhắc oversell/abuse trước.
 - Spatial/3D (WebXR, WebGPU): nhánh năng lực riêng, không thuộc layer này.

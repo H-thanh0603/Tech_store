@@ -47,8 +47,54 @@ describe('JSON-LD builders', () => {
     const data = productJsonLd(product)
     expect(data['@type']).toBe('Product')
     expect(data.name).toBe('MacBook Air M3')
-    expect((data.offers as { priceCurrency: string }).priceCurrency).toBe('VND')
-    expect((data.offers as { lowPrice: number }).lowPrice).toBe(30_000_000)
+    // Single variant collapses to one Offer (no aggregate wrapper).
+    const offer = data.offers as { '@type': string; priceCurrency: string; price: number }
+    expect(offer['@type']).toBe('Offer')
+    expect(offer.priceCurrency).toBe('VND')
+    expect(offer.price).toBe(30_000_000)
+  })
+
+  it('emits per-variant offers with seller and condition', () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.com'
+    const two = {
+      ...product,
+      variants: [
+        ...product.variants,
+        {
+          ...product.variants[0],
+          id: 'v2',
+          sku: 'MBA-M3-16',
+          regularPrice: 35_000_000,
+          price: 35_000_000,
+        },
+      ],
+    }
+    const data = productJsonLd(two)
+    const offers = data.offers as {
+      '@type': string
+      offers: Array<{
+        '@type': string
+        sku: string
+        price: number
+        itemCondition: string
+        seller: { name: string }
+      }>
+    }
+    expect(offers['@type']).toBe('AggregateOffer')
+    expect(offers.offers).toHaveLength(2)
+    expect(offers.offers[0].itemCondition).toBe('https://schema.org/NewCondition')
+    expect(offers.offers[0].seller.name).toBe('TechStore')
+  })
+
+  it('adds aggregateRating only when reviews exist', () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.com'
+    expect(productJsonLd(product).aggregateRating).toBeUndefined()
+    expect(
+      productJsonLd(product, { average: 4.5, count: 12 }).aggregateRating,
+    ).toEqual({ '@type': 'AggregateRating', ratingValue: 4.5, reviewCount: 12 })
+    expect(
+      productJsonLd(product, { average: 0, count: 0 }).aggregateRating,
+    ).toBeUndefined()
   })
 
   it('builds breadcrumb positions', () => {

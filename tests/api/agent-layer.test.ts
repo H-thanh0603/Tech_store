@@ -22,6 +22,7 @@ vi.mock('@/lib/assistant/backend', () => ({ trackOrder }))
 
 import { GET as listProducts } from '@/app/api/agents/products/route'
 import { GET as productDetail } from '@/app/api/agents/products/[slug]/route'
+import { GET as compareProducts } from '@/app/api/agents/compare/route'
 import { GET as trackOrderRoute } from '@/app/api/agents/orders/route'
 import { GET as policies } from '@/app/api/agents/policies/route'
 import { GET as manifest } from '@/app/api/agents/manifest/route'
@@ -143,6 +144,90 @@ describe('agent catalog endpoints', () => {
   })
 })
 
+describe('agent compare endpoint', () => {
+  const detailA = {
+    id: 'p1',
+    name: 'Laptop A',
+    slug: 'laptop-a',
+    description: null,
+    categoryId: 'c1',
+    categorySlug: 'laptop',
+    categoryName: 'Laptop',
+    brandName: 'Dell',
+    isFeatured: false,
+    images: [],
+    variants: [
+      {
+        id: 'v1',
+        sku: 'A-1',
+        attributes: {},
+        regularPrice: 15000000,
+        salePrice: null,
+        price: 15000000,
+        hasDiscount: false,
+        availableStock: 2,
+        inStock: true,
+      },
+    ],
+    specs: [],
+    useCases: [],
+    minPrice: 15000000,
+    hasDiscount: false,
+    availableStock: 2,
+    inStock: true,
+  }
+  const detailB = { ...detailA, id: 'p2', name: 'Laptop B', slug: 'laptop-b', minPrice: 20000000 }
+
+  beforeEach(() => {
+    rpc.mockReset().mockResolvedValue({ data: false })
+    getProductBySlug.mockReset()
+  })
+
+  it('rejects fewer than 2 or more than 4 slugs', async () => {
+    expect(await (await compareProducts(new Request('http://localhost/api/agents/compare?slugs=a'))).status).toBe(400)
+    expect(
+      await (await compareProducts(new Request('http://localhost/api/agents/compare?slugs=a,b,c,d,e'))).status,
+    ).toBe(400)
+  })
+
+  it('returns products plus cheapest/in-stock summary', async () => {
+    getProductBySlug.mockImplementation(async (slug: string) =>
+      slug === 'laptop-a' ? detailA : slug === 'laptop-b' ? detailB : null,
+    )
+    const res = await compareProducts(
+      new Request('http://localhost/api/agents/compare?slugs=laptop-a,laptop-b'),
+    )
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.products).toHaveLength(2)
+    expect(body.unknownSlugs).toEqual([])
+    expect(body.summary.cheapest).toMatchObject({ slug: 'laptop-a', minPrice: 15000000 })
+    expect(body.summary.inStock).toEqual(expect.arrayContaining(['laptop-a', 'laptop-b']))
+    expect(body.products[0]).not.toHaveProperty('availableStock')
+  })
+
+  it('reports unknown slugs explicitly instead of fabricating', async () => {
+    getProductBySlug.mockImplementation(async (slug: string) =>
+      slug === 'laptop-a' ? detailA : null,
+    )
+    const res = await compareProducts(
+      new Request('http://localhost/api/agents/compare?slugs=laptop-a,ghost'),
+    )
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.products).toHaveLength(1)
+    expect(body.unknownSlugs).toEqual(['ghost'])
+  })
+
+  it('returns 404 when no slug matches', async () => {
+    getProductBySlug.mockResolvedValue(null)
+    const res = await compareProducts(
+      new Request('http://localhost/api/agents/compare?slugs=ghost1,ghost2'),
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
 describe('agent order endpoint', () => {
   beforeEach(() => {
     rpc.mockReset().mockResolvedValue({ data: false })
@@ -195,8 +280,10 @@ describe('agent policies and manifest', () => {
     expect(Object.keys(body.capabilities)).toEqual([
       'searchProducts',
       'getProduct',
+      'compareProducts',
       'trackOrder',
       'getPolicy',
+      'stageOrderIntent',
     ])
     expect(body.capabilities.searchProducts.endpoint).toContain('/api/v1/agents/products')
     expect(body.notCapabilities.join(' ')).toMatch(/thanh toán/i)

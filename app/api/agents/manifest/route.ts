@@ -70,6 +70,13 @@ export async function GET() {
           method: 'GET',
           parameters: { slug: 'slug sản phẩm do searchProducts trả về' },
         },
+        compareProducts: {
+          description:
+            'So sánh 2–4 sản phẩm cạnh nhau: chi tiết từng món (giá theo biến thể, tồn kho, thông số) kèm tóm tắt món rẻ nhất và các món còn hàng.',
+          endpoint: `${base}/api/v1/agents/compare`,
+          method: 'GET',
+          parameters: { slugs: 'danh sách 2–4 slug, cách nhau bằng dấu phẩy' },
+        },
         trackOrder: {
           description:
             'Tra cứu trạng thái đơn hàng. Cần mã đơn + số điện thoại đặt hàng — không bao giờ đoán số điện thoại.',
@@ -85,9 +92,17 @@ export async function GET() {
           parameters: { q: 'câu hỏi về chính sách' },
           topics: policyTopics,
         },
+        stageOrderIntent: {
+          description:
+            'Chuẩn bị đơn hộ khách (scope cart:write): gửi slug + SKU + số lượng, nhận approvalUrl để KHÁCH TỰ MỞ và duyệt. Agent không bao giờ tạo đơn thật hay trừ tiền — đơn và thanh toán chỉ xảy ra khi con người bấm duyệt rồi checkout trên website. Tồn kho kiểm tra lại lúc duyệt.',
+          endpoint: `${base}/api/v1/agents/intents`,
+          method: 'POST',
+          auth: 'Authorization: Bearer tsa_… (token do chủ shop cấp, xem /llms.txt)',
+          parameters: { items: 'mảng 1–10 món {slug, sku, quantity 1–99}' },
+        },
       },
       notCapabilities: [
-        'Đặt hàng, thêm vào giỏ hay thanh toán qua API — khách hàng tự hoàn tất trên website.',
+        'Tạo đơn thật, thêm vào giỏ của khách hay thanh toán qua API — agent chỉ stage intent, khách tự duyệt và trả tiền trên website.',
         'Tra cứu phí vận chuyển theo thời gian thực — hiển thị ở bước thanh toán.',
       ],
       rateLimits: {
