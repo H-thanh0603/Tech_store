@@ -10,6 +10,7 @@ import { CatalogFilterDrawer } from '@/components/commerce/catalog-filter-drawer
 import { CatalogSort } from '@/components/commerce/catalog-sort'
 import { Pagination } from '@/components/commerce/pagination'
 import { ProductGrid } from '@/components/commerce/product-grid'
+import { ProductGridSkeleton } from '@/components/ui/loading-skeleton'
 import { getCatalogFacets, getProducts, normalizeCatalogFilters } from '@/lib/catalog/queries'
 import { parseCatalogSearchParams, type RawSearchParams } from '@/lib/catalog/search-params'
 
@@ -18,11 +19,14 @@ export const metadata: Metadata = {
   description: 'Danh sách sản phẩm công nghệ chọn lọc: laptop, điện thoại và phụ kiện.',
 }
 
-// Catalog changes slowly (price/stock adjust, new products are not added
-// every minute). Caching the rendered HTML for 60 s removes most of the
-// DB load on shared Supabase free-tier without making the storefront
-// feel stale.
+// Catalog dùng searchParams (filter/sort/page trong URL) nên route này dynamic
+// theo thiết kế — ISR 60s không áp dụng cho HTML đã lọc. Chiến lược LCP:
+// shell tĩnh (breadcrumb + heading + facets cached 5m) paint ngay, grid kết quả
+// chạy trong Suspense để TTFB nhanh và CDN có thể cache shell.
+// Facets: unstable_cache 5m. Kết quả: no-store (giá/tồn realtime).
+// Khi catalog >5000 SP: đọc từ catalog_products_cached matview (xem migration 20260914).
 export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 interface ProductsPageProps {
   searchParams: Promise<RawSearchParams>
@@ -110,7 +114,9 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
           </CatalogFilterDrawer>
 
           {hasResults ? (
-            <ProductGrid products={result.products} />
+            <Suspense fallback={<ProductGridSkeleton />}>
+              <ProductGrid products={result.products} />
+            </Suspense>
           ) : (
             <div className="flex flex-col items-start gap-4 rounded-(--radius-xl) border border-dashed border-border-strong bg-surface-muted/60 px-6 py-12">
               <p className="text-(length:--text-lg) font-semibold text-fg">

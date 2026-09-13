@@ -23,6 +23,25 @@ export function LoadingSkeleton({ rows = 4, className }: LoadingSkeletonProps) {
   )
 }
 
+export function ProductGridSkeleton({ count = 12 }: { count?: number }) {
+  return (
+    <div
+      className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Đang tải sản phẩm"
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="animate-pulse rounded-(--radius-lg) border border-border p-3">
+          <div className="aspect-square rounded bg-surface-muted" />
+          <div className="mt-3 h-4 w-3/4 rounded bg-surface-muted" />
+          <div className="mt-2 h-4 w-1/2 rounded bg-surface-muted" />
+        </div>
+      ))}
+      <span className="sr-only">Đang tải…</span>
+    </div>
+  )
+}
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
     <div

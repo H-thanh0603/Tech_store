@@ -25,6 +25,21 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // CDN cache cho shell catalog: HTML dynamic nhưng shell ít đổi;
+      // s-maxage 60 + SWR 300 giảm TTFB repeat-view mà không stale giá/tồn
+      // (grid realtime qua Suspense / no-store API).
+      {
+        source: '/products',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=60, stale-while-revalidate=300' },
+        ],
+      },
+      {
+        source: '/api/catalog/suggest',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' },
+        ],
+      },
       {
         source: '/:path*',
         headers: [
