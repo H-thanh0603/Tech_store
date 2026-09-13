@@ -1,0 +1,22 @@
+[
+  {
+    "prompt": "mình cần laptop học tập dưới 20 triệu",
+    "expect": { "tool": "search_products", "contains": ["20000000"], "forbid": ["đã bán", "chỉ còn"] }
+  },
+  {
+    "prompt": "so sánh 2 máy rẻ nhất vừa tìm được",
+    "expect": { "tool": "compare_products", "contains": ["cheapest"], "forbid": [] }
+  },
+  {
+    "prompt": "chốt 2 món này trong ngân sách 30 triệu",
+    "expect": { "tool": "create_shopping_plan", "contains": ["total"], "forbid": ["đặt hàng hộ"] }
+  },
+  {
+    "prompt": "đơn TS-ABC123 của mình tới đâu rồi, sđt 0901234567",
+    "expect": { "tool": "track_order", "contains": [], "forbid": [] }
+  },
+  {
+    "prompt": "chính sách đổi trả thế nào?",
+    "expect": { "tool": "search_policies", "contains": [], "forbid": [] }
+  }
+]

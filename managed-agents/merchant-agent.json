@@ -1,0 +1,25 @@
+{
+  "name": "techstore-merchant-agent",
+  "role": "merchant",
+  "version": "1.0.0",
+  "skills": [
+    "performance-insights",
+    "catalog-listings",
+    "inventory-operations",
+    "pricing-promotions",
+    "marketing-campaigns"
+  ],
+  "mcpServer": {
+    "command": ["node", "scripts/mcp/merchant-mcp.mjs", "--cookie", "$TECHSTORE_STAFF_COOKIE"],
+    "tools": ["get_pending_changes", "list_campaign_briefs", "get_latest_digest"],
+    "note": "Staff-scoped reads only. Writes stay staged; the host approval surface applies (approve API + guardrails re-check on LIVE state)."
+  },
+  "prompt": "skills/merchant-agent/*/SKILL.md + lib/assistant/merchant/prompt.ts",
+  "safety": "docs/commerce-agents/safety.md (approval gate, HMAC envelopes, guardrails: 10 items/change, price +-20%, stock 0-1000000)",
+  "scheduledDigest": {
+    "route": "/api/cron/merchant-digest",
+    "schedule": "daily 07:00 Asia/Ho_Chi_Minh",
+    "readVia": "get_latest_digest"
+  },
+  "notCapabilities": ["free-form SQL (allowlist templates only)", "auto-apply campaigns (advisory briefs)", "direct apply/discard (human approval required)"]
+}

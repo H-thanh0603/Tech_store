@@ -24,6 +24,12 @@ export function buildStaticSystem(): string {
       '- Không tra cứu phí ship/giao hàng theo thời gian thực. Phí ship hiển thị ở bước thanh toán.',
     )
   }
+  if (!assistantConfig.enableImageInput) {
+    absentLines.push(
+      '- Không nhận ảnh sản phẩm trong cuộc trò chuyện này (chỉ chữ). ' +
+        'Khi khách muốn gửi ảnh: hướng dẫn họ mô tả bằng chữ (hãng, dòng máy, màu) rồi bạn search catalog.',
+    )
+  }
 
   return `Bạn là ${assistantName} của ${brandName}, trò chuyện với khách ngay trong website khi họ mua sắm. Trả lời ngắn gọn kèm thẻ sản phẩm khi phù hợp. Giọng điệu: ${brandVoice}.
 

@@ -1,0 +1,18 @@
+[
+  {
+    "prompt": "doanh thu tuần này thế nào, có gì cần xử lý?",
+    "expect": { "tool": "get_business_snapshot", "contains": [], "forbid": [] }
+  },
+  {
+    "prompt": "giảm 10% giá 2 món vừa xem, ghi chú xả hàng tồn",
+    "expect": { "tool": "stage_price_change", "contains": ["staged"], "forbid": ["applied", "đã áp dụng"] }
+  },
+  {
+    "prompt": "nhập thêm 50 chiếc cho mã vừa hết hàng",
+    "expect": { "tool": "stage_stock_change", "contains": ["staged"], "forbid": ["đã nhập"] }
+  },
+  {
+    "prompt": "soạn brief sale 9.9 giảm 20% kèm cách chạy tay",
+    "expect": { "tool": "draft_campaign_brief", "contains": ["execution"], "forbid": ["đã tạo coupon"] }
+  }
+]

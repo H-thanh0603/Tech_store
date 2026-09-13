@@ -24,6 +24,12 @@ describe('assistant pilot config', () => {
     }
   })
 
+  it('defaults order history on, model memory and image input off', () => {
+    expect(assistantConfig.enableOrderHistory).toBe(process.env.ASSISTANT_NO_ORDER_HISTORY !== '1')
+    expect(assistantConfig.enableMemoryExtraction).toBe(process.env.ASSISTANT_MEMORY === 'model')
+    expect(assistantConfig.enableImageInput).toBe(process.env.ASSISTANT_IMAGE_INPUT === '1')
+  })
+
   it('detects Vietnamese policy intent', () => {
     expect(wantsPolicyGrounding('Chính sách đổi trả thế nào?')).toBe(true)
     expect(wantsPolicyGrounding('hoàn tiền mất bao lâu')).toBe(true)

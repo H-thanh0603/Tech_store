@@ -9,16 +9,18 @@ TypeScript-native port of the shopping agent from
 
 | ON | OFF |
 |---|---|
-| `search_products` — catalog search (từ khóa, category, brand, trần giá) | Order history — guest không có tài khoản |
-| `get_product_details` — biến thể, thông số, ảnh | Streaming token-level, input ảnh (chưa cần) |
-| `compare_products` — so sánh 2–4 món cạnh nhau | Agent SDK / Managed Agents / MCP — xem `docs/AGENT_LAYER.md` (lớp agent công khai đã phủ vai trò này) |
+| `search_products` — catalog search (từ khóa, category, brand, trần giá) | Streaming token-level (SSE text deltas đã có), input ảnh (`enableImageInput`, mặc định OFF) |
+| `get_product_details` — biến thể, thông số, ảnh | Order history theo account (guest chỉ tra cứu theo SĐT của chính mình) |
+| `compare_products` — so sánh 2–4 món cạnh nhau | Xem thêm: skills (`skills/*`), plugin (`plugins/commerce-builder/`), docs (`docs/commerce-agents/`) |
 | `create_shopping_plan` — chốt danh sách + tổng tiền theo ngân sách | |
 | Cart (`get_cart`, `add/update/remove`, `start_checkout`) — chung giỏ guest với website, gates provenance + số lượng 1–10, checkout chỉ trả link /checkout cho host hoàn tất | |
-| `get_fulfillment_options` — phí ship live + cửa hàng pickup | |
+| `get_fulfillment_options` — phí ship live + cửa hàng pickup | Streaming token-level, input ảnh (`enableImageInput`, mặc định OFF) |
 | `track_order` — mã đơn + SĐT, read-only, không mint token | |
+| `get_order_history` — 5 đơn gần nhất theo SĐT (không chi tiết thanh toán) | |
 | `search_policies` — passages tĩnh từ trang pháp lý | |
-| Memory — sở thích (ngân sách, nhu cầu, thương hiệu) theo session, rule-based, không lưu SĐT | |
+| Memory — sở thích (ngân sách, nhu cầu, thương hiệu) theo session; rule-based mặc định, model-driven (`update_memory` sau lượt) khi `ASSISTANT_MEMORY=model`; không lưu SĐT | |
 | `present_suggestions` — chips kết thúc lượt | |
+| Runtimes — Messages API (web), SDK consoles (`scripts/commerce-sdk/`), MCP servers (`scripts/mcp/`) + manifests (`managed-agents/`, deploy qua `npm run agent:deploy`) | |
 
 ## Setup
 
@@ -66,7 +68,7 @@ digest). Staff-only, MFA-verified, trong `/admin/assistant` (module
 |---|---|
 | `get_business_snapshot` — doanh thu/đơn 7 ngày, chờ xử lý, sắp hết, nháp | SQL tự do — chỉ template allowlist (`snapshot`, `low_stock`, `open_orders`, `revenue_by_payment`, `category_mix`) |
 | `get_inventory_alerts`, `get_order_issues` | Áp dụng campaign tự động — brief duyệt xong người thực hiện tay |
-| `search_listings`, `get_listing`, `get_pricing_context` | Memory extraction, streaming (đã có ở shopping; merchant giữ JSON + SSE hiện có) |
+| `search_listings`, `get_listing`, `get_pricing_context` | Memory extraction merchant (shopping đã có `update_memory`; merchant stateless theo ca trực) |
 | `stage_*` — publish/draft/archive, giá %/tắt sale, đặt tồn | apply/discard cho model (không có tool) |
 | `draft_campaign_brief` / `list_campaign_briefs` — brief khuyến mãi chờ duyệt ở `/api/v1/assistant/merchant/campaigns` | |
 | `run_analysis` — delegate phân tích theo template | |
@@ -115,9 +117,9 @@ Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
 ## Mở rộng
 
 - Thêm passage chính sách: sửa `lib/assistant/policies.ts` + giữ trang nguồn đồng bộ.
-- Memory hiện rule-based (ngân sách/nhu cầu/thương hiệu, không SĐT). Muốn model
-  tự trích xuất: thêm tool `update_memory` gọi model với transcript (tốn 1 call
-  mỗi lượt) — giữ validation không lưu PII.
+- Memory shopping: rule-based mặc định; bật `ASSISTANT_MEMORY=model` để trích
+  xuất bằng model sau mỗi lượt (`updateMemoryWithModel` — 1 call, transcript
+  lọc SĐT, JSON qua validation không PII + cap 2000 ký tự).
 - Merchant agent: campaigns briefs đã có (advisory); muốn tự tạo coupon thì thêm
   tool apply ký HMAC theo mẫu staged changes.
 

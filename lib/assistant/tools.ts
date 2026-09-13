@@ -11,6 +11,7 @@ import {
   compareProducts,
   fulfillmentOptions,
   getProductDetails,
+  orderHistory,
   policyResults,
   searchProducts,
   trackOrder,
@@ -40,6 +41,7 @@ export const TOOL_UPDATE_CART_ITEM = 'update_cart_item'
 export const TOOL_REMOVE_FROM_CART = 'remove_from_cart'
 export const TOOL_START_CHECKOUT = 'start_checkout'
 export const TOOL_TRACK_ORDER = 'track_order'
+export const TOOL_ORDER_HISTORY = 'get_order_history'
 export const TOOL_SEARCH_POLICIES = 'search_policies'
 export const TOOL_PRESENT_SUGGESTIONS = 'present_suggestions'
 
@@ -217,6 +219,20 @@ export function buildAnthropicTools(): Anthropic.Tool[] {
           phone: { type: 'string', description: 'Số điện thoại dùng khi đặt hàng' },
         },
         required: ['order_code', 'phone'],
+      },
+    })
+  }
+  if (assistantConfig.enableOrderHistory && !absent.has(TOOL_TRACK_ORDER)) {
+    tools.push({
+      name: TOOL_ORDER_HISTORY,
+      description:
+        'Xem 5 đơn gần nhất của một số điện thoại (mã đơn, trạng thái, tổng tiền, số món). Chỉ gọi khi khách cho SĐT của chính họ.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          phone: { type: 'string', description: 'Số điện thoại dùng khi đặt hàng' },
+        },
+        required: ['phone'],
       },
     })
   }
@@ -430,6 +446,19 @@ export async function dispatchTool(
           return fencePayload({ result: 'empty', hint: 'Không có chính sách liên quan.' })
         }
         return fencePayload({ result: 'ok', policies: passages })
+      }
+      case TOOL_ORDER_HISTORY: {
+        if (!assistantConfig.enableOrderHistory) {
+          return fencePayload({ result: 'held', hint: 'Tra cứu lịch sử đơn đang tắt trên môi trường này.' })
+        }
+        const history = await orderHistory(String(input.phone ?? ''))
+        if (!history) {
+          return fencePayload({ result: 'held', hint: 'Cần số điện thoại đặt hàng hợp lệ (đủ số, của chính khách).' })
+        }
+        if (history.length === 0) {
+          return fencePayload({ result: 'empty', hint: 'SĐT này chưa có đơn hàng nào.' })
+        }
+        return fencePayload({ result: 'ok', orders: history })
       }
       case TOOL_PRESENT_SUGGESTIONS: {
         const raw = Array.isArray(input.suggestions) ? input.suggestions : []

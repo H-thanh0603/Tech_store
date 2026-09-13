@@ -2,9 +2,10 @@
  * TechStore StorefrontBackend (port of `commerce-agents` StorefrontBackend).
  *
  * Each method calls the store's own systems server-side; the model only ever
- * sees the returned DTOs (fenced by the agent loop). Pilot scope: catalog
- * search + product details + order tracking (phone-verified, read-only) +
- * static policies. Cart writes are OFF (see config + docs/ASSISTANT.md).
+ * sees the returned DTOs (fenced by the agent loop). Full scope: catalog
+ * search + details + compare + plans + fulfillment + order tracking/history
+ * (phone-verified, read-only) + static policies. Cart writes live in
+ * `./cart.ts` under provenance + quantity gates (see config).
  */
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
@@ -235,6 +236,54 @@ export async function trackOrder(
     itemCount,
     createdAt: String(order.created_at ?? ''),
   }
+}
+
+export interface OrderHistoryItem {
+  orderCode: string
+  orderStatus: string
+  paymentStatus: string
+  total: number
+  itemCount: number
+  createdAt: string
+}
+
+/**
+ * Phone-scoped recent orders (guest-safe history: no account, no token).
+ * Returns null for an invalid phone, [] when the phone has no orders.
+ * Item counts only — no payment details, no addresses.
+ */
+export async function orderHistory(phone: string): Promise<OrderHistoryItem[] | null> {
+  const digits = phone.replace(/\D/g, '').slice(-10)
+  if (digits.length < 8) return null
+
+  const db = getSupabaseAdminClient()
+  const { data: orders, error } = await db
+    .from('orders')
+    .select('id, order_code, customer_phone, order_status, payment_status, total, created_at')
+    .ilike('customer_phone', `%${digits}`)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  if (error || !orders) return []
+  const rows = (orders as Array<Record<string, unknown>>).filter((o) =>
+    String(o.customer_phone ?? '').replace(/\D/g, '').slice(-10) === digits,
+  )
+  const history: OrderHistoryItem[] = []
+  for (const order of rows) {
+    const { data: items } = await db.from('order_items').select('quantity').eq('order_id', order.id)
+    const itemCount = ((items ?? []) as Array<{ quantity?: unknown }>).reduce(
+      (sum, row) => sum + Number(row.quantity ?? 0),
+      0,
+    )
+    history.push({
+      orderCode: String(order.order_code),
+      orderStatus: String(order.order_status),
+      paymentStatus: String(order.payment_status),
+      total: Number(order.total ?? 0),
+      itemCount,
+      createdAt: String(order.created_at ?? ''),
+    })
+  }
+  return history
 }
 
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

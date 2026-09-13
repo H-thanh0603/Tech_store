@@ -1,0 +1,23 @@
+{
+  "name": "techstore-shopping-agent",
+  "role": "shopping",
+  "version": "1.0.0",
+  "skills": [
+    "search-discovery",
+    "purchase-research",
+    "planning-goals",
+    "customer-care",
+    "memory-personalization"
+  ],
+  "mcpServer": {
+    "command": ["node", "scripts/mcp/storefront-mcp.mjs"],
+    "tools": ["search_products", "get_product_details", "compare_products", "track_order", "search_policies"]
+  },
+  "prompt": "skills/shopping-agent/*/SKILL.md + lib/assistant/prompt.ts (identity, grounding, fencing)",
+  "safety": "docs/commerce-agents/safety.md (fencing, provenance-lite, cart gates 1-10, caps 5+1 rounds)",
+  "checkout": {
+    "mode": "handoff",
+    "note": "checkout renders the cart for the host to complete at /checkout; the model never places an order"
+  },
+  "notCapabilities": ["order-history-by-account (guest only)", "image-input (text-only)", "holds-reservation (no inventory hold at stage)"]
+}

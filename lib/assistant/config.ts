@@ -3,8 +3,10 @@
  * `commerce-agents` shopping agent, Messages-API path).
  *
  * Scope: catalog search + details + compare + plans + cart (shared guest
- * cart) + order tracking + policies. Fulfillment options and memory
- * extraction are ON — see docs/ASSISTANT.md.
+ * cart) + order tracking + order history (phone-scoped) + policies.
+ * Fulfillment options and rule-based memory are ON — see docs/ASSISTANT.md.
+ * Model-driven memory extraction and image input are OFF by default
+ * (enable_* switches); their flows park under skills/_staged/.
  */
 export interface AssistantConfig {
   assistantName: string
@@ -19,8 +21,14 @@ export interface AssistantConfig {
 
   enableCart: boolean
   enableOrders: boolean
+  /** Phone-scoped recent-order lookup (guest-safe: code+phone never minted). */
+  enableOrderHistory: boolean
   enablePolicies: boolean
   enableFulfillment: boolean
+  /** Post-turn model extraction (1 extra call/turn); OFF = rule-based. */
+  enableMemoryExtraction: boolean
+  /** Image input blocks; OFF = text-only with an honest notCapability. */
+  enableImageInput: boolean
 }
 
 export const assistantConfig: AssistantConfig = {
@@ -38,8 +46,13 @@ export const assistantConfig: AssistantConfig = {
 
   enableCart: true,
   enableOrders: true,
+  enableOrderHistory: process.env.ASSISTANT_NO_ORDER_HISTORY !== '1',
   enablePolicies: true,
   enableFulfillment: true,
+  // ASSISTANT_MEMORY=model spends 1 extra model call per turn on extraction;
+  // anything else keeps the rule-based default (no extra call).
+  enableMemoryExtraction: process.env.ASSISTANT_MEMORY === 'model',
+  enableImageInput: process.env.ASSISTANT_IMAGE_INPUT === '1',
 }
 
 /** Tool names the pilot leaves out for systems switched off above. */

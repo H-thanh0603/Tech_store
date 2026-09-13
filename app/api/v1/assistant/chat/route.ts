@@ -3,7 +3,9 @@ import { z } from 'zod'
 
 import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
 import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/cart'
-import { loadMemoryFacts, sessionKeyHash, updateMemory } from '@/lib/assistant/memory'
+import { assistantConfig } from '@/lib/assistant/config'
+import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
+import { createProviderClient } from '@/lib/assistant/providers'
 import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import { streamToSSE } from '@/lib/assistant/sse'
 import { sha256Hex } from '@/lib/commerce/tokens'
@@ -69,21 +71,33 @@ export async function POST(request: Request) {
   )
   const cartTokenHash = await sha256Hex(cartToken)
 
-  // Memory (update_memory after the turn): rule-based prefs keyed by the
-  // client's session id. Fail-closed — chat works without it.
+  // Memory (update_memory after the turn): prefs keyed by the client's
+  // session id. Model-driven when ASSISTANT_MEMORY=model (1 extra call),
+  // otherwise rule-based. Fail-closed — chat works without it.
   const sessionKey = parsed.data.sessionId ? await sessionKeyHash(parsed.data.sessionId) : null
   const memory = sessionKey ? await loadMemoryFacts(sessionKey) : {}
   const userTexts = history.filter((m) => m.role === 'user').map((m) => m.content)
+  const persistMemory = () => {
+    if (!sessionKey) return
+    if (assistantConfig.enableMemoryExtraction) {
+      const client = createProviderClient()
+      if (client) {
+        void updateMemoryWithModel(sessionKey, userTexts, client, assistantConfig.model).catch(() => {})
+        return
+      }
+    }
+    void updateMemory(sessionKey, userTexts).catch(() => {})
+  }
 
   if (parsed.data.stream) {
-    if (sessionKey) void updateMemory(sessionKey, userTexts).catch(() => {})
+    persistMemory()
     const streamResponse = streamToSSE(streamAssistantTurn(history, { cartTokenHash, memory }))
     if (isNewCart) streamResponse.headers.set('set-cookie', cartSetCookie(cartToken))
     return streamResponse
   }
 
   const result = await runAssistantTurn(history, { cartTokenHash, memory })
-  if (sessionKey) void updateMemory(sessionKey, userTexts).catch(() => {})
+  persistMemory()
   const response = NextResponse.json({
     reply: result.reply,
     cards: result.cards,
