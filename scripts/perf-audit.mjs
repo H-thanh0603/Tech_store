@@ -37,7 +37,10 @@ for (const vp of VIEWPORTS) {
     throttling: { rttMs: 40, throughputKbps: 10_240, cpuSlowdownMultiplier: 1 },
   };
   try {
-    const result = await lighthouse(baseURL, { port: chrome.port }, flags);
+    // lighthouse(url, flags, config?): port belongs in flags; default config
+    // audits all categories filtered by onlyCategories. (Fix 2026-09-14: script
+    // previously passed flags as config → "No artifacts were defined".)
+    const result = await lighthouse(baseURL, { ...flags, port: chrome.port });
     const report = result.lhr;
     await writeFile(`${outDir}${vp.name}.json`, JSON.stringify(report, null, 2));
     const perf = report.categories.performance.score * 100;
