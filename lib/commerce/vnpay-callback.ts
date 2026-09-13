@@ -19,7 +19,7 @@ export async function handleVnpayCallback(
   if (!config) {
     return { ok: false, orderCode: null, message: 'VNPay chưa được cấu hình.', ipnResponseCode: '99' }
   }
-  if (!verifyVnpaySignature(searchParams, config.secret)) {
+  if (!verifyVnpaySignature(searchParams, config.secret, config.previousSecret)) {
     return { ok: false, orderCode: null, message: 'Chữ ký không hợp lệ.', ipnResponseCode: '97' }
   }
 

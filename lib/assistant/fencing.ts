@@ -15,7 +15,16 @@ export const FENCE_NOTICE =
 const MAX_FENCED_CHARS = 6000
 
 function sanitizeText(value: string, maxChars = 6000): string {
-  return value.replace(/[<>&]/g, '').slice(0, maxChars)
+  return (
+    value
+      // strip HTML + exfil vectors: markdown links/images, javascript:/data: URIs,
+      // bidi overrides + zero-width (homoglyph / visual spoofing), @-mentions noise
+      .replace(/[<>&]/g, '')
+      .replace(/!?\[[^\]]*\]\([^)]*\)/g, '[link removed]')
+      .replace(/(javascript|data|vbscript)\s*:/gi, '[scheme removed]')
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '')
+      .slice(0, maxChars)
+  )
 }
 
 export function fencePayload(payload: unknown): string {

@@ -27,9 +27,18 @@ const USE_CASE_LEXICON: Array<{ test: RegExp; value: string }> = [
 
 const BRAND_LEXICON = ['apple', 'samsung', 'dell', 'asus', 'xiaomi', 'sony', 'jbl', 'lenovo', 'hp', 'acer', 'msi', 'gigabyte', 'logitech']
 
-/** Never persist anything phone-like (memory validation). */
+/** Never persist anything phone/email/ID-like (memory validation). */
 export function containsPhoneLike(text: string): boolean {
   return /(^|\D)0\d{8,10}(\D|$)/.test(text)
+}
+
+export function containsSensitivePii(text: string): boolean {
+  if (containsPhoneLike(text)) return true
+  // email, CCCD 12 số, số tài khoản/ví dài
+  if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(text)) return true
+  if (/(^|\D)\d{12}(\D|$)/.test(text)) return true
+  if (/(^|\D)\d{13,19}(\D|$)/.test(text)) return true
+  return false
 }
 
 function parseBudgetVnd(text: string): number | null {
@@ -165,7 +174,7 @@ function cleanStringList(value: unknown): string[] {
   return value
     .filter((v): v is string => typeof v === 'string')
     .map((v) => v.trim().slice(0, 80))
-    .filter((v) => v.length > 0 && !containsPhoneLike(v))
+    .filter((v) => v.length > 0 && !containsSensitivePii(v))
     .slice(0, 5)
 }
 

@@ -8,6 +8,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 export interface VnpayConfig {
   tmnCode: string
   secret: string
+  previousSecret?: string
   paymentUrl: string
 }
 
@@ -18,6 +19,9 @@ export function getVnpayConfig(): VnpayConfig | null {
   return {
     tmnCode,
     secret,
+    // Rotation không downtime: đặt secret mới vào VNPAY_SECRET, giữ secret cũ
+    // ở VNPAY_SECRET_PREVIOUS trong 24-48h để IPN đang bay vẫn verify được.
+    previousSecret: process.env.VNPAY_SECRET_PREVIOUS || undefined,
     paymentUrl:
       process.env.VNP_URL ?? 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
   }
@@ -38,6 +42,7 @@ function sign(params: Record<string, string>, secret: string): string {
 export function verifyVnpaySignature(
   params: Record<string, string>,
   secret: string,
+  previousSecret?: string,
 ): boolean {
   const received = params.vnp_SecureHash
   if (!received) return false
@@ -46,10 +51,13 @@ export function verifyVnpaySignature(
     if (key === 'vnp_SecureHash' || key === 'vnp_SecureHashType') continue
     rest[key] = value
   }
-  const expected = sign(rest, secret)
-  const a = Buffer.from(expected)
-  const b = Buffer.from(received)
-  return a.length === b.length && timingSafeEqual(a, b)
+  const secrets = [secret, ...(previousSecret ? [previousSecret] : [])]
+  return secrets.some((s) => {
+    const expected = sign(rest, s)
+    const a = Buffer.from(expected)
+    const b = Buffer.from(received)
+    return a.length === b.length && timingSafeEqual(a, b)
+  })
 }
 
 function vnpayCreateDate(date: Date): string {
