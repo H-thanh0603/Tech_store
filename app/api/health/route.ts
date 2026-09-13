@@ -16,6 +16,8 @@ import { getSupabaseServerClient } from '@/lib/supabase/server'
  */
 export async function GET(request?: NextRequest) {
   const wantsDb = request?.nextUrl.searchParams.get('check') === 'db'
+  const requestId = request?.headers.get('x-request-id') ?? crypto.randomUUID()
+  const baseHeaders = { 'Cache-Control': 'no-store', 'x-request-id': requestId }
   if (!wantsDb) {
     return NextResponse.json(
       {
@@ -25,7 +27,7 @@ export async function GET(request?: NextRequest) {
       },
       {
         status: 200,
-        headers: { 'Cache-Control': 'no-store' },
+        headers: baseHeaders,
       },
     )
   }
@@ -41,7 +43,7 @@ export async function GET(request?: NextRequest) {
         message: 'Supabase env is missing.',
         timestamp: new Date().toISOString(),
       },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      { status: 503, headers: baseHeaders },
     )
   }
 
@@ -63,7 +65,7 @@ export async function GET(request?: NextRequest) {
         latencyMs,
         timestamp: new Date().toISOString(),
       },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      { status: 503, headers: baseHeaders },
     )
   }
 
@@ -75,6 +77,6 @@ export async function GET(request?: NextRequest) {
       latencyMs,
       timestamp: new Date().toISOString(),
     },
-    { status: 200, headers: { 'Cache-Control': 'no-store' } },
+    { status: 200, headers: baseHeaders },
   )
 }

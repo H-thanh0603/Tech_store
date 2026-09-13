@@ -55,7 +55,7 @@ Guard chỉ là vòng đai; đúng nghĩa staging cần data riêng:
    project staging.
 
 5. **Vercel Hobby lưu ý**: mỗi project chỉ được 2 cron schedule (giữ
-   `*/5` health + `0 18` purge-logs như hiện tại). Preview thừa hưởng cron
+   `0 6` health + `0 18` purge-logs như trong `vercel.json`). Preview thừa hưởng cron
    config — không thêm cron mới cho đến khi nâng Pro plan.
 
 ## Khi nào cần làm lớp 2?

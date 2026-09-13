@@ -12,24 +12,33 @@ export type AuthFormState = {
   mode?: 'magic' | 'password' | 'signup'
 }
 
-// Auth endpoints are anonymous by design, so the only usable identity
-// for a rate-limit bucket is the submitted email plus the caller IP
-// (server actions expose headers()). Limit is 5 attempts / 15 minutes
-// per identity — enough for a forgetful human, hostile to enumeration.
+// Auth endpoints are anonymous by design, so the rate-limit bucket mixes the
+// submitted email with the caller IP (server actions expose headers()).
+// Limit is 5 attempts / 15 minutes per identity — enough for a forgetful
+// human, hostile to enumeration and single-IP credential stuffing.
 async function authRateLimited(
   action: 'auth_magic' | 'auth_password' | 'auth_signup',
   email: string,
 ): Promise<boolean> {
   try {
+    const { headers } = await import('next/headers')
+    const headerList = await headers()
+    const ip =
+      headerList.get('x-real-ip')?.trim() ||
+      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+      'unknown'
     const { data } = await getSupabaseServiceRoleClient().rpc('check_rate_limit', {
       p_action: action,
-      p_identity: email,
+      p_identity: `${email}:${ip}`,
       p_limit: 5,
       p_window_minutes: 15,
     })
     return data === true
   } catch {
-    // Rate-limit infra failure must not lock customers out.
+    // Rate-limit infra failure must not lock customers out (fail-open for
+    // availability; brute-force is still slowed by Supabase Auth defaults).
+    const { logger } = await import('@/lib/logger')
+    logger.warn('auth rate-limit fail-open', { action })
     return false
   }
 }

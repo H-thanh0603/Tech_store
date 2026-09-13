@@ -114,10 +114,9 @@ address. Real order emails need a verified domain.
 The code does not change between free and paid tiers. Upgrading is
 purely an account action; the env vars stay the same.
 
-## What this hardening does NOT cover (by design)
+## What this hardening does NOT fully cover (by design)
 
-- Refund / return workflow (missing from M1-M6; plan in project docs).
-- E-invoice (hóa đơn điện tử) for Vietnamese tax compliance.
-- Carrier integration (GHN / GHTK / Viettel Post) for shipping labels
-  and tracking.
-- Load testing; the free tier comfortably serves a single small store.
+- Refund execution: return workflow + refund ledger có (`request_order_return`/`admin_decide_return`/`payment_refunds`), nhưng hoàn tiền VNPay live chưa đấu nối — thủ công (`lib/commerce/vnpay-refund.ts`).
+- E-invoice (hóa đơn điện tử) for Vietnamese tax compliance — mới có invoice nội bộ (`202609130004`).
+- Carrier integration (GHN / GHTK): khung quote/track + fallback internal đã có (`lib/shipping/*`), live cần mapping mã địa chỉ + parcel dims.
+- Load testing: đã có k6 `browse/suggest/checkout-mix` + Lighthouse CI, nhưng checkout-mix mới warm GET, chưa contention `place_order` thật.

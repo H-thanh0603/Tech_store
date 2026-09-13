@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "perf:audit": "node scripts/perf-audit.mjs",
+    "deploy:rollback": "node scripts/rollback-vercel.mjs",
     "agent:parity": "node scripts/check-commerce-parity.mjs",
     "agent:smoke": "node scripts/smoke-chat.mjs --vertical retail",
     "agent:deploy": "node scripts/deploy-managed-agent.mjs",

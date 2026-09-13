@@ -1,26 +1,15 @@
+import * as Sentry from '@sentry/nextjs'
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 interface LogContext {
+  requestId?: string
   [key: string]: unknown
-}
-
-function getRequestId(): string | undefined {
-  try {
-    // next/headers is async in Next 16 (returns Promise), sync in older.
-    // Fail-open: if Promise, skip.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const maybeHeaders = (require('next/headers') as unknown as { headers: () => unknown }).headers() as unknown
-    if (maybeHeaders && typeof (maybeHeaders as Promise<unknown>).then === 'function') return undefined
-    const hdrs = maybeHeaders as { get: (k: string) => string | null }
-    return hdrs.get('x-request-id') ?? undefined
-  } catch {
-    return undefined
-  }
 }
 
 function formatMessage(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString()
-  const requestId = getRequestId()
+  const requestId = context?.requestId
   const prefix = requestId
     ? `[${timestamp}] [${level.toUpperCase()}] [${requestId}]`
     : `[${timestamp}] [${level.toUpperCase()}]`
@@ -47,5 +36,14 @@ export const logger = {
 
   error(message: string, context?: LogContext) {
     console.error(formatMessage('error', message, context))
+    try {
+      Sentry.captureMessage(message, {
+        level: 'error',
+        extra: context,
+        tags: context?.requestId ? { request_id: context.requestId } : undefined,
+      })
+    } catch {
+      // reporting must never break the caller
+    }
   },
 }

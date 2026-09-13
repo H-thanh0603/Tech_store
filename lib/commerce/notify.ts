@@ -126,15 +126,23 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
     }
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'Idempotency-Key': `notification/${row.id}`,
-        },
-        body: JSON.stringify({ from, to, subject: email.subject, html: email.html }),
-      })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15_000)
+      let response: Response
+      try {
+        response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `notification/${row.id}`,
+          },
+          body: JSON.stringify({ from, to, subject: email.subject, html: email.html }),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
       if (!response.ok) {
         throw new Error(`Resend ${response.status}: ${await response.text()}`)
       }

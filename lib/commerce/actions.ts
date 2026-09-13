@@ -122,7 +122,10 @@ export async function applyCoupon(_: ActionState, formData: FormData): Promise<A
       return { ok: false, code: 'RATE_LIMITED', message: toUserMessage('RATE_LIMITED') }
     }
   } catch {
-    // fail-open
+    // Fail-open for availability (coupon abuse is capped server-side by
+    // usage_limit + unique(coupon,order)); log so limiter outages are visible.
+    const { logger } = await import('@/lib/logger')
+    logger.warn('coupon rate-limit fail-open')
   }
   return mutate('cart_apply_coupon', { p_code: parsed.data.code })
 }

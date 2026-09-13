@@ -15,7 +15,7 @@ name: Alert on failure
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI", "Monitor", "Backup", "Lighthouse perf audit", "RLS prod smoke"]
     types: [completed]
 
 permissions:
