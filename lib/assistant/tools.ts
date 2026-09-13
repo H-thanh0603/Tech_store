@@ -5,6 +5,7 @@
  */
 
 import type Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
 
 import {
   buildShoppingPlan,
@@ -68,6 +69,67 @@ export function createDispatchContext(init?: { cartTokenHash?: string | null; ca
     cartTokenHash: init?.cartTokenHash ?? null,
     cartRpc: init?.cartRpc,
   }
+}
+
+// Strict server-side validation for model-supplied tool args (tool-injection
+// defense). The JSON schema advertised to the model is advisory only — the
+// model can send anything, so every handler parses here first and returns a
+// fenced invalid_args hint the model can act on (also feeds error recovery).
+const toolInputSchemas: Record<string, z.ZodType> = {
+  [TOOL_SEARCH_PRODUCTS]: z.object({
+    query: z.string().trim().min(1).max(120),
+    category: z.string().trim().max(80).optional(),
+    brand: z.string().trim().max(80).optional(),
+    max_price: z.number().positive().max(1_000_000_000).optional(),
+  }),
+  [TOOL_GET_PRODUCT_DETAILS]: z.object({ identifier: z.string().trim().min(1).max(160) }),
+  [TOOL_COMPARE_PRODUCTS]: z.object({
+    identifiers: z.array(z.string().trim().min(1).max(160)).min(2).max(4),
+  }),
+  [TOOL_CREATE_PLAN]: z.object({
+    title: z.string().trim().max(120).optional(),
+    budget: z.number().int().positive().max(1_000_000_000).optional(),
+    lines: z
+      .array(z.object({ identifier: z.string().trim().min(1).max(160), quantity: z.number().int().min(1).max(99) }))
+      .min(1)
+      .max(10),
+  }),
+  [TOOL_GET_FULFILLMENT]: z.object({
+    subtotal: z.number().min(0).max(1_000_000_000).optional(),
+    item_count: z.number().int().min(0).max(999).optional(),
+  }),
+  [TOOL_GET_CART]: z.object({}),
+  [TOOL_ADD_TO_CART]: z.object({
+    identifier: z.string().trim().min(1).max(160),
+    quantity: z.number().int().min(1).max(99),
+  }),
+  [TOOL_UPDATE_CART_ITEM]: z.object({
+    identifier: z.string().trim().min(1).max(160),
+    quantity: z.number().int().min(1).max(99),
+  }),
+  [TOOL_REMOVE_FROM_CART]: z.object({ identifier: z.string().trim().min(1).max(160) }),
+  [TOOL_START_CHECKOUT]: z.object({ confirmed: z.boolean().optional() }),
+  [TOOL_TRACK_ORDER]: z.object({
+    order_code: z.string().trim().min(1).max(24),
+    phone: z.string().trim().min(1).max(20),
+  }),
+  [TOOL_ORDER_HISTORY]: z.object({ phone: z.string().trim().min(1).max(20) }),
+  [TOOL_SEARCH_POLICIES]: z.object({ query: z.string().trim().min(1).max(120) }),
+  [TOOL_PRESENT_SUGGESTIONS]: z.object({
+    suggestions: z.array(z.string().trim().min(1).max(80)).max(4).default([]),
+  }),
+}
+
+type ParsedToolInput = Record<string, never> | Record<string, unknown>
+
+function parseToolInput(name: string, input: Record<string, unknown>): { ok: true; value: ParsedToolInput } | { ok: false; hint: string } {
+  const schema = toolInputSchemas[name]
+  if (!schema) return { ok: true, value: input }
+  const parsed = schema.safeParse(input)
+  if (parsed.success) return { ok: true, value: parsed.data as ParsedToolInput }
+  const first = parsed.error.issues[0]
+  const where = first?.path.join('.') || 'input'
+  return { ok: false, hint: `Tham số không hợp lệ ở ${where}: ${first?.message ?? 'sai định dạng'}. Gọi lại tool với tham số đúng.` }
 }
 
 export function buildAnthropicTools(): Anthropic.Tool[] {
@@ -299,6 +361,11 @@ export async function dispatchTool(
   input: Record<string, unknown>,
 ): Promise<string> {
   try {
+    const validated = parseToolInput(name, input)
+    if (!validated.ok) {
+      return fencePayload({ result: 'invalid_args', hint: validated.hint })
+    }
+    input = validated.value
     switch (name) {
       case TOOL_SEARCH_PRODUCTS: {
         const query = String(input.query ?? '')
@@ -323,11 +390,7 @@ export async function dispatchTool(
         return fencePayload({ result: 'ok', product: detail })
       }
       case TOOL_COMPARE_PRODUCTS: {
-        const raw = Array.isArray(input.identifiers) ? input.identifiers : []
-        const identifiers = raw.filter((s): s is string => typeof s === 'string').slice(0, 4)
-        if (identifiers.length < 2) {
-          return fencePayload({ result: 'error', hint: 'So sánh cần 2–4 sản phẩm (slug hoặc id đã thấy).' })
-        }
+        const identifiers = input.identifiers as string[]
         const compared = await compareProducts(identifiers, ctx.seenIds)
         for (const row of compared.rows) {
           rememberProduct(ctx, {
@@ -347,15 +410,12 @@ export async function dispatchTool(
         return fencePayload({ result: 'ok', ...compared })
       }
       case TOOL_CREATE_PLAN: {
-        const rawLines = Array.isArray(input.lines) ? input.lines : []
+        const lines = input.lines as { identifier: string; quantity: number }[]
         const plan = await buildShoppingPlan(
           {
             title: typeof input.title === 'string' ? input.title : undefined,
             budget: typeof input.budget === 'number' ? input.budget : undefined,
-            lines: rawLines.map((l) => ({
-              identifier: String((l as Record<string, unknown>)?.identifier ?? ''),
-              quantity: Number((l as Record<string, unknown>)?.quantity ?? 0),
-            })),
+            lines,
           },
           ctx.seenIds,
         )
@@ -373,8 +433,8 @@ export async function dispatchTool(
         }
         const result = await chatAddToCart(
           ctx.cartTokenHash,
-          String(input.identifier ?? ''),
-          Number(input.quantity ?? 0),
+          input.identifier as string,
+          input.quantity as number,
           ctx.seenIds,
           ctx.cartRpc,
         )
@@ -387,8 +447,8 @@ export async function dispatchTool(
         }
         const result = await chatUpdateCartItem(
           ctx.cartTokenHash,
-          String(input.identifier ?? ''),
-          Number(input.quantity ?? 0),
+          input.identifier as string,
+          input.quantity as number,
           ctx.seenIds,
           ctx.cartRpc,
         )
@@ -401,7 +461,7 @@ export async function dispatchTool(
         }
         const result = await chatRemoveFromCart(
           ctx.cartTokenHash,
-          String(input.identifier ?? ''),
+          input.identifier as string,
           ctx.seenIds,
           ctx.cartRpc,
         )
@@ -461,8 +521,7 @@ export async function dispatchTool(
         return fencePayload({ result: 'ok', orders: history })
       }
       case TOOL_PRESENT_SUGGESTIONS: {
-        const raw = Array.isArray(input.suggestions) ? input.suggestions : []
-        ctx.suggestions = raw.filter((s): s is string => typeof s === 'string').slice(0, 4)
+        ctx.suggestions = (input.suggestions as string[]).slice(0, 4)
         ctx.endTurn = true
         return fencePayload({ result: 'ok' })
       }

@@ -5,6 +5,7 @@
  */
 
 import { formatPrice } from '@/lib/format'
+import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { bulkAdjustPrice, bulkSetStock, bulkUpdateProducts } from '@/lib/admin/products'
 import type { AdminActionState } from '@/lib/admin/types'
 
@@ -27,6 +28,27 @@ import {
 const INITIAL_STATE: AdminActionState = { ok: true }
 
 type StageResult = { change?: SignedChange; violations?: string[]; error?: string }
+
+/**
+ * Append-only audit for guardrail-held stage attempts. Only successful applies
+ * were logged before — held/rejected attempts are the interesting security
+ * signal (prompt-injection probes, compromised staff session), so they get
+ * their own immutable trail. Best-effort: never blocks staging.
+ */
+async function auditHeld(kind: string, violations: string[], actorUserId: string | null): Promise<void> {
+  try {
+    await getSupabaseAdminClient().from('admin_audit_logs').insert({
+      action: 'assistant_change_held',
+      entity_type: 'staged_change',
+      entity_id: null,
+      payload: { kind, violations: violations.slice(0, 10), payload_version: 1, payload_schema: 'v1' },
+      actor_label: 'merchant-agent',
+      actor_user_id: actorUserId,
+    })
+  } catch {
+    // audit must never break staging
+  }
+}
 
 async function persist(actorUserId: string | null, change: StagedChange): Promise<StageResult> {
   const signed = signChange(change)
@@ -76,7 +98,10 @@ export async function stagePublish(
     }),
   )
   const check = checkGuardrails(action, live)
-  if (!check.ok) return { violations: check.violations }
+  if (!check.ok) {
+    await auditHeld('publish', check.violations, actorUserId)
+    return { violations: check.violations }
+  }
   const verb = target === 'publish' ? 'Xuất bản' : target === 'draft' ? 'Chuyển sang nháp' : 'Lưu trữ'
   const change: StagedChange = {
     id: nextChangeId(),
@@ -101,7 +126,10 @@ export async function stagePrice(
   const action: PriceAction = { kind: 'price', productIds: ids, mode, value }
   const live = await liveStates(ids)
   const check = checkGuardrails(action, live)
-  if (!check.ok) return { violations: check.violations }
+  if (!check.ok) {
+    await auditHeld('price', check.violations, actorUserId)
+    return { violations: check.violations }
+  }
   const items: StagedItemPreview[] = ids.map((id) => {
     const state = live.get(id)
     const before = state ? formatPrice(state.minPrice) : '?'
@@ -141,7 +169,10 @@ export async function stageStock(
   const action: StockAction = { kind: 'stock', productIds: ids, quantity }
   const live = await liveStates(ids)
   const check = checkGuardrails(action, live)
-  if (!check.ok) return { violations: check.violations }
+  if (!check.ok) {
+    await auditHeld('stock', check.violations, actorUserId)
+    return { violations: check.violations }
+  }
   const change: StagedChange = {
     id: nextChangeId(),
     kind: 'stock',

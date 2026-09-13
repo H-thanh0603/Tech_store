@@ -236,7 +236,11 @@ export async function dispatchMerchantTool(
         return { text: fencePayload({ result: 'ok', issues: await orderIssues() }) }
       }
       case TOOL_SEARCH_LISTINGS: {
-        const hits = await searchListings(String(input.query ?? ''))
+        const query = typeof input.query === 'string' ? input.query.trim().slice(0, 120) : ''
+        if (!query) {
+          return { text: fencePayload({ result: 'invalid_args', hint: 'query là chuỗi bắt buộc (1–120 ký tự).' }) }
+        }
+        const hits = await searchListings(query)
         for (const h of hits) ctx.seenListingIds.add(h.product_id)
         if (hits.length === 0) {
           return { text: fencePayload({ result: 'empty', hint: 'Không tìm thấy. Thử từ khóa khác.' }) }
@@ -244,13 +248,21 @@ export async function dispatchMerchantTool(
         return { text: fencePayload({ result: 'ok', listings: hits }) }
       }
       case TOOL_GET_LISTING: {
-        const detail = await getListing(String(input.product_id ?? ''))
+        const productId = typeof input.product_id === 'string' ? input.product_id.trim().slice(0, 160) : ''
+        if (!productId) {
+          return { text: fencePayload({ result: 'invalid_args', hint: 'product_id là chuỗi bắt buộc.' }) }
+        }
+        const detail = await getListing(productId)
         if (!detail) return { text: fencePayload({ result: 'not_found' }) }
         ctx.seenListingIds.add(detail.product_id)
         return { text: fencePayload({ result: 'ok', listing: detail }) }
       }
       case TOOL_GET_PRICING: {
-        const detail = await getListing(String(input.product_id ?? ''))
+        const pricingId = typeof input.product_id === 'string' ? input.product_id.trim().slice(0, 160) : ''
+        if (!pricingId) {
+          return { text: fencePayload({ result: 'invalid_args', hint: 'product_id là chuỗi bắt buộc.' }) }
+        }
+        const detail = await getListing(pricingId)
         if (!detail) return { text: fencePayload({ result: 'not_found' }) }
         ctx.seenListingIds.add(detail.product_id)
         return {
@@ -273,6 +285,30 @@ export async function dispatchMerchantTool(
           }
         }
         const note = typeof input.note === 'string' ? input.note.slice(0, 500) : null
+        // Strict params: no silent defaults — a missing/invalid mode, value or
+        // quantity is held with a fix hint instead of guessing the merchant's intent.
+        const priceMode =
+          input.mode === 'percent_up' || input.mode === 'percent_down' || input.mode === 'set_sale_off'
+            ? input.mode
+            : null
+        const priceValue = typeof input.value === 'number' && Number.isFinite(input.value) ? input.value : null
+        const stockQty =
+          typeof input.quantity === 'number' && Number.isInteger(input.quantity) && input.quantity >= 0
+            ? input.quantity
+            : null
+        if (name === TOOL_STAGE_PRICE && (priceMode === null || priceValue === null)) {
+          return {
+            text: fencePayload({
+              result: 'invalid_args',
+              hint: 'mode phải một trong percent_up/percent_down/set_sale_off và value phải là số.',
+            }),
+          }
+        }
+        if (name === TOOL_STAGE_STOCK && stockQty === null) {
+          return {
+            text: fencePayload({ result: 'invalid_args', hint: 'quantity phải là số nguyên ≥ 0.' }),
+          }
+        }
         const staged =
           name === TOOL_STAGE_PUBLISH
             ? await stagePublish(
@@ -282,21 +318,8 @@ export async function dispatchMerchantTool(
                 ctx.actorUserId,
               )
             : name === TOOL_STAGE_PRICE
-              ? await stagePrice(
-                  ids,
-                  input.mode === 'percent_up' || input.mode === 'percent_down' || input.mode === 'set_sale_off'
-                    ? input.mode
-                    : 'percent_down',
-                  typeof input.value === 'number' ? input.value : 0,
-                  note,
-                  ctx.actorUserId,
-                )
-              : await stageStock(
-                  ids,
-                  typeof input.quantity === 'number' ? input.quantity : -1,
-                  note,
-                  ctx.actorUserId,
-                )
+              ? await stagePrice(ids, priceMode ?? 'percent_down', priceValue ?? 0, note, ctx.actorUserId)
+              : await stageStock(ids, stockQty ?? -1, note, ctx.actorUserId)
         if (!staged.change) {
           const problems = staged.violations ?? [staged.error ?? 'Stage thất bại.']
           return { text: fencePayload({ result: 'held', violations: problems }) }
@@ -349,10 +372,11 @@ export async function dispatchMerchantTool(
             text: fencePayload({ result: 'held', hint: `template phải một trong: ${ANALYSIS_TEMPLATES.join(', ')}.` }),
           }
         }
-        const { result, error } = await runAnalysis(
-          String(input.template),
-          typeof input.limit === 'number' ? input.limit : 10,
-        )
+        const limit =
+          typeof input.limit === 'number' && Number.isInteger(input.limit)
+            ? Math.min(Math.max(input.limit, 1), 50)
+            : 10
+        const { result, error } = await runAnalysis(String(input.template), limit)
         if (!result) return { text: fencePayload({ result: 'error', hint: error ?? 'Phân tích thất bại.' }) }
         return { text: fencePayload({ result: 'ok', analysis: result }) }
       }

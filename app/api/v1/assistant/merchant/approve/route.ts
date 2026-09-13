@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { requireAdminSession } from '@/lib/admin/auth'
-import { getStagedById, markStagedDecided } from '@/lib/assistant/merchant/ledger'
+import { getStagedById, getStagedDecisionMeta, markStagedDecided } from '@/lib/assistant/merchant/ledger'
 import { applySignedChange } from '@/lib/assistant/merchant/stage'
 
 const bodySchema = z.object({
@@ -49,9 +49,27 @@ export async function POST(request: Request) {
     )
   }
 
+  // Approval gates: expiry + separation of duties. A staged change lives 24h;
+  // the staffer who staged it cannot approve it themselves (4-eyes principle).
+  const meta = await getStagedDecisionMeta(parsed.data.changeId)
+  if (meta?.expiresAt && new Date(meta.expiresAt).getTime() < Date.now()) {
+    await markStagedDecided(signed.change.id, 'discarded', session.userId)
+    return NextResponse.json(
+      { ok: false, code: 'EXPIRED', message: 'Change đã hết hạn (24h) và bị hủy — hãy stage lại.' },
+      { status: 410 },
+    )
+  }
+
   if (parsed.data.decision === 'discard') {
     await markStagedDecided(signed.change.id, 'discarded', session.userId)
     return NextResponse.json({ ok: true, message: 'Đã bỏ change.' })
+  }
+
+  if (meta?.createdBy && meta.createdBy === session.userId) {
+    return NextResponse.json(
+      { ok: false, code: 'SELF_APPROVAL', message: 'Người stage không được tự duyệt — cần một staff khác.' },
+      { status: 403 },
+    )
   }
 
   const result = await applySignedChange(signed)

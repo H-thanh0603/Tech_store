@@ -77,7 +77,7 @@ describe('compare_products', () => {
   it('rejects fewer than 2 identifiers', async () => {
     const ctx = createDispatchContext()
     const text = await dispatchTool(ctx, TOOL_COMPARE_PRODUCTS, { identifiers: ['iphone-15'] })
-    expect(text).toContain('2–4')
+    expect(text).toContain('invalid_args')
   })
 
   it('rejects unseen opaque ids (provenance gate)', async () => {

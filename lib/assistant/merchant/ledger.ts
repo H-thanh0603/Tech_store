@@ -84,6 +84,24 @@ export async function getStagedById(changeId: string): Promise<SignedChange | nu
   return toSigned(data as Row)
 }
 
+export interface StagedDecisionMeta {
+  status: string
+  createdBy: string | null
+  expiresAt: string | null
+}
+
+/** Decision metadata for approval gates (expiry + separation of duties). */
+export async function getStagedDecisionMeta(changeId: string): Promise<StagedDecisionMeta | null> {
+  const { data, error } = await getSupabaseAdminClient()
+    .from('assistant_staged_changes')
+    .select('status, created_by, expires_at')
+    .eq('id', changeId.slice(0, 80))
+    .maybeSingle()
+  if (error || !data) return null
+  const row = data as { status: string; created_by: string | null; expires_at: string | null }
+  return { status: row.status, createdBy: row.created_by, expiresAt: row.expires_at }
+}
+
 export async function markStagedDecided(
   changeId: string,
   status: 'applied' | 'discarded',

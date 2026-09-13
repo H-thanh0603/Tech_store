@@ -26,8 +26,17 @@ vi.mock('@/lib/assistant/merchant/ledger', () => ({
   recordStaged: vi.fn(async () => {}),
   listPendingStaged: vi.fn(async () => []),
   getStagedById: vi.fn(async (id: string) => (id === 'chg-1' ? signed : null)),
+  getStagedDecisionMeta: decisionMetaMock,
   markStagedDecided: vi.fn(async () => {}),
 }))
+
+const decisionMetaMock = vi.hoisted(() =>
+  vi.fn(async (id: string) =>
+    id === 'chg-1'
+      ? { status: 'staged', createdBy: 'u2', expiresAt: new Date(Date.now() + 3600_000).toISOString() }
+      : null,
+  ),
+)
 
 vi.mock('@/lib/assistant/merchant/stage', () => ({
   applySignedChange: vi.fn(async () => ({ ok: true, message: 'Đã xuất bản 1 sản phẩm.' })),
@@ -67,5 +76,29 @@ describe('merchant approve endpoint', () => {
   it('rejects malformed bodies', async () => {
     const res = await post({ changeId: 'chg-1' })
     expect(res.status).toBe(400)
+  })
+
+  it('blocks self-approval (separation of duties)', async () => {
+    decisionMetaMock.mockResolvedValueOnce({
+      status: 'staged',
+      createdBy: 'u1',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    })
+    const res = await post({ changeId: 'chg-1', decision: 'apply' })
+    expect(res.status).toBe(403)
+    const data = (await res.json()) as { code: string }
+    expect(data.code).toBe('SELF_APPROVAL')
+  })
+
+  it('expires staged changes after 24h', async () => {
+    decisionMetaMock.mockResolvedValueOnce({
+      status: 'staged',
+      createdBy: 'u2',
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    })
+    const res = await post({ changeId: 'chg-1', decision: 'apply' })
+    expect(res.status).toBe(410)
+    const data = (await res.json()) as { code: string }
+    expect(data.code).toBe('EXPIRED')
   })
 })
