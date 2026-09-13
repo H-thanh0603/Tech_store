@@ -72,7 +72,6 @@ export async function verifyAgentToken(
     return { ok: false, error: 'INVALID' }
   }
 }
-
 export function tokenErrorStatus(error: TokenError): number {
   switch (error) {
     case 'MISSING':
@@ -83,5 +82,29 @@ export function tokenErrorStatus(error: TokenError): number {
       return 403
     case 'RATE_LIMITED':
       return 429
+  }
+}
+
+/**
+ * Optional identity for the public READ API. Reads stay public (the data is
+ * the storefront catalog), but a valid agent token upgrades the caller from
+ * an anonymous IP bucket to a per-agent bucket with a higher quota — and
+ * every read becomes attributable in rate-limit rows. Never throws.
+ */
+export async function verifyAgentReadToken(authHeader: string | null): Promise<AgentToken | null> {
+  const raw = bearerToken(authHeader)
+  if (!raw) return null
+  try {
+    const hash = await sha256HexNode(raw)
+    const supabase = getSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from('agent_tokens')
+      .select('id, name, scopes, is_active')
+      .eq('token_hash', hash)
+      .maybeSingle()
+    if (error || !data || !data.is_active) return null
+    return { id: data.id, name: data.name, scopes: data.scopes }
+  } catch {
+    return null
   }
 }

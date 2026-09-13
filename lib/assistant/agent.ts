@@ -76,8 +76,21 @@ export interface MessagesClient {
   }
 }
 
-function toAnthropicHistory(history: ChatMessage[]): Anthropic.MessageParam[] {
-  return history.map((m) => ({ role: m.role, content: m.content }))
+const HISTORY_TAIL_MESSAGES = 12
+const HISTORY_TEXT_CHARS = 2000
+
+export function toAnthropicHistory(history: ChatMessage[]): Anthropic.MessageParam[] {
+  // Context management: cap the tail so a long chat cannot blow the context
+  // window or the bill. Text is truncated per message; tool_use/tool_result
+  // blocks stay intact, and the slice starts at a user message so a tail
+  // tool_result is never orphaned from its tool_use.
+  let tail = history.slice(-HISTORY_TAIL_MESSAGES)
+  const firstUser = tail.findIndex((m) => m.role === 'user')
+  if (firstUser > 0) tail = tail.slice(firstUser)
+  return tail.map((m) => ({
+    role: m.role,
+    content: m.content.length > HISTORY_TEXT_CHARS ? `${m.content.slice(0, HISTORY_TEXT_CHARS)}…[cắt bớt]` : m.content,
+  }))
 }
 
 function lastUserText(history: ChatMessage[]): string {
@@ -104,7 +117,7 @@ export async function runAssistantTurn(
   }
 
   const config = assistantConfig
-  if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
+  if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
     return { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [] }
   }
   const ctx: DispatchContext = createDispatchContext({

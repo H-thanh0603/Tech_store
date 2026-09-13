@@ -4,39 +4,51 @@
  * - `anthropic` (default): native Messages API via @anthropic-ai/sdk.
  * - `deepseek`: DeepSeek's OpenAI-compatible `/chat/completions`, translated
  *   to/from the same Anthropic-shaped params so the turn loop is untouched.
+ * - `openrouter`: OpenRouter's OpenAI-compatible endpoint — same translator,
+ *   any tool-capable model (e.g. `anthropic/claude-haiku-4-5`).
  *
- * Select with ASSISTANT_PROVIDER=anthropic|deepseek (default anthropic).
- * Keys are server-only: ANTHROPIC_API_KEY / DEEPSEEK_API_KEY.
+ * Select with ASSISTANT_PROVIDER=anthropic|deepseek|openrouter (default
+ * anthropic). Keys are server-only: ANTHROPIC_API_KEY / DEEPSEEK_API_KEY /
+ * OPENROUTER_API_KEY.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
 
 import type { MessagesClient, ProviderStreamEvent, StreamParams } from './agent'
 
-export type AssistantProvider = 'anthropic' | 'deepseek'
+export type AssistantProvider = 'anthropic' | 'deepseek' | 'openrouter'
 
 export function resolveProvider(): AssistantProvider {
-  return process.env.ASSISTANT_PROVIDER === 'deepseek' ? 'deepseek' : 'anthropic'
+  if (process.env.ASSISTANT_PROVIDER === 'deepseek') return 'deepseek'
+  if (process.env.ASSISTANT_PROVIDER === 'openrouter') return 'openrouter'
+  return 'anthropic'
 }
 
 export function defaultModelFor(provider: AssistantProvider): string {
   if (process.env.ASSISTANT_MODEL) return process.env.ASSISTANT_MODEL
-  return provider === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5'
+  if (provider === 'deepseek') return 'deepseek-chat'
+  if (provider === 'openrouter') return 'anthropic/claude-haiku-4-5'
+  return 'claude-haiku-4-5'
 }
 
 function createAnthropicClient(apiKey: string): MessagesClient {
-  const client = new Anthropic({ apiKey })
+  // Parity with the OpenAI-compatible path: bounded retries on 408/425/429/5xx
+  // plus hard timeouts. The Anthropic SDK supports both natively.
+  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 60_000 })
   return {
     messages: {
       create: async (params) => {
-        const message = await client.messages.create({
-          model: params.model,
-          max_tokens: params.max_tokens,
-          system: params.system,
-          tools: params.tools,
-          tool_choice: params.tool_choice,
-          messages: params.messages,
-        })
+        const message = await client.messages.create(
+          {
+            model: params.model,
+            max_tokens: params.max_tokens,
+            system: params.system,
+            tools: params.tools,
+            tool_choice: params.tool_choice,
+            messages: params.messages,
+          },
+          { signal: AbortSignal.timeout(60_000) },
+        )
         const content: (
           | { type: 'text'; text: string }
           | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
@@ -55,14 +67,17 @@ function createAnthropicClient(apiKey: string): MessagesClient {
         return { content, stop_reason: message.stop_reason }
       },
       stream: async function* (params: StreamParams): AsyncGenerator<ProviderStreamEvent> {
-        const stream = client.messages.stream({
-          model: params.model,
-          max_tokens: params.max_tokens,
-          system: params.system,
-          tools: params.tools,
-          tool_choice: params.tool_choice,
-          messages: params.messages,
-        })
+        const stream = client.messages.stream(
+          {
+            model: params.model,
+            max_tokens: params.max_tokens,
+            system: params.system,
+            tools: params.tools,
+            tool_choice: params.tool_choice,
+            messages: params.messages,
+          },
+          { signal: AbortSignal.timeout(90_000) },
+        )
         // MessageStreamEvent is structurally light: only text deltas are read.
         const events = stream as AsyncIterable<{
           type: string
@@ -97,9 +112,10 @@ function createAnthropicClient(apiKey: string): MessagesClient {
   }
 }
 
-// -- DeepSeek (OpenAI-compatible) -------------------------------------------
+// -- OpenAI-compatible (DeepSeek direct + OpenRouter) ------------------------
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
+export const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 interface DSMessage {
   role: string
@@ -264,13 +280,17 @@ export function fromDeepSeekResponse(json: {
 }
 
 /**
- * Pilot only supports non-reasoning chat models. DeepSeek-R1 leaks its chain
- * of thought in `reasoning_content` and its tool calls are unreliable — the
- * translator intentionally does not handle that shape. Fail fast with a clear
- * message instead of burning money on a flaky turn.
+ * Pilot only supports non-reasoning chat models. DeepSeek-R1 (and its
+ * OpenRouter mirrors) leaks its chain of thought in `reasoning_content` and
+ * its tool calls are unreliable — the translator intentionally does not
+ * handle that shape. Fail fast with a clear message instead of burning money
+ * on a flaky turn.
  */
 export function isUnsupportedReasonerModel(model: string): boolean {
-  return model.toLowerCase().includes('reasoner') || model.toLowerCase().includes('/r1')
+  const lower = model.toLowerCase()
+  if (lower.includes('reasoner')) return true
+  // R1 family in any namespace: deepseek-r1, deepseek/deepseek-r1:free, ...
+  return /(^|[^a-z0-9])r1([^a-z0-9]|$)/.test(lower)
 }
 
 export const REASONER_GUARD_REPLY =
@@ -355,17 +375,19 @@ function toolUseBlocks(pending: PendingToolCall[]) {
   return blocks
 }
 
-async function* streamDeepSeek(
+async function* streamOpenAICompatible(
+  url: string,
   body: Record<string, unknown>,
   apiKey: string,
+  extraHeaders: Record<string, string> = {},
 ): AsyncGenerator<ProviderStreamEvent> {
-  const res = await fetchWithRetry(DEEPSEEK_URL, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}`, ...extraHeaders },
     body: JSON.stringify({ ...body, stream: true }),
     signal: AbortSignal.timeout(90_000),
   })
-  if (!res.ok || !res.body) throw new Error(`DeepSeek HTTP ${res.status}`)
+  if (!res.ok || !res.body) throw new Error(`OpenAI-compatible HTTP ${res.status}`)
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   const pending: PendingToolCall[] = []
@@ -407,23 +429,40 @@ async function* streamDeepSeek(
   yield { type: 'message', content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
 }
 
-function createDeepSeekClient(apiKey: string): MessagesClient {
+function createOpenAICompatibleClient(
+  url: string,
+  apiKey: string,
+  extraHeaders: Record<string, string> = {},
+): MessagesClient {
+  const headers = { 'content-type': 'application/json', authorization: `Bearer ${apiKey}`, ...extraHeaders }
   return {
     messages: {
       create: async (params) => {
-        const res = await fetchWithRetry(DEEPSEEK_URL, {
+        const res = await fetchWithRetry(url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+          headers,
           body: JSON.stringify(toDeepSeekRequest(params)),
           signal: AbortSignal.timeout(60_000),
         })
-        if (!res.ok) throw new Error(`DeepSeek HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`OpenAI-compatible HTTP ${res.status}`)
         return fromDeepSeekResponse(await res.json())
       },
       stream: (params: StreamParams) =>
-        streamDeepSeek(toDeepSeekRequest(params) as Record<string, unknown>, apiKey),
+        streamOpenAICompatible(url, toDeepSeekRequest(params) as Record<string, unknown>, apiKey, extraHeaders),
     },
   }
+}
+
+function createDeepSeekClient(apiKey: string): MessagesClient {
+  return createOpenAICompatibleClient(DEEPSEEK_URL, apiKey)
+}
+
+/** OpenRouter recommends identifying headers; the key still stays server-side. */
+function createOpenRouterClient(apiKey: string): MessagesClient {
+  return createOpenAICompatibleClient(OPENROUTER_URL, apiKey, {
+    'HTTP-Referer': process.env.SITE_URL ?? 'http://localhost:3000',
+    'X-Title': 'TechStore Assistant',
+  })
 }
 
 /** Build the configured provider client, or null when its key is missing. */
@@ -432,6 +471,10 @@ export function createProviderClient(): MessagesClient | null {
   if (provider === 'deepseek') {
     const apiKey = process.env.DEEPSEEK_API_KEY
     return apiKey ? createDeepSeekClient(apiKey) : null
+  }
+  if (provider === 'openrouter') {
+    const apiKey = process.env.OPENROUTER_API_KEY
+    return apiKey ? createOpenRouterClient(apiKey) : null
   }
   const apiKey = process.env.ANTHROPIC_API_KEY
   return apiKey ? createAnthropicClient(apiKey) : null

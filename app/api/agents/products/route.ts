@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 
 import { getProducts } from '@/lib/catalog/queries'
 import { CATALOG_SORTS, type CatalogSort } from '@/lib/catalog/types'
-import { agentClientIp, isAgentRateLimited, toAgentProductCard } from '@/lib/agents/public-api'
+import { isAgentReadLimited, toAgentProductCard } from '@/lib/agents/public-api'
 
 /**
  * Public read-only catalog search for external AI agents (agent layer, see
  * docs/AGENT_LAYER.md). Returns the same data the storefront renders — no
- * fabrication, no hidden stock counts. Rate-limited per IP; fail-open on
- * limiter outage.
+ * fabrication, no hidden stock counts. Rate-limited per IP; a valid
+ * `Authorization: Bearer tsa_*` upgrades to a per-agent bucket (5x quota).
+ * Fail-open on limiter outage.
  */
 
 const MAX_PAGE = 10
@@ -26,7 +27,7 @@ function parseNumber(value: string | null): number | undefined {
 }
 
 export async function GET(request: Request) {
-  if (await isAgentRateLimited('agents_catalog', agentClientIp(request.headers))) {
+  if (await isAgentReadLimited(request, 'agents_catalog')) {
     return NextResponse.json(
       { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu — thử lại sau ít phút.' },
       { status: 429 },

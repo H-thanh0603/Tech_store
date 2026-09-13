@@ -8,8 +8,15 @@ import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { ProductCardData, ProductDetail } from '@/lib/catalog/types'
 import { getSiteUrl } from '@/lib/site'
 
+import { verifyAgentReadToken } from './tokens'
+
 export const AGENT_CATALOG_LIMIT = 60
 export const AGENT_ORDERS_LIMIT = 20
+// Authenticated agents (valid tsa_ token) get 5x quota on reads — they are
+// attributable and revocable, unlike anonymous IPs behind NAT.
+export const AGENT_AUTH_MULTIPLIER = 5
+export const AGENT_CATALOG_ACTION = 'agents_catalog'
+export const AGENT_ORDERS_ACTION = 'agents_orders'
 const WINDOW_MINUTES = 15
 
 // Same IP resolution as the assistant endpoints: request.headers (not
@@ -33,6 +40,32 @@ export async function isAgentRateLimited(
       p_action: action,
       p_identity: identity,
       p_limit: action === 'agents_catalog' ? AGENT_CATALOG_LIMIT : AGENT_ORDERS_LIMIT,
+      p_window_minutes: WINDOW_MINUTES,
+    })
+    return limited === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Per-agent read gate: a valid `Authorization: Bearer tsa_*` upgrades the
+ * caller to a per-agent bucket (5x quota, attributable); anonymous callers
+ * stay on the IP bucket. Returns true when limited — respond 429.
+ */
+export async function isAgentReadLimited(request: Request, action: 'agents_catalog' | 'agents_orders'): Promise<boolean> {
+  const token = await verifyAgentReadToken(request.headers.get('authorization'))
+  const base = action === 'agents_catalog' ? AGENT_CATALOG_LIMIT : AGENT_ORDERS_LIMIT
+  // Same action name, different identity ⇒ separate bucket (the DB allowlist
+  // only permits known actions, so no new action string may be introduced
+  // without a migration).
+  const identity = token ? `agent:${token.id}` : agentClientIp(request.headers)
+  const limit = token ? base * AGENT_AUTH_MULTIPLIER : base
+  try {
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
+      p_action: action,
+      p_identity: identity,
+      p_limit: limit,
       p_window_minutes: WINDOW_MINUTES,
     })
     return limited === true

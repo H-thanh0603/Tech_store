@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getProductBySlug } from '@/lib/catalog/queries'
 import {
-  agentClientIp,
-  isAgentRateLimited,
+  isAgentReadLimited,
   toAgentProductDetail,
 } from '@/lib/agents/public-api'
 
@@ -20,7 +19,7 @@ const MIN_SLUGS = 2
 const MAX_SLUGS = 4
 
 export async function GET(request: Request) {
-  if (await isAgentRateLimited('agents_catalog', agentClientIp(request.headers))) {
+  if (await isAgentReadLimited(request, 'agents_catalog')) {
     return NextResponse.json(
       { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu — thử lại sau ít phút.' },
       { status: 429 },

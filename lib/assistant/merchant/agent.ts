@@ -7,6 +7,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 
 import type { ChatMessage, MessagesClient } from '../agent'
+import { toAnthropicHistory } from '../agent'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from '../providers'
 import { streamTurn, type StreamEvent } from '../stream'
 import { merchantConfig, wantsChangeHint, wantsMetricsGrounding } from './config'
@@ -48,7 +49,7 @@ export async function runMerchantTurn(
   }
 
   const config = merchantConfig
-  if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
+  if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
     return { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] }
   }
 
@@ -61,10 +62,7 @@ export async function runMerchantTurn(
       changeHint: wantsChangeHint(userText),
     })
   const tools = buildMerchantTools()
-  const messages: Anthropic.MessageParam[] = history.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }))
+  const messages: Anthropic.MessageParam[] = toAnthropicHistory(history)
 
   // Metrics grounding gate: a performance question forces one snapshot read first.
   const forcedTool = wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null
@@ -145,7 +143,7 @@ export async function* streamMerchantTurn(
   }
 
   const config = merchantConfig
-  if (resolveProvider() === 'deepseek' && isUnsupportedReasonerModel(config.model)) {
+  if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
     yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] } }
     return
   }
@@ -166,7 +164,7 @@ export async function* streamMerchantTurn(
     maxIterations: config.maxToolIterations,
     system,
     tools: buildMerchantTools(),
-    messages: history.map((m) => ({ role: m.role, content: m.content })),
+    messages: toAnthropicHistory(history),
     forcedTool: wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null,
     dispatch: async (name, input) => {
       const outcome = await dispatchMerchantTool(ctx, name, input)

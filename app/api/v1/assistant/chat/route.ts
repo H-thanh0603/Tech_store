@@ -6,7 +6,7 @@ import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/
 import { assistantConfig } from '@/lib/assistant/config'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
 import { createProviderClient } from '@/lib/assistant/providers'
-import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import { streamToSSE } from '@/lib/assistant/sse'
 import { sha256Hex } from '@/lib/commerce/tokens'
 
@@ -50,12 +50,25 @@ export async function POST(request: Request) {
 
   // Budget protection: 20 turns / 15 min per IP (fail-open on limiter outage).
   // request.headers (not next/headers) so the route stays unit-testable.
-  if (await isChatRateLimited('assistant_chat', clientIp(request.headers))) {
+  const ip = clientIp(request.headers)
+  if (await isChatRateLimited('assistant_chat', ip)) {
     return NextResponse.json(
       {
         code: 'RATE_LIMITED',
         message: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
         reply: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
+        cards: [],
+        suggestions: [],
+      },
+      { status: 429 },
+    )
+  }
+  if (await isChatDailyLimited('assistant_chat', ip)) {
+    return NextResponse.json(
+      {
+        code: 'DAILY_LIMITED',
+        message: 'Bạn đã dùng hết lượt hỏi hôm nay — quay lại ngày mai nhé.',
+        reply: 'Bạn đã dùng hết lượt hỏi hôm nay — quay lại ngày mai nhé.',
         cards: [],
         suggestions: [],
       },

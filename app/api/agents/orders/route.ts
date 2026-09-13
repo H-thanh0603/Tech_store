@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { trackOrder } from '@/lib/assistant/backend'
-import { agentClientIp, isAgentRateLimited } from '@/lib/agents/public-api'
+import { isAgentReadLimited } from '@/lib/agents/public-api'
 
 /**
  * Public read-only order status for external AI agents (agent layer, see
@@ -10,7 +10,7 @@ import { agentClientIp, isAgentRateLimited } from '@/lib/agents/public-api'
  * no PII beyond status fields. Ordering/payment remain human-only.
  */
 export async function GET(request: Request) {
-  if (await isAgentRateLimited('agents_orders', agentClientIp(request.headers))) {
+  if (await isAgentReadLimited(request, 'agents_orders')) {
     return NextResponse.json(
       { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu — thử lại sau ít phút.' },
       { status: 429 },

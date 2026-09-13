@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { requireAdminSession } from '@/lib/admin/auth'
 import type { ChatMessage } from '@/lib/assistant/agent'
 import { runMerchantTurn, streamMerchantTurn } from '@/lib/assistant/merchant/agent'
-import { clientIp, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import { streamToSSE } from '@/lib/assistant/sse'
 
 const messageSchema = z.object({
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     content: m.content,
   }))
 
-  // Per-staff budget: 60 turns / 15 min (fail-open on limiter outage).
+  // Per-staff budget: 60 turns / 15 min + 600 / day (fail-open on limiter outage).
   const identity = `staff:${session.userId}:${clientIp(request.headers)}`
   if (await isChatRateLimited('merchant_chat', identity)) {
     return NextResponse.json(
@@ -56,6 +56,18 @@ export async function POST(request: Request) {
         code: 'RATE_LIMITED',
         message: 'Bạn thao tác hơi nhanh — nghỉ ít phút rồi tiếp tục nhé.',
         reply: 'Bạn thao tác hơi nhanh — nghỉ ít phút rồi tiếp tục nhé.',
+        staged: [],
+        suggestions: [],
+      },
+      { status: 429 },
+    )
+  }
+  if (await isChatDailyLimited('merchant_chat', identity)) {
+    return NextResponse.json(
+      {
+        code: 'DAILY_LIMITED',
+        message: 'Bạn đã dùng hết lượt trợ lý hôm nay — quay lại ngày mai nhé.',
+        reply: 'Bạn đã dùng hết lượt trợ lý hôm nay — quay lại ngày mai nhé.',
         staged: [],
         suggestions: [],
       },
