@@ -26,7 +26,11 @@ const DENY_ADMIN_WRITE: AgentPermissionRule = {
   reason: 'Tool này chỉ dành cho người vận hành. Agent không tự sửa dữ liệu cửa hàng.',
 }
 
-/** Shopping agent (khách hàng): đọc catalog + giỏ hàng của chính khách. */
+/** Shopping agent (khách hàng): đọc catalog + giỏ hàng của chính khách.
+ * Cart writes are `approval`-gated (H2): the model must assert confirmed=true
+ * AND the server must observe human cart intent in the latest user message
+ * (lib/assistant/cart-confirm.ts). dispatchTool enforces both; the matrix
+ * marks the intent so a future signed-confirm flow can hook here. */
 export const SHOPPING_AGENT_PERMISSIONS: Record<string, AgentPermissionRule> = {
   search_products: { effect: 'allow' },
   get_product_details: { effect: 'allow' },
@@ -35,9 +39,9 @@ export const SHOPPING_AGENT_PERMISSIONS: Record<string, AgentPermissionRule> = {
   get_fulfillment_options: { effect: 'allow' },
   search_policies: { effect: 'allow' },
   get_cart: { effect: 'allow' },
-  add_to_cart: { effect: 'allow' },
-  update_cart_item: { effect: 'allow' },
-  remove_from_cart: { effect: 'allow' },
+  add_to_cart: { effect: 'approval', reason: 'Thêm vào giỏ cần khách xác nhận rõ trong chat.' },
+  update_cart_item: { effect: 'approval', reason: 'Đổi số lượng cần khách xác nhận rõ trong chat.' },
+  remove_from_cart: { effect: 'approval', reason: 'Bỏ món khỏi giỏ cần khách xác nhận rõ trong chat.' },
   start_checkout: { effect: 'allow' },
   track_order: { effect: 'allow' },
   get_order_history: { effect: 'allow' },

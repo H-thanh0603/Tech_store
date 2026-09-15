@@ -10,6 +10,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 import { agentCall, type AgentCallObserver } from './activity'
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
+import { hasHumanCartConfirm } from './cart-confirm'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
 import { streamTurn, type StreamEvent } from './stream'
@@ -132,6 +133,7 @@ export async function runAssistantTurn(
   const ctx: DispatchContext = createDispatchContext({
     cartTokenHash: deps?.cartTokenHash ?? null,
     cartRpc: deps?.cartRpc,
+    userConfirmed: hasHumanCartConfirm(lastUserText(history)),
   })
   const userText = lastUserText(history)
   const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {
@@ -245,6 +247,7 @@ export async function* streamAssistantTurn(
   const ctx: DispatchContext = createDispatchContext({
     cartTokenHash: deps?.cartTokenHash ?? null,
     cartRpc: deps?.cartRpc,
+    userConfirmed: hasHumanCartConfirm(lastUserText(history)),
   })
   const userText = lastUserText(history)
   const system = `${buildStaticSystem()}\n\n${buildDynamicContext(deps?.now ?? new Date(), {

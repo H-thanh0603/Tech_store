@@ -44,6 +44,9 @@ function toSigned(row: Row): SignedChange | null {
 }
 
 export async function recordStaged(signed: SignedChange, actorUserId: string | null): Promise<void> {
+  // H5: bind the stager at stage time — a null actor would make SoD
+  // unenforceable at approve time (anyone could approve it).
+  if (!actorUserId) throw new Error('record staged change: actorUserId is required')
   const { error } = await getSupabaseAdminClient().from('assistant_staged_changes').insert({
     id: signed.change.id,
     kind: signed.change.kind,

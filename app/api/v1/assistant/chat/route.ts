@@ -130,10 +130,13 @@ export async function POST(request: Request) {
   )
   const cartTokenHash = await hashToken(cartToken)
 
-  // Memory (update_memory after the turn): prefs keyed by the client's
-  // session id. Model-driven when ASSISTANT_MEMORY=model (1 extra call),
-  // otherwise rule-based. Fail-closed — chat works without it.
-  const sessionKey = parsed.data.sessionId ? await sessionKeyHash(parsed.data.sessionId) : null
+  // Memory (update_memory after the turn): prefs bound to (cart + IP +
+  // client session id) so a guessed sessionId alone cannot read/write another
+  // visitor's memory. Fail-closed — chat works without it.
+  // H5-style binding: predictable client IDs are never keys on their own.
+  const sessionKey = parsed.data.sessionId
+    ? await sessionKeyHash(`${cartTokenHash}:${ip}:${parsed.data.sessionId}`)
+    : null
   const memory = sessionKey ? await loadMemoryFacts(sessionKey) : {}
   const userTexts = history.filter((m) => m.role === 'user').map((m) => m.content)
 

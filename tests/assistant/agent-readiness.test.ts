@@ -34,11 +34,17 @@ describe('agent readiness: tool input validation', () => {
   it('holds invalid tool args without touching the DB', async () => {
     const ctx = createDispatchContext()
     // Missing quantity → schema rejects before any cart RPC.
-    const held = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'sony-a7iv' })
+    const held = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'sony-a7iv', confirmed: true })
     expect(held).toContain('invalid_args')
     // Quantity out of range → held as well.
-    const held2 = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'sony-a7iv', quantity: 9999 })
+    const held2 = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'sony-a7iv', quantity: 9999, confirmed: true })
     expect(held2).toContain('invalid_args')
+  })
+
+  it('holds cart writes missing model-asserted confirmation (H2)', async () => {
+    const ctx = createDispatchContext({ userConfirmed: true })
+    const held = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'sony-a7iv', quantity: 1 })
+    expect(held).toContain('invalid_args')
   })
 })
 

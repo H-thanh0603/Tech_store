@@ -94,14 +94,29 @@ describe('chat cart writes', () => {
 
   it('updates and removes through dispatch with a seen variant id', async () => {
     const rpc = fakeRpc()
-    const ctx = createDispatchContext({ cartTokenHash: 'hash', cartRpc: rpc })
+    const ctx = createDispatchContext({ cartTokenHash: 'hash', cartRpc: rpc, userConfirmed: true })
     ctx.seenIds.set('var-1', 'iphone-15')
-    const updated = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'var-1', quantity: 1 })
+    const updated = await dispatchTool(ctx, TOOL_ADD_TO_CART, { identifier: 'var-1', quantity: 1, confirmed: true })
     expect(updated).toContain('"result":"ok"')
     const removed = await chatRemoveFromCart('hash', 'var-1', ctx.seenIds, rpc)
     expect(removed.ok).toBe(true)
     const changed = await chatUpdateCartItem('hash', 'var-1', 3, ctx.seenIds, rpc)
     expect(changed.ok).toBe(true)
+  })
+
+  it('holds cart writes without human confirmation (H2)', async () => {
+    const rpc = fakeRpc()
+    // Model asserts confirmed but the human never typed intent → held.
+    const noHuman = createDispatchContext({ cartTokenHash: 'hash', cartRpc: rpc, userConfirmed: false })
+    noHuman.seenIds.set('var-1', 'iphone-15')
+    const held = await dispatchTool(noHuman, TOOL_ADD_TO_CART, { identifier: 'var-1', quantity: 1, confirmed: true })
+    expect(held).toContain('needs_confirmation')
+    expect(rpc.calls).not.toContain('cart_add_item')
+    // Human typed intent but the model did not assert confirmed → held.
+    const noModel = createDispatchContext({ cartTokenHash: 'hash', cartRpc: rpc, userConfirmed: true })
+    noModel.seenIds.set('var-1', 'iphone-15')
+    const held2 = await dispatchTool(noModel, TOOL_ADD_TO_CART, { identifier: 'var-1', quantity: 1, confirmed: false })
+    expect(held2).toContain('needs_confirmation')
   })
 
   it('reads an empty cart view on RPC failure', async () => {

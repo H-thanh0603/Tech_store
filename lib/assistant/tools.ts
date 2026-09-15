@@ -23,6 +23,7 @@ import {
 import { absentTools, assistantConfig } from './config'
 import { fencePayload } from './fencing'
 import { checkAgentPermission, permissionDeniedReply, SHOPPING_AGENT_PERMISSIONS } from './permissions'
+import { CART_CONFIRM_HINT } from './cart-confirm'
 import {
   chatAddToCart,
   chatCheckoutHandoff,
@@ -59,9 +60,18 @@ export interface DispatchContext {
   cartTokenHash: string | null
   /** Injectable cart RPC client (tests). */
   cartRpc?: CartRpcClient
+  /**
+   * Server-observed human cart intent in the latest user message (H2).
+   * Cart writes require this AND model-asserted confirmed=true.
+   */
+  userConfirmed: boolean
 }
 
-export function createDispatchContext(init?: { cartTokenHash?: string | null; cartRpc?: CartRpcClient }): DispatchContext {
+export function createDispatchContext(init?: {
+  cartTokenHash?: string | null
+  cartRpc?: CartRpcClient
+  userConfirmed?: boolean
+}): DispatchContext {
   return {
     seenIds: new Map(),
     cards: [],
@@ -69,6 +79,7 @@ export function createDispatchContext(init?: { cartTokenHash?: string | null; ca
     endTurn: false,
     cartTokenHash: init?.cartTokenHash ?? null,
     cartRpc: init?.cartRpc,
+    userConfirmed: init?.userConfirmed ?? false,
   }
 }
 
@@ -103,12 +114,17 @@ const toolInputSchemas: Record<string, z.ZodType> = {
   [TOOL_ADD_TO_CART]: z.object({
     identifier: z.string().trim().min(1).max(160),
     quantity: z.number().int().min(1).max(99),
+    confirmed: z.boolean(),
   }),
   [TOOL_UPDATE_CART_ITEM]: z.object({
     identifier: z.string().trim().min(1).max(160),
     quantity: z.number().int().min(1).max(99),
+    confirmed: z.boolean(),
   }),
-  [TOOL_REMOVE_FROM_CART]: z.object({ identifier: z.string().trim().min(1).max(160) }),
+  [TOOL_REMOVE_FROM_CART]: z.object({
+    identifier: z.string().trim().min(1).max(160),
+    confirmed: z.boolean(),
+  }),
   [TOOL_START_CHECKOUT]: z.object({ confirmed: z.boolean().optional() }),
   [TOOL_TRACK_ORDER]: z.object({
     order_code: z.string().trim().min(1).max(24),
@@ -213,35 +229,40 @@ export function buildAnthropicTools(): Anthropic.Tool[] {
       {
         name: TOOL_ADD_TO_CART,
         description:
-          'Thêm một biến thể vào giỏ. identifier là variant_id do get_product_details trả về, hoặc slug khi sản phẩm chỉ có đúng một biến thể. quantity 1–10 và trong tồn kho.',
+          'Thêm một biến thể vào giỏ. identifier là variant_id do get_product_details trả về, hoặc slug khi sản phẩm chỉ có đúng một biến thể. quantity 1–10 và trong tồn kho. confirmed=true BẮT BUỘC và chỉ đặt khi khách vừa xác nhận rõ trong tin nhắn mới nhất — chưa xác nhận thì hỏi trước, không gọi tool.',
         input_schema: {
           type: 'object' as const,
           properties: {
             identifier: { type: 'string' },
             quantity: { type: 'number', description: 'Số lượng 1–10' },
+            confirmed: { type: 'boolean', description: 'Khách đã xác nhận rõ trong tin nhắn mới nhất' },
           },
-          required: ['identifier', 'quantity'],
+          required: ['identifier', 'quantity', 'confirmed'],
         },
       },
       {
         name: TOOL_UPDATE_CART_ITEM,
-        description: 'Đổi số lượng một món trong giỏ (1–10, trong tồn kho).',
+        description: 'Đổi số lượng một món trong giỏ (1–10, trong tồn kho). confirmed=true bắt buộc — chỉ khi khách vừa xác nhận rõ.',
         input_schema: {
           type: 'object' as const,
           properties: {
             identifier: { type: 'string' },
             quantity: { type: 'number' },
+            confirmed: { type: 'boolean' },
           },
-          required: ['identifier', 'quantity'],
+          required: ['identifier', 'quantity', 'confirmed'],
         },
       },
       {
         name: TOOL_REMOVE_FROM_CART,
-        description: 'Bỏ một món khỏi giỏ.',
+        description: 'Bỏ một món khỏi giỏ. confirmed=true bắt buộc — chỉ khi khách vừa xác nhận rõ.',
         input_schema: {
           type: 'object' as const,
-          properties: { identifier: { type: 'string' } },
-          required: ['identifier'],
+          properties: {
+            identifier: { type: 'string' },
+            confirmed: { type: 'boolean' },
+          },
+          required: ['identifier', 'confirmed'],
         },
       },
       {
@@ -363,6 +384,8 @@ export async function dispatchTool(
 ): Promise<string> {
   try {
     // Agent permission matrix (điểm 4): fail-closed, chặn trước khi chạm backend.
+    // Cart writes are `approval` in the matrix (H2) — they continue below to
+    // the human-confirm gate instead of stopping here; deny still stops.
     const rule = checkAgentPermission(SHOPPING_AGENT_PERMISSIONS, name)
     if (rule.effect === 'deny') {
       return fencePayload({ result: 'permission_denied', hint: permissionDeniedReply(rule) })
@@ -372,6 +395,13 @@ export async function dispatchTool(
       return fencePayload({ result: 'invalid_args', hint: validated.hint })
     }
     input = validated.value
+    // H2 human-confirm gate: model assertion alone never moves a real cart.
+    if (
+      (name === TOOL_ADD_TO_CART || name === TOOL_UPDATE_CART_ITEM || name === TOOL_REMOVE_FROM_CART) &&
+      (input.confirmed !== true || !ctx.userConfirmed)
+    ) {
+      return fencePayload({ result: 'needs_confirmation', hint: CART_CONFIRM_HINT })
+    }
     switch (name) {
       case TOOL_SEARCH_PRODUCTS: {
         const query = String(input.query ?? '')
