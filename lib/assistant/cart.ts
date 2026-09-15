@@ -10,7 +10,7 @@
  */
 
 import { getProductBySlug } from '@/lib/catalog/queries'
-import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
+import { createOpaqueToken } from '@/lib/commerce/tokens'
 import { CART_COOKIE } from '@/lib/commerce/cookies'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 

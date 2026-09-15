@@ -7,7 +7,7 @@ import { OrderSavedEffect } from '@/components/commerce/order-saved'
 import { OrderStatus } from '@/components/commerce/order-status'
 import { PaymentSummary } from '@/components/commerce/payment-summary'
 import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 import type { OrderConfirmationData } from '@/lib/commerce/types'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -24,7 +24,7 @@ export default async function OrderConfirmationPage({
   if (!token) notFound()
   const { data, error } = await getSupabaseServerClient().rpc('order_get_by_access', {
     p_order_code: code,
-    p_access_token_hash: await sha256Hex(token),
+    p_access_token_hash: await hashToken(token),
   })
   if (error || !data || data.code !== 'OK') notFound()
   const order = data as OrderConfirmationData

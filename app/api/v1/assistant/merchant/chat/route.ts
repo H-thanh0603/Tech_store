@@ -13,7 +13,7 @@ import {
   MERCHANT_SCOPE_REFUSAL,
   MERCHANT_SCOPE_SUGGESTIONS,
 } from '@/lib/assistant/scope'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 import { streamToSSE } from '@/lib/assistant/sse'
 
 const messageSchema = z.object({
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
   // Abuse layer (no model call burned): active ban → jailbreak detector
   // (logged, feeds the ban ladder) → hard scope gate.
-  const banHash = await sha256Hex(`merchant_chat:${session.userId}:${clientIp(request.headers)}`)
+  const banHash = await hashToken(`merchant_chat:${session.userId}:${clientIp(request.headers)}`)
   if (await isBanned(banHash)) {
     return NextResponse.json(
       {

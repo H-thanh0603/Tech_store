@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { getProductBySlug } from '@/lib/catalog/queries'
-import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
+import { createOpaqueToken, hashToken } from '@/lib/commerce/tokens'
 import { tokenErrorStatus, verifyAgentToken } from '@/lib/agents/tokens'
 import { getSiteUrl } from '@/lib/site'
 
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       .insert({
         token_id: verified.token.id,
         items: resolved,
-        approve_token_hash: await sha256Hex(approveToken),
+        approve_token_hash: await hashToken(approveToken),
       })
       .select('id, expires_at')
       .single()

@@ -1,5 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 
 export interface IntentItem {
   slug: string
@@ -29,7 +29,7 @@ export async function getIntentByToken(token: string): Promise<OrderIntent | nul
   const { data } = await supabase
     .from('agent_order_intents')
     .select('id, items, status, expires_at, token_id, agent_tokens!inner(name)')
-    .eq('approve_token_hash', await sha256Hex(token))
+    .eq('approve_token_hash', await hashToken(token))
     .maybeSingle()
   if (!data) return null
 

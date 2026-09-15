@@ -1,12 +1,13 @@
 // Mint a scoped bearer token for an external AI agent (docs/AGENT_LAYER.md).
 // The plaintext token prints ONCE — store it in the agent's secret manager;
-// only the SHA-256 lands in agent_tokens.
+// only the HMAC (TOKEN_PEPPER) lands in agent_tokens, with legacy SHA-256
+// dual-read on the server for rotation safety.
 //
 //   node scripts/mint-agent-token.mjs --name "chatgpt-shop" [--scopes cart:write]
 //
 // Env (or .env.local): NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { readFileSync, existsSync } from 'node:fs'
 
 import { createClient } from '@supabase/supabase-js'
@@ -49,7 +50,13 @@ if (!url || !serviceKey) {
 }
 
 const plaintext = `tsa_${randomBytes(32).toString('base64url')}`
-const hash = createHash('sha256').update(plaintext).digest('hex')
+const pepper = env.TOKEN_PEPPER
+const hash = pepper
+  ? createHmac('sha256', pepper).update(plaintext).digest('hex')
+  : createHash('sha256').update(plaintext).digest('hex')
+if (!pepper) {
+  console.error('WARNING: TOKEN_PEPPER unset — minting legacy SHA-256 hash. Set a 32+ char pepper in prod.')
+}
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } })
 const { data, error } = await supabase

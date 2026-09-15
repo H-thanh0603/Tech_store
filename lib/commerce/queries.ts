@@ -2,7 +2,7 @@ import { getExistingCartTokenHash } from '@/lib/commerce/cookies'
 import { cookies } from 'next/headers'
 
 import { ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 import type { CartData, CartItemData, OrderConfirmationData, ShippingInfo } from '@/lib/commerce/types'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -119,7 +119,7 @@ export async function getOrderByAccess(orderCode: string): Promise<OrderConfirma
   if (!token) return null
   const { data, error } = await getSupabaseServerClient().rpc('order_get_by_access', {
     p_order_code: orderCode,
-    p_access_token_hash: await sha256Hex(token),
+    p_access_token_hash: await hashToken(token),
   })
   if (error || !data || data.code !== 'OK') return null
   return data as OrderConfirmationData

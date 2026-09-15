@@ -7,7 +7,7 @@ import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { CART_COOKIE, getCartTokenHash, ORDER_ACCESS_COOKIE } from '@/lib/commerce/cookies'
-import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
+import { createOpaqueToken, hashToken } from '@/lib/commerce/tokens'
 import { isCommerceErrorCode, toUserMessage } from '@/lib/commerce/errors'
 import { getRateLimitIdentity } from '@/lib/commerce/request-identity'
 import type { ActionState, CommerceErrorCode } from '@/lib/commerce/types'
@@ -176,11 +176,11 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
   const { data, error } = await authClient.rpc('place_order', {
     p_cart_token_hash: cartHash,
     p_idempotency_key: parsed.data.idempotencyKey,
-    p_order_access_token_hash: await sha256Hex(rawAccessToken),
+    p_order_access_token_hash: await hashToken(rawAccessToken),
     p_customer: parsed.data,
     p_payment_method: parsed.data.paymentMethod,
     p_coupon_code: null,
-    p_client_identity_hash: await sha256Hex(checkoutIdentity),
+    p_client_identity_hash: await hashToken(checkoutIdentity),
   })
   const state = rpcState(data as RpcResult | null, error)
   if (!state.ok) {
@@ -240,8 +240,8 @@ export async function trackOrder(_: ActionState, formData: FormData): Promise<Ac
   const { data, error } = await getSupabaseServerClient().rpc('order_track', {
     p_order_code: parsed.data.orderCode,
     p_phone: parsed.data.phone,
-    p_identity_hash: await sha256Hex(requestIdentity),
-    p_new_access_token_hash: await sha256Hex(rawAccessToken),
+    p_identity_hash: await hashToken(requestIdentity),
+    p_new_access_token_hash: await hashToken(rawAccessToken),
   })
   const state = rpcState(data as RpcResult | null, error)
   if (!state.ok) {
@@ -287,7 +287,7 @@ export async function requestReturn(
 
   const { data, error } = await getSupabaseServerClient().rpc('request_order_return', {
     p_order_code: parsed.data.orderCode,
-    p_access_token_hash: await sha256Hex(accessToken),
+    p_access_token_hash: await hashToken(accessToken),
     p_phone: parsed.data.phone,
     p_reason_code: parsed.data.reasonCode,
     p_customer_note: parsed.data.customerNote || null,

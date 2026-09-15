@@ -17,7 +17,7 @@ import {
   SHOPPING_SCOPE_SUGGESTIONS,
 } from '@/lib/assistant/scope'
 import { streamToSSE } from '@/lib/assistant/sse'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
   // Abuse layer (no model call burned): active ban → jailbreak detector
   // (logged, feeds the ban ladder) → hard scope gate.
-  const identityHash = await sha256Hex(`assistant_chat:${ip}`)
+  const identityHash = await hashToken(`assistant_chat:${ip}`)
   if (await isBanned(identityHash)) {
     return NextResponse.json(
       {
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   const { token: cartToken, isNew: isNewCart } = ensureCartToken(
     parseCartToken(request.headers.get('cookie')),
   )
-  const cartTokenHash = await sha256Hex(cartToken)
+  const cartTokenHash = await hashToken(cartToken)
 
   // Memory (update_memory after the turn): prefs keyed by the client's
   // session id. Model-driven when ASSISTANT_MEMORY=model (1 extra call),

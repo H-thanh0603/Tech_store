@@ -6,7 +6,7 @@
  */
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
-import { sha256Hex } from '@/lib/commerce/tokens'
+import { hashToken } from '@/lib/commerce/tokens'
 
 export interface MemoryFacts {
   budget_vnd?: number
@@ -96,7 +96,7 @@ export type MemoryDb = {
 export async function sessionKeyHash(sessionId: string): Promise<string | null> {
   const id = sessionId.trim().slice(0, 128)
   if (id.length < 8) return null
-  return sha256Hex(id)
+  return hashToken(id)
 }
 
 export async function loadMemoryFacts(

@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation'
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import { CART_COOKIE } from '@/lib/commerce/cookies'
-import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
+import { createOpaqueToken, hashToken } from '@/lib/commerce/tokens'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getIntentByToken } from './intent'
 
@@ -31,7 +31,7 @@ export async function approveIntent(token: string): Promise<void> {
   const failed: string[] = []
   for (const item of intent.items) {
     const { data } = await cartClient.rpc('cart_add_item', {
-      p_cart_token_hash: await sha256Hex(cartToken),
+      p_cart_token_hash: await hashToken(cartToken),
       p_variant_id: item.variantId,
       p_quantity: item.quantity,
     })

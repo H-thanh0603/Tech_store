@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 
-import { createOpaqueToken, sha256Hex } from '@/lib/commerce/tokens'
+import { createOpaqueToken, hashToken } from '@/lib/commerce/tokens'
 
 export const CART_COOKIE = 'techstore_cart'
 export const ORDER_ACCESS_COOKIE = 'techstore_order_access'
@@ -32,9 +32,9 @@ export async function getExistingCartToken(): Promise<string | null> {
 
 export async function getExistingCartTokenHash(): Promise<string | null> {
   const token = await getExistingCartToken()
-  return token ? sha256Hex(token) : null
+  return token ? hashToken(token) : null
 }
 
 export async function getCartTokenHash(): Promise<string> {
-  return sha256Hex(await getOrCreateCartToken())
+  return hashToken(await getOrCreateCartToken())
 }
