@@ -5,7 +5,7 @@ import {
   OrdersStatusChart,
   RevenueTrendChart,
   TopProductsChart,
-} from '@/components/admin/dashboard/charts'
+} from '@/components/admin/dashboard/charts-dynamic'
 import { DashboardBlock } from '@/components/admin/dashboard/dashboard-block'
 import { KpiCard } from '@/components/admin/dashboard/kpi-card'
 import { RecentOrdersList, StockAlertList } from '@/components/admin/dashboard/ops-lists'

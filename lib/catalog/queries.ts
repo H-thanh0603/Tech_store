@@ -269,6 +269,31 @@ export function mapProductDetail(row: DetailRow, availability?: Map<string, numb
 const CATALOG_SELECT =
   'id, name, slug, category_slug, brand_name, min_price, has_discount, available_stock, image_url, image_alt'
 
+/**
+ * Per-keystroke suggest query (perf): same catalog view, but NO count
+ * (count:exact costs a full scan per keystroke) and a hard LIMIT 6. The old
+ * path ran the full paginated getProducts (count:exact + 12 rows) then
+ * sliced 6 — the heaviest per-keystroke query in the system.
+ */
+export async function suggestProducts(query: string): Promise<ProductCardData[]> {
+  const q = query.trim().slice(0, 80)
+  if (q.length < 2) return []
+  const supabase = getSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('catalog_products')
+    .select(CATALOG_SELECT)
+    .textSearch('search_vector_nd', normalizeVietnamese(q), { type: 'plain', config: 'simple' })
+    .gt('available_stock', 0)
+    .order('is_featured', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(6)
+  if (error) {
+    console.warn('[catalog] suggest failed', error)
+    return []
+  }
+  return ((data ?? []) as CatalogRow[]).map(mapCatalogRowToCard)
+}
+
 const DETAIL_SELECT = `
   id, name, slug, description, category_id, is_featured,
   categories!inner ( name, slug ),

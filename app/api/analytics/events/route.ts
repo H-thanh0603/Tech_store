@@ -22,6 +22,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'payload_too_large' }, { status: 413 })
   }
 
+  // Spam guard: unauthenticated inserts are capped per IP (60/min). Fail-open
+  // for availability — a limiter outage must not 500 every page view — but
+  // loud, and batch shape caps (20 events, 12 keys) still bound one request.
+  try {
+    const { trustedClientIp } = await import('@/lib/net/ip')
+    const ip = trustedClientIp(request.headers)
+    const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
+      p_action: 'analytics_events',
+      p_identity: ip,
+      p_limit: 60,
+      p_window_minutes: 1,
+    })
+    if (limited === true) {
+      return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
+    }
+  } catch {
+    const { logger } = await import('@/lib/logger')
+    logger.warn('analytics rate-limit fail-open')
+  }
+
   let input: unknown
   try {
     const body = await request.text()
