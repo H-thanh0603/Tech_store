@@ -53,6 +53,25 @@ const FENCE_FORGERY_PATTERNS: RegExp[] = [
   /\[tool_result[\s:\]]/i,
 ]
 
+// H4: indirect / third-party injection — instructions that arrive via pasted
+// page content, links or "the tool said" hearsay. The model must treat tool
+// output as data; a user message that smuggles a new instruction *through* a
+// quoted source is the same primitive as a direct override.
+const INDIRECT_PATTERNS: RegExp[] = [
+  // "the page says to ..." / pasted instructions to follow
+  /(trang|page|web|bài viết|bai viet|email|tài liệu|tai lieu).{0,40}(bảo|nói|ghi|yêu cầu|hướng dẫn).{0,40}(làm theo|thực hiện|gọi tool|apply|gửi)/i,
+  /(làm theo|thực hiện|follow).{0,40}(hướng dẫn|chỉ dẫn|instruction).{0,40}(trong|từ|from).{0,40}(trang|page|link|tool|kết quả|ket qua)/i,
+  // instruction + URL in one breath (fetch-and-follow, send-to-webhook)
+  /(mở|mo|truy cập|truy cap|tải|tai|fetch|open|visit|curl|wget).{0,30}https?:\/\/\S+/i,
+  /(gửi|gui|send|post|forward|chuyển).{0,30}(đến|den|tới|toi|to).{0,30}https?:\/\/\S+/i,
+  /(copy|dán|paste).{0,40}(vào|vao|từ|tu|from).{0,40}(tool|kết quả|ket qua|trang|page)/i,
+  // fake tool/system voice inside user text
+  /\[?(system|tool|assistant)\s*[:\]]\s*(bảo|nói|yêu cầu|instruction|ignore|reveal)/i,
+  /(kết quả tool|ket qua tool|tool (đã |da )?trả).{0,40}(bảo|nói|yêu cầu).{0,40}(gọi|gửi|tiết lộ|reveal|gửi tiền|thanh toán)/i,
+]
+
+export type TranscriptMessage = { role: string; content: string }
+
 export function detectJailbreak(text: string): Finding | null {
   for (const re of FENCE_FORGERY_PATTERNS) {
     if (re.test(text)) return { blocked: true, kind: 'fence-forgery' }
@@ -62,6 +81,24 @@ export function detectJailbreak(text: string): Finding | null {
   }
   for (const re of INJECTION_PATTERNS) {
     if (re.test(text)) return { blocked: true, kind: 'prompt-injection' }
+  }
+  for (const re of INDIRECT_PATTERNS) {
+    if (re.test(text)) return { blocked: true, kind: 'prompt-injection' }
+  }
+  return null
+}
+
+/**
+ * H4: scan the FULL user transcript (not just the last message) plus any
+ * injected tool-output text. A jailbreak split across turns ("ignore that" …
+ * three turns later "…and do X") or laundered through a pasted tool result
+ * must still block the turn without burning model budget.
+ */
+export function scanTranscript(messages: TranscriptMessage[]): Finding | null {
+  for (const m of messages) {
+    if (m.role !== 'user') continue
+    const hit = detectJailbreak(m.content ?? '')
+    if (hit) return hit
   }
   return null
 }

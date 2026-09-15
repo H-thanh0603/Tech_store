@@ -7,7 +7,7 @@ import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/a
 import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
 import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/cart'
 import { assistantConfig } from '@/lib/assistant/config'
-import { detectJailbreak, JAILBREAK_REFUSAL } from '@/lib/assistant/jailbreak'
+import { detectJailbreak, JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
 import { createProviderClient } from '@/lib/assistant/providers'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
@@ -101,9 +101,12 @@ export async function POST(request: Request) {
     )
   }
   const lastText = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
-  const jailbreak = detectJailbreak(lastText)
+  // H4: full-transcript scan — a split-across-turns or pasted-source
+  // injection anywhere in the user history blocks before any model call.
+  const jailbreak = scanTranscript(parsed.data.messages) ?? detectJailbreak(lastText)
   if (jailbreak) {
-    await recordViolation(identityHash, 'assistant_chat', `jailbreak:${jailbreak.kind}`, lastText)
+    const evidence = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+    await recordViolation(identityHash, 'assistant_chat', `jailbreak:${jailbreak.kind}`, evidence.slice(0, 500))
     return NextResponse.json({
       code: 'BLOCKED',
       reply: JAILBREAK_REFUSAL,

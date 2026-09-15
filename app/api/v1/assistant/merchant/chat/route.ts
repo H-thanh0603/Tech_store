@@ -6,7 +6,7 @@ import { requireAdminSession } from '@/lib/admin/auth'
 import type { ChatMessage } from '@/lib/assistant/agent'
 import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
 import { runMerchantTurn, streamMerchantTurn } from '@/lib/assistant/merchant/agent'
-import { detectJailbreak, MERCHANT_JAILBREAK_REFUSAL } from '@/lib/assistant/jailbreak'
+import { detectJailbreak, MERCHANT_JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import {
   checkMerchantScope,
@@ -100,9 +100,11 @@ export async function POST(request: Request) {
     )
   }
   const lastText = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
-  const jailbreak = detectJailbreak(lastText)
+  // H4: full-transcript scan (same rationale as the shopping endpoint).
+  const jailbreak = scanTranscript(parsed.data.messages) ?? detectJailbreak(lastText)
   if (jailbreak) {
-    await recordViolation(banHash, 'merchant_chat', `jailbreak:${jailbreak.kind}`, lastText)
+    const evidence = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+    await recordViolation(banHash, 'merchant_chat', `jailbreak:${jailbreak.kind}`, evidence.slice(0, 500))
     return NextResponse.json({
       code: 'BLOCKED',
       reply: MERCHANT_JAILBREAK_REFUSAL,

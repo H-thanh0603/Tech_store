@@ -18,10 +18,14 @@ function sanitizeText(value: string, maxChars = 6000): string {
   return (
     value
       // strip HTML + exfil vectors: markdown links/images, javascript:/data: URIs,
-      // bidi overrides + zero-width (homoglyph / visual spoofing), @-mentions noise
+      // bidi overrides + zero-width (homoglyph / visual spoofing), @-mentions noise,
+      // plus bare http(s) URLs (H4: a catalog/policy record has no legitimate
+      // outbound link for the model to follow — redact so a poisoned record
+      // cannot smuggle a fetch-and-follow primitive through the fence).
       .replace(/[<>&]/g, '')
       .replace(/!?\[[^\]]*\]\([^)]*\)/g, '[link removed]')
       .replace(/(javascript|data|vbscript)\s*:/gi, '[scheme removed]')
+      .replace(/https?:\/\/[^\s)>\]]+/gi, '[url removed]')
       .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '')
       .slice(0, maxChars)
   )
