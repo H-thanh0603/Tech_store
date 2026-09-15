@@ -6,9 +6,14 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 
+import type { AgentCall } from './activity'
+import { agentCall } from './activity'
 import type { MessagesClient } from './agent'
 
-export type StreamEvent<R> = { type: 'text'; delta: string } | { type: 'result'; result: R }
+export type StreamEvent<R> =
+  | { type: 'text'; delta: string }
+  | { type: 'activity'; call: AgentCall }
+  | { type: 'result'; result: R }
 
 interface StreamDriver<R> {
   model: string
@@ -19,6 +24,8 @@ interface StreamDriver<R> {
   messages: Anthropic.MessageParam[]
   forcedTool: string | null
   dispatch: (name: string, input: Record<string, unknown>) => Promise<string>
+  /** Real-time Agent Activity UI: fired per tool call before it runs. */
+  onActivity?: (call: AgentCall) => void
   /** Return true when the turn should stop after this round (e.g. suggestions). */
   shouldEnd: () => boolean
   /** Fallback reply when the model produced no text. */
@@ -107,6 +114,11 @@ export async function* streamTurn<R>(
 
     const results: Anthropic.ToolResultBlockParam[] = []
     for (const use of toolUses) {
+      const call = agentCall(use.name, use.input)
+      driver.onActivity?.(call)
+      // Real-time Agent Activity UI: mỗi tool call được đẩy ra SSE để UI vẽ
+      // checklist từng bước agent đang làm (nhãn chuẩn hóa, đã redact).
+      yield { type: 'activity', call }
       const text = await driver.dispatch(use.name, use.input)
       results.push({ type: 'tool_result', tool_use_id: use.id, content: text })
     }

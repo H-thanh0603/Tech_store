@@ -1,8 +1,11 @@
 /**
  * Minimal Server-Sent Events plumbing for assistant chat.
- * Event frames: {type:'text',delta} … final {type:'result',result}.
+ * Event frames: {type:'text',delta} … {type:'activity',call:AgentCall}
+ * (Real-time Agent Activity UI, fired per tool call; generic in R so it does
+ * not constrain payloads) … final {type:'result',result}.
  */
 
+import type { AgentCall } from './activity'
 import type { StreamEvent } from './stream'
 
 export function sseEncode(payload: unknown): string {
@@ -36,10 +39,11 @@ export function streamToSSE<R>(gen: AsyncGenerator<StreamEvent<R>>): Response {
   })
 }
 
-/** Client-side SSE reader for POST chat streams. Calls onText per delta, resolves the result. */
+/** Client-side SSE reader for POST chat streams. Calls onText per delta, onActivity per tool call, resolves the result. */
 export async function readChatStream<R>(
   res: Response,
   onText: (delta: string) => void,
+  onActivity?: (call: AgentCall) => void,
 ): Promise<R> {
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
   const reader = res.body.getReader()
@@ -59,9 +63,13 @@ export async function readChatStream<R>(
         try {
           const event = JSON.parse(trimmed.slice(5).trim()) as
             | { type: 'text'; delta: string }
+            | { type: 'activity'; call?: AgentCall; activity?: AgentCall }
             | { type: 'result'; result: R }
           if (event.type === 'text') onText(event.delta)
-          else result = event.result
+          else if (event.type === 'activity') {
+            const call = event.call ?? event.activity
+            if (call) onActivity?.(call)
+          } else result = event.result
         } catch {
           // Partial frame: more bytes coming.
         }

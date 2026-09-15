@@ -131,7 +131,7 @@ describe('merchant tool dispatcher', () => {
   it('never throws on unknown tools', async () => {
     const ctx = createMerchantContext()
     const { text } = await dispatchMerchantTool(ctx, 'apply_change', {})
-    expect(text).toContain('error')
+    expect(text).toContain('permission_denied')
   })
 
   it('exposes inventory alerts', async () => {

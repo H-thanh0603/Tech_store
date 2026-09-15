@@ -22,6 +22,7 @@ import {
 } from './backend'
 import { absentTools, assistantConfig } from './config'
 import { fencePayload } from './fencing'
+import { checkAgentPermission, permissionDeniedReply, SHOPPING_AGENT_PERMISSIONS } from './permissions'
 import {
   chatAddToCart,
   chatCheckoutHandoff,
@@ -361,6 +362,11 @@ export async function dispatchTool(
   input: Record<string, unknown>,
 ): Promise<string> {
   try {
+    // Agent permission matrix (điểm 4): fail-closed, chặn trước khi chạm backend.
+    const rule = checkAgentPermission(SHOPPING_AGENT_PERMISSIONS, name)
+    if (rule.effect === 'deny') {
+      return fencePayload({ result: 'permission_denied', hint: permissionDeniedReply(rule) })
+    }
     const validated = parseToolInput(name, input)
     if (!validated.ok) {
       return fencePayload({ result: 'invalid_args', hint: validated.hint })

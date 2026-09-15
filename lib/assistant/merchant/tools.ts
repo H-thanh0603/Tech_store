@@ -17,6 +17,7 @@ import { ANALYSIS_TEMPLATES, runAnalysis } from './analysis'
 import { draftCampaignBrief, listCampaignBriefs } from './campaigns'
 import { latestDigest } from './digest'
 import { fencePayload } from '../fencing'
+import { checkAgentPermission, MERCHANT_AGENT_PERMISSIONS, permissionDeniedReply } from '../permissions'
 import { merchantConfig } from './config'
 import { stagePrice, stagePublish, stageStock } from './stage'
 import { listPendingStaged } from './ledger'
@@ -225,6 +226,12 @@ export async function dispatchMerchantTool(
   input: Record<string, unknown>,
 ): Promise<{ text: string; signed?: SignedChange }> {
   try {
+    // Agent permission matrix (điểm 4): stage_* là 'approval' (chỉ tạo nháp,
+    // người duyệt bấm nút); mọi tool chưa liệt kê → fail-closed.
+    const rule = checkAgentPermission(MERCHANT_AGENT_PERMISSIONS, name)
+    if (rule.effect === 'deny') {
+      return { text: fencePayload({ result: 'permission_denied', hint: permissionDeniedReply(rule) }) }
+    }
     switch (name) {
       case TOOL_SNAPSHOT: {
         return { text: fencePayload({ result: 'ok', snapshot: await businessSnapshot() }) }

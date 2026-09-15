@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  createProviderClient,
   defaultModelFor,
+  _resetGlmTextSeqForTests,
+  extractGlmToolCalls,
   fetchWithRetry,
   fromDeepSeekResponse,
   isUnsupportedReasonerModel,
@@ -33,8 +36,25 @@ describe('assistant providers', () => {
     expect(resolveProvider()).toBe('deepseek')
     expect(defaultModelFor('deepseek')).toBe('deepseek-chat')
     expect(defaultModelFor('anthropic')).toBe('claude-haiku-4-5')
+    process.env.ASSISTANT_PROVIDER = 'openrouter'
+    expect(resolveProvider()).toBe('openrouter')
+    expect(defaultModelFor('openrouter')).toBe('anthropic/claude-haiku-4-5')
     if (saved === undefined) delete process.env.ASSISTANT_PROVIDER
     else process.env.ASSISTANT_PROVIDER = saved
+  })
+
+  it('builds an OpenRouter client only when its key is set', () => {
+    const savedProvider = process.env.ASSISTANT_PROVIDER
+    const savedKey = process.env.OPENROUTER_API_KEY
+    process.env.ASSISTANT_PROVIDER = 'openrouter'
+    delete process.env.OPENROUTER_API_KEY
+    expect(createProviderClient()).toBeNull()
+    process.env.OPENROUTER_API_KEY = 'test-key'
+    expect(createProviderClient()).not.toBeNull()
+    if (savedProvider === undefined) delete process.env.ASSISTANT_PROVIDER
+    else process.env.ASSISTANT_PROVIDER = savedProvider
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY
+    else process.env.OPENROUTER_API_KEY = savedKey
   })
 
   it('translates system/history/tools to DeepSeek chat format', () => {
@@ -116,8 +136,47 @@ describe('assistant providers', () => {
 
   it('blocks reasoning models that break tool-calling', () => {
     expect(isUnsupportedReasonerModel('deepseek-reasoner')).toBe(true)
+    expect(isUnsupportedReasonerModel('deepseek/deepseek-r1:free')).toBe(true)
     expect(isUnsupportedReasonerModel('deepseek-chat')).toBe(false)
+    expect(isUnsupportedReasonerModel('anthropic/claude-haiku-4-5')).toBe(false)
     expect(isUnsupportedReasonerModel('claude-haiku-4-5')).toBe(false)
+  })
+
+  it('parses GLM pseudo-XML tool calls out of text (no markup leak to UI)', () => {
+    _resetGlmTextSeqForTests()
+    const { text, calls } = extractGlmToolCalls(
+      '<tool_call>search_products<arg_key>max_price</arg_key><arg_value>25000000</arg_value><arg_key>query</arg_key><arg_value>máy tính laptop văn phòng học tập</arg_value></tool_call>',
+    )
+    expect(text).toBe('')
+    expect(calls).toEqual([
+      {
+        id: 'glm-text-0',
+        name: 'search_products',
+        input: { max_price: 25000000, query: 'máy tính laptop văn phòng học tập' },
+      },
+    ])
+  })
+
+  it('keeps surrounding prose and surfaces text tool calls as real tool_use', () => {
+    _resetGlmTextSeqForTests()
+    const out = fromDeepSeekResponse({
+      choices: [
+        {
+          message: {
+            content:
+              'Để mình tìm giúp bạn nhé. <tool_call>search_products<arg_key>query</arg_key><arg_value>laptop</arg_value></tool_call>',
+          },
+          finish_reason: 'stop',
+        },
+      ],
+    })
+    expect(out.content[0]).toEqual({ type: 'text', text: 'Để mình tìm giúp bạn nhé.' })
+    expect(out.content[1]).toEqual({
+      type: 'tool_use',
+      id: 'glm-text-0',
+      name: 'search_products',
+      input: { query: 'laptop' },
+    })
   })
 
   it('retries retryable statuses then succeeds', async () => {

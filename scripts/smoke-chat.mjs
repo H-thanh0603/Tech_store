@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Live smoke conversation (needs ANTHROPIC/DEEPSEEK key on the server + dev server).
+ * Live smoke conversation (needs a provider key on the server + dev server).
+ * Key: ANTHROPIC_API_KEY, DEEPSEEK_API_KEY (+ASSISTANT_PROVIDER=deepseek),
+ * OPENROUTER_API_KEY (+ASSISTANT_PROVIDER=openrouter, ASSISTANT_MODEL=...),
+ * or TOKENROUTER_API_KEY (+ASSISTANT_PROVIDER=tokenrouter, ASSISTANT_MODEL=...).
  *   node scripts/smoke-chat.mjs --vertical retail [--base http://localhost:3000]
  * Travel/telecom/entertainment print their TRY cards (lib covered by vitest).
  */
@@ -11,6 +14,11 @@ function flag(name) {
 }
 const vertical = flag('--vertical') ?? 'retail'
 const base = ((flag('--base') ?? process.env.TECHSTORE_BASE ?? 'http://localhost:3000')).replace(/\/$/, '')
+// Free-tier gateways (e.g. TokenRouter glm free: 8 req/min) need spacing
+// between prompts — a single turn can fan out to 6 model calls.
+//   node scripts/smoke-chat.mjs --vertical retail --delay 25000
+const delayMs = Number(flag('--delay') ?? process.env.SMOKE_DELAY_MS ?? 0) || 0
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const TRY = {
   travel: 'Lên lịch Đà Lạt 3N2Đ đầu tháng 10, ngân sách 10 triệu (good: xác nhận ngày, buildItinerary, báo chặng hết chỗ, render itinerary).',
@@ -35,7 +43,8 @@ const prompts = [
 ]
 
 let failed = 0
-for (const prompt of prompts) {
+for (const [i, prompt] of prompts.entries()) {
+  if (i > 0 && delayMs > 0) await sleep(delayMs)
   const res = await fetch(`${base}/api/v1/assistant/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

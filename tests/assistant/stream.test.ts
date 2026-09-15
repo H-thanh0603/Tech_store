@@ -108,7 +108,7 @@ describe('assistant streaming', () => {
     })
     for await (const event of gen) {
       if (event.type === 'text') seen.push(event.delta)
-      else expect(event.result).toEqual({ reply: 'Xin chào.' })
+      else if (event.type === 'result') expect(event.result).toEqual({ reply: 'Xin chào.' })
     }
     expect(seen).toEqual(['Xin ', 'chào.'])
   })
@@ -138,7 +138,7 @@ describe('assistant streaming', () => {
     })
     for await (const event of gen) {
       if (event.type === 'text') deltas.push(event.delta)
-      else expect(event.result).toEqual({ reply: 'Trả lời gọn.' })
+      else if (event.type === 'result') expect(event.result).toEqual({ reply: 'Trả lời gọn.' })
     }
     expect(deltas).toEqual(['Trả lời gọn.'])
   })

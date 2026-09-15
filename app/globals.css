@@ -332,6 +332,31 @@ body {
   }
 }
 
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.animate-typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.typing-dot-2 {
+  animation-delay: 0.15s;
+}
+
+.typing-dot-3 {
+  animation-delay: 0.3s;
+}
+
 @keyframes promo-marquee {
   from {
     transform: translateX(0);
@@ -395,6 +420,7 @@ body {
   .animate-hero-in,
   .animate-hero-in-delay,
   .animate-pulse-soft,
+  .animate-typing-dot,
   .promo-marquee {
     animation: none !important;
     transition: none !important;

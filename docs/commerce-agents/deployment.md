@@ -8,9 +8,9 @@ consoles, MCP servers, managed manifests) trỏ về cùng một base URL.
 
 Env production (Vercel → Settings → Environment Variables):
 
-- `ASSISTANT_PROVIDER` + `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`
+- `ASSISTANT_PROVIDER` + `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY` / `TOKENROUTER_API_KEY`
 - `ASSISTANT_STAGING_SECRET` (random ≥ 32 ký tự; thiếu thì staging từ chối)
-- `ASSISTANT_MODEL` (tùy chọn), `ASSISTANT_MEMORY=model` (tùy chọn, tốn 1 call/lượt)
+- `ASSISTANT_MODEL` (tùy chọn), `ASSISTANT_MAX_TOKENS` (tùy chọn, 256-32000), `ASSISTANT_MEMORY=model` (tùy chọn, tốn 1 call/lượt)
 - Supabase URL/keys như `docs/ops/DEPLOY.md`
 
 Cron digest merchant: `/api/cron/merchant-digest` (xem manifest

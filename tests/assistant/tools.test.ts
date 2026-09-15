@@ -140,6 +140,6 @@ describe('assistant tool dispatcher', () => {
   it('never throws on unknown tools', async () => {
     const ctx = createDispatchContext()
     const text = await dispatchTool(ctx, 'delete_everything', {})
-    expect(text).toContain('error')
+    expect(text).toContain('permission_denied')
   })
 })

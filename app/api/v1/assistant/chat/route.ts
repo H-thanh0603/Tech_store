@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
+import type { AgentCallObserver } from '@/lib/assistant/activity'
+import { logAgentActivity } from '@/lib/assistant/activity-log'
 import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
+import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
 import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/cart'
 import { assistantConfig } from '@/lib/assistant/config'
+import { detectJailbreak, JAILBREAK_REFUSAL } from '@/lib/assistant/jailbreak'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
 import { createProviderClient } from '@/lib/assistant/providers'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import {
+  checkShoppingScope,
+  SHOPPING_SCOPE_REFUSAL,
+  SHOPPING_SCOPE_SUGGESTIONS,
+} from '@/lib/assistant/scope'
 import { streamToSSE } from '@/lib/assistant/sse'
 import { sha256Hex } from '@/lib/commerce/tokens'
 
@@ -76,6 +85,43 @@ export async function POST(request: Request) {
     )
   }
 
+  // Abuse layer (no model call burned): active ban → jailbreak detector
+  // (logged, feeds the ban ladder) → hard scope gate.
+  const identityHash = await sha256Hex(`assistant_chat:${ip}`)
+  if (await isBanned(identityHash)) {
+    return NextResponse.json(
+      {
+        code: 'BANNED',
+        message: ABUSE_BAN_MESSAGE,
+        reply: ABUSE_BAN_MESSAGE,
+        cards: [],
+        suggestions: [],
+      },
+      { status: 403 },
+    )
+  }
+  const lastText = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  const jailbreak = detectJailbreak(lastText)
+  if (jailbreak) {
+    await recordViolation(identityHash, 'assistant_chat', `jailbreak:${jailbreak.kind}`, lastText)
+    return NextResponse.json({
+      code: 'BLOCKED',
+      reply: JAILBREAK_REFUSAL,
+      cards: [],
+      suggestions: SHOPPING_SCOPE_SUGGESTIONS,
+      disabled: false,
+    })
+  }
+  if (checkShoppingScope(lastText) === 'off-topic') {
+    return NextResponse.json({
+      code: 'OFF_SCOPE',
+      reply: SHOPPING_SCOPE_REFUSAL,
+      cards: [],
+      suggestions: SHOPPING_SCOPE_SUGGESTIONS,
+      disabled: false,
+    })
+  }
+
   // The widget shares the storefront guest cart: reuse the browser's cart
   // cookie when present, otherwise mint one and set it on the response so
   // cart tools act on the same cart the website shows.
@@ -90,6 +136,14 @@ export async function POST(request: Request) {
   const sessionKey = parsed.data.sessionId ? await sessionKeyHash(parsed.data.sessionId) : null
   const memory = sessionKey ? await loadMemoryFacts(sessionKey) : {}
   const userTexts = history.filter((m) => m.role === 'user').map((m) => m.content)
+
+  // AI Activity Log (audit, fail-open): mỗi tool call của agent vào
+  // agent_activity_log; cùng gói dữ liệu đó đang stream ra UI real-time.
+  const logSessionKey = sessionKey ?? `ip:${identityHash.slice(0, 24)}`
+  const activity: AgentCallObserver = (call) => {
+    void logAgentActivity('shopping', logSessionKey, identityHash, call)
+  }
+
   const persistMemory = () => {
     if (!sessionKey) return
     if (assistantConfig.enableMemoryExtraction) {
@@ -104,12 +158,12 @@ export async function POST(request: Request) {
 
   if (parsed.data.stream) {
     persistMemory()
-    const streamResponse = streamToSSE(streamAssistantTurn(history, { cartTokenHash, memory }))
+    const streamResponse = streamToSSE(streamAssistantTurn(history, { cartTokenHash, memory, activity }))
     if (isNewCart) streamResponse.headers.set('set-cookie', cartSetCookie(cartToken))
     return streamResponse
   }
 
-  const result = await runAssistantTurn(history, { cartTokenHash, memory })
+  const result = await runAssistantTurn(history, { cartTokenHash, memory, activity })
   persistMemory()
   const response = NextResponse.json({
     reply: result.reply,

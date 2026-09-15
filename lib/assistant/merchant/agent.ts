@@ -6,6 +6,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 
+import { agentCall, type AgentCallObserver } from '../activity'
 import type { ChatMessage, MessagesClient } from '../agent'
 import { toAnthropicHistory } from '../agent'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from '../providers'
@@ -41,7 +42,13 @@ const DISABLED_REPLY =
 
 export async function runMerchantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date; actorUserId?: string | null },
+  deps?: {
+    client?: MessagesClient
+    now?: Date
+    actorUserId?: string | null
+    /** Real-time Agent Activity UI + audit: fired per tool call. */
+    activity?: AgentCallObserver
+  },
 ): Promise<MerchantTurnResult> {
   const client = deps?.client ?? createProviderClient()
   if (!client) {
@@ -113,6 +120,10 @@ export async function runMerchantTurn(
 
     const results: Anthropic.ToolResultBlockParam[] = []
     for (const use of toolUses) {
+      const call = agentCall(use.name, use.input)
+      // Single source of activity: route layer persists audit via the
+      // observer. Lib must not log directly (would double-log).
+      deps?.activity?.(call)
       const outcome = await dispatchMerchantTool(ctx, use.name, use.input)
       if (outcome.signed) staged.push(outcome.signed)
       results.push({ type: 'tool_result', tool_use_id: use.id, content: outcome.text })
@@ -134,7 +145,13 @@ export type MerchantStreamEvent = StreamEvent<MerchantTurnResult>
 
 export async function* streamMerchantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date; actorUserId?: string | null },
+  deps?: {
+    client?: MessagesClient
+    now?: Date
+    actorUserId?: string | null
+    /** Real-time Agent Activity UI + audit: fired per tool call. */
+    activity?: AgentCallObserver
+  },
 ): AsyncGenerator<MerchantStreamEvent> {
   const client = deps?.client ?? createProviderClient()
   if (!client) {
@@ -167,10 +184,13 @@ export async function* streamMerchantTurn(
     messages: toAnthropicHistory(history),
     forcedTool: wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null,
     dispatch: async (name, input) => {
+      // No activity fire here: streamTurn already fires onActivity + yields
+      // the SSE event. Firing here would duplicate UI steps + audit rows.
       const outcome = await dispatchMerchantTool(ctx, name, input)
       if (outcome.signed) staged.push(outcome.signed)
       return outcome.text
     },
+    onActivity: deps?.activity,
     shouldEnd: () => ctx.endTurn,
     fallbackReply:
       'Mình chưa hiểu ý bạn. Bạn hỏi về doanh thu, tồn kho, đơn chờ xử lý, hay muốn stage thay đổi giá/xuất bản?',

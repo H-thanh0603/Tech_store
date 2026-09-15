@@ -7,6 +7,8 @@
  * analysis delegate + scheduled digest.
  */
 
+import { defaultMaxTokensFor, defaultModelFor, resolveProvider } from '../providers'
+
 export interface MerchantPilotConfig {
   assistantName: string
   brandName: string
@@ -31,10 +33,8 @@ export const merchantConfig: MerchantPilotConfig = {
   assistantName: 'Trợ lý vận hành',
   brandName: 'TechStore',
   brandVoice: 'rõ ràng, số liệu trước, đề xuất hành động nhỏ nhất',
-  model:
-    process.env.ASSISTANT_MODEL ??
-    (process.env.ASSISTANT_PROVIDER === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5'),
-  maxTokens: 1024,
+  model: defaultModelFor(resolveProvider()),
+  maxTokens: defaultMaxTokensFor(resolveProvider()),
   maxToolIterations: 5,
 
   enableListingReads: true,

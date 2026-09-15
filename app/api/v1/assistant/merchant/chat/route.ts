@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
+import { logAgentActivity } from '@/lib/assistant/activity-log'
 import { requireAdminSession } from '@/lib/admin/auth'
 import type { ChatMessage } from '@/lib/assistant/agent'
+import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
 import { runMerchantTurn, streamMerchantTurn } from '@/lib/assistant/merchant/agent'
+import { detectJailbreak, MERCHANT_JAILBREAK_REFUSAL } from '@/lib/assistant/jailbreak'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
+import {
+  checkMerchantScope,
+  MERCHANT_SCOPE_REFUSAL,
+  MERCHANT_SCOPE_SUGGESTIONS,
+} from '@/lib/assistant/scope'
+import { sha256Hex } from '@/lib/commerce/tokens'
 import { streamToSSE } from '@/lib/assistant/sse'
 
 const messageSchema = z.object({
@@ -75,11 +84,58 @@ export async function POST(request: Request) {
     )
   }
 
-  if (parsed.data.stream) {
-    return streamToSSE(streamMerchantTurn(history, { actorUserId: session.userId }))
+  // Abuse layer (no model call burned): active ban → jailbreak detector
+  // (logged, feeds the ban ladder) → hard scope gate.
+  const banHash = await sha256Hex(`merchant_chat:${session.userId}:${clientIp(request.headers)}`)
+  if (await isBanned(banHash)) {
+    return NextResponse.json(
+      {
+        code: 'BANNED',
+        message: ABUSE_BAN_MESSAGE,
+        reply: ABUSE_BAN_MESSAGE,
+        staged: [],
+        suggestions: [],
+      },
+      { status: 403 },
+    )
+  }
+  const lastText = [...parsed.data.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  const jailbreak = detectJailbreak(lastText)
+  if (jailbreak) {
+    await recordViolation(banHash, 'merchant_chat', `jailbreak:${jailbreak.kind}`, lastText)
+    return NextResponse.json({
+      code: 'BLOCKED',
+      reply: MERCHANT_JAILBREAK_REFUSAL,
+      staged: [],
+      suggestions: MERCHANT_SCOPE_SUGGESTIONS,
+    })
+  }
+  if (checkMerchantScope(lastText) === 'off-topic') {
+    return NextResponse.json({
+      code: 'OFF_SCOPE',
+      reply: MERCHANT_SCOPE_REFUSAL,
+      staged: [],
+      suggestions: MERCHANT_SCOPE_SUGGESTIONS,
+    })
   }
 
-  const result = await runMerchantTurn(history, { actorUserId: session.userId })
+  if (parsed.data.stream) {
+    return streamToSSE(
+      streamMerchantTurn(history, {
+        actorUserId: session.userId,
+        activity: (call) => {
+          void logAgentActivity('merchant', `staff:${session.userId}`, `merchant:${session.userId}`, call)
+        },
+      }),
+    )
+  }
+
+  const result = await runMerchantTurn(history, {
+    actorUserId: session.userId,
+    activity: (call) => {
+      void logAgentActivity('merchant', `staff:${session.userId}`, `merchant:${session.userId}`, call)
+    },
+  })
   return NextResponse.json({
     reply: result.reply,
     staged: result.staged,

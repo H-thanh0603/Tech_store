@@ -23,7 +23,7 @@ test.describe('shopping assistant smoke', () => {
     await page.getByRole('button', { name: /mở trợ lý mua sắm/i }).click()
     await page.getByPlaceholder(/hỏi về máy, giá, đơn hàng/i).fill('laptop học tập')
     await page.getByRole('button', { name: /^gửi$/i }).click()
-    // No ANTHROPIC_/DEEPSEEK_API_KEY in test env: graceful disabled reply.
+    // No provider key in test env: graceful disabled reply.
     await expect(page.getByText(/chưa được cấu hình/i)).toBeVisible({ timeout: 15_000 })
   })
 

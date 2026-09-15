@@ -8,6 +8,8 @@
  * Model-driven memory extraction and image input are OFF by default
  * (enable_* switches); their flows park under skills/_staged/.
  */
+import { defaultMaxTokensFor, defaultModelFor, resolveProvider } from './providers'
+
 export interface AssistantConfig {
   assistantName: string
   brandName: string
@@ -36,11 +38,10 @@ export const assistantConfig: AssistantConfig = {
   brandName: 'TechStore',
   brandVoice: 'thân thiện, ngắn gọn, nói rõ đánh đổi',
   // Overridable via ASSISTANT_MODEL. Provider default comes from
-  // defaultModelFor() so it tracks ASSISTANT_PROVIDER at import time.
-  model:
-    process.env.ASSISTANT_MODEL ??
-    (process.env.ASSISTANT_PROVIDER === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5'),
-  maxTokens: 1024,
+  // defaultModelFor() so it tracks ASSISTANT_PROVIDER at import time
+  // (anthropic, deepseek, openrouter).
+  model: defaultModelFor(resolveProvider()),
+  maxTokens: defaultMaxTokensFor(resolveProvider()),
   maxToolIterations: 5,
   searchLimit: 6,
 

@@ -24,19 +24,23 @@ TypeScript-native port of the shopping agent from
 
 ## Setup
 
-1. Chọn provider: `ASSISTANT_PROVIDER=anthropic` (mặc định) hoặc `deepseek`.
+1. Chọn provider: `ASSISTANT_PROVIDER=anthropic` (mặc định), `deepseek`, `openrouter`, hoặc `tokenrouter`.
 2. Thêm key tương ứng vào `.env.local` (server-only, không bao giờ `NEXT_PUBLIC_*`):
    - Anthropic: `ANTHROPIC_API_KEY=...` (https://console.anthropic.com → API Keys)
    - DeepSeek: `DEEPSEEK_API_KEY=...` (https://platform.deepseek.com → API Keys)
+   - OpenRouter: `OPENROUTER_API_KEY=...` (https://openrouter.ai → Keys) + `ASSISTANT_MODEL=...` (ví dụ `anthropic/claude-haiku-4-5`; model reasoning/R1 bị chặn vì tool-calling không ổn định)
+   - TokenRouter: `TOKENROUTER_API_KEY=...` (https://www.tokenrouter.io → Keys) + `ASSISTANT_MODEL=...` (ví dụ `z-ai/glm-5.3-free`; GLM đôi khi trả tool-call dạng pseudo-XML trong text — translator tự bóc tách, không leak markup ra UI)
 3. Restart dev server. Chưa có key → widget vẫn hiện nhưng trả lời "chưa được cấu hình" (xem `DISABLED_REPLY`).
-4. Optional: `ASSISTANT_MODEL=` (mặc định `claude-haiku-4-5` / `deepseek-chat`).
+4. Optional: `ASSISTANT_MODEL=` (mặc định `claude-haiku-4-5` / `deepseek-chat` / `anthropic/claude-haiku-4-5` trên OpenRouter / `z-ai/glm-5.3-free` trên TokenRouter), `ASSISTANT_MAX_TOKENS=` (mặc định 1024, 4096 trên TokenRouter; 256–32000).
 
-DeepSeek chạy qua endpoint OpenAI-compatible (`/chat/completions`), được dịch
+DeepSeek, OpenRouter và TokenRouter chạy qua endpoint OpenAI-compatible (`/chat/completions`), được dịch
 hai chiều trong `lib/assistant/providers.ts` nên vòng lặp turn không đổi —
-tool contracts, fencing và grounding giữ nguyên.
+tool contracts, fencing và grounding giữ nguyên. Guard reasoner áp dụng cho cả
+hai provider dịch (model reasoning/R1 bị từ chối với thông báo rõ ràng).
 
 ## Safety (port từ `docs/safety.md` của blueprint)
 
+- **Abuse layer** (trước mọi model call, không tốn budget): IP bị ban → 403 (`abuse_bans`); phát hiện jailbreak (`lib/assistant/jailbreak.ts`: override EN/VI, moi system prompt/API key, giả mạo thẻ `<storefront_data>`) → chặn + ghi `security_events`, tái phạm ≥3/24h ban 1h, ≥6 ban 24h; câu ngoài lề (`lib/assistant/scope.ts`) → từ chối cứng kèm chip gợi ý. Câu mơ hồ/gray vẫn chạy mềm như cũ.
 - **Fencing** (`lib/assistant/fencing.ts`): mọi kết quả tool vào model trong thẻ
   `<storefront_data>`; chỉ thị bên trong là dữ liệu để báo cáo, không làm theo.
 - **Grounding**: khẳng định về sản phẩm/giá/tồn kho/chính sách/đơn hàng phải từ
@@ -100,16 +104,33 @@ Vòng lặp chung `lib/assistant/stream.ts` (Anthropic native stream, DeepSeek S
 + ráp tool_calls); khi provider không có stream sẽ fallback 1 `create()` mỗi vòng.
 Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
 
+## Agent Activity UI + AI Activity Log (điểm 5-6)
+
+- **Real-time Agent Activity UI**: mỗi tool call của agent được chuẩn hóa thành
+  `AgentCall` (`lib/assistant/activity.ts` — nhãn tiếng Việt đọc được, chi tiết
+  1 dòng đã redact SĐT/email, cap 140 ký tự), đẩy ra SSE qua event
+  `{type:'activity', call}` trong `stream.ts`. Widget vẽ checklist từng bước
+  (`components/assistant/agent-activity-list.tsx`) — khách thấy agent đang
+  "Tìm sản phẩm trong catalog: laptop gaming" thay vì "Đang xử lý...".
+- **AI Activity Log**: cùng gói AgentCall được ghi append-only vào bảng
+  `agent_activity_log` (`lib/assistant/activity-log.ts`, migration
+  `202609140007_agent_activity_log.sql`) — agent, session, tool, kind, detail
+  (đã redact), identity hash. Fail-open như abuse layer: log lỗi không phá chat.
+  Dùng cho debug, security review, CS kháng nghị và phát hiện agent hành xử
+  bất thường (query theo `session_key` hoặc `agent` — đã có index theo cả hai).
+- Wire format `activity` hỗ trợ cả `call` lẫn key cũ `activity` trên client
+  (`readChatStream`) để tương thích ngược.
+
 ---
 
 # Production checklist (trước khi mở assistant cho người thật)
 
 | # | Việc | Ở đâu |
 |---|---|---|
-| 1 | `ASSISTANT_PROVIDER` + key tương ứng (`ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY`) vào Vercel env (Production), **không** commit | Vercel → Settings → Environment Variables |
+| 1 | `ASSISTANT_PROVIDER` + key tương ứng (`ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY` / `TOKENROUTER_API_KEY`) vào Vercel env (Production), **không** commit | Vercel → Settings → Environment Variables |
 | 2 | `ASSISTANT_STAGING_SECRET` random ≥ 32 ký tự vào Vercel env; thiếu → staging từ chối ở production | Vercel env |
-| 3 | Áp migrations lên DB production (`supabase db push`) + chạy pgTAP: `assistant_staged_changes.sql`, `assistant_full_scope.sql` (memory, briefs, digests) | Supabase |
-| 4 | Đặt trần chi tiêu + cảnh báo trên dashboard nhà cung cấp model (Anthropic Console / DeepSeek Platform) — endpoint công khai đã rate-limit 20 turns/15'/IP nhưng trần billing là chốt cuối | Provider dashboard |
+| 3 | Áp migrations lên DB production (`supabase db push`) + chạy pgTAP: `assistant_staged_changes.sql`, `assistant_full_scope.sql` (memory, briefs, digests), `agent_activity_log.sql` (AI Activity Log), `rate_limit.sql` (daily buckets) | Supabase |
+| 4 | Đặt trần chi tiêu + cảnh báo trên dashboard nhà cung cấp model (Anthropic Console / DeepSeek Platform / OpenRouter / TokenRouter) — endpoint công khai đã rate-limit 20 turns/15'/IP + daily quota nhưng trần billing là chốt cuối | Provider dashboard |
 | 5 | Xoay key ngay nếu từng paste vào chat/log; key cũ revoke trên dashboard | Provider dashboard |
 | 6 | Kiểm tra CSP: chat chỉ gọi `same-origin` (`/api/v1/assistant/*`) — đã nằm trong `connect-src 'self'`, không cần sửa | `proxy.ts` |
 | 7 | Smoke test production: chat thử 1 câu catalog + merchant stage 1 change lên staging (chưa Duyệt), rồi discard | Browser |

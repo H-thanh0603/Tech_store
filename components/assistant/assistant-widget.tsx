@@ -5,7 +5,11 @@ import Link from 'next/link'
 import { useRef, useState } from 'react'
 
 import { formatPrice } from '@/lib/format'
+import type { AgentCall } from '@/lib/assistant/activity'
 import { readChatStream } from '@/lib/assistant/sse'
+
+import { detectIntent, ThinkingBubble, type ShoppingIntent } from './thinking-bubble'
+import { AgentActivityList } from './agent-activity-list'
 
 interface AssistantCard {
   product_id: string
@@ -24,18 +28,28 @@ interface ChatEntry {
   content: string
   cards?: AssistantCard[]
   suggestions?: string[]
+  /** Detected intent of the user message that triggered this entry. */
+  intent?: ShoppingIntent
+  /** Real-time Agent Activity UI: tool calls streamed during this turn. */
+  activity?: AgentCall[]
 }
 
 const HELLO: ChatEntry = {
   role: 'assistant',
   content:
     'Chào bạn, mình là trợ lý TechStore. Bạn cần tìm máy gì, ngân sách bao nhiêu — hoặc muốn tra cứu đơn hàng?',
-  suggestions: ['Laptop học tập dưới 20 triệu', 'iPhone cũ còn hàng không', 'Tra cứu đơn hàng'],
+  suggestions: [
+    'Laptop nào pin trâu cho sinh viên, dưới 20 triệu?',
+    'So sánh iPhone 15 và Galaxy S24 — nên chọn bên nào?',
+    'Đang có deal nào hot không?',
+    'Top máy bán chạy nhất tháng này',
+  ],
 }
 
 async function postChat(
   messages: { role: string; content: string }[],
   onText: (delta: string) => void,
+  onActivity: (call: AgentCall) => void,
 ) {
   const res = await fetch('/api/v1/assistant/chat', {
     method: 'POST',
@@ -46,7 +60,7 @@ async function postChat(
     reply: string
     cards: AssistantCard[]
     suggestions: string[]
-  }>(res, onText)
+  }>(res, onText, onActivity)
 }
 
 /** Stable per-browser chat session id for memory (regenerated if missing). */
@@ -64,13 +78,23 @@ function assistantSessionId(): string {
   }
 }
 
-function ProductMiniCard({ card }: { card: AssistantCard }) {
+function ProductMiniCard({ card, wide = false }: { card: AssistantCard; wide?: boolean }) {
   return (
     <Link
       href={card.url}
-      className="flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated"
+      className={
+        wide
+          ? 'flex w-full shrink-0 gap-2 overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
+          : 'flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
+      }
     >
-      <div className="relative aspect-[4/3] bg-bg-secondary/60">
+      <div
+        className={
+          wide
+            ? 'relative h-16 w-16 shrink-0 bg-bg-secondary/60'
+            : 'relative aspect-[4/3] bg-bg-secondary/60'
+        }
+      >
         {card.image ? (
           <Image src={card.image} alt={card.name} fill sizes="160px" className="object-cover" />
         ) : null}
@@ -86,6 +110,135 @@ function ProductMiniCard({ card }: { card: AssistantCard }) {
   )
 }
 
+/**
+ * Horizontal card carousel: arrows on both sides page the strip. Scroll is
+ * driven imperatively so the arrows work even without native smooth snapping.
+ */
+function CardCarousel({ cards }: { cards: AssistantCard[] }) {
+  const trackRef = useRef<HTMLDivElement>(null)
+
+  function page(direction: 1 | -1) {
+    const track = trackRef.current
+    if (!track) return
+    track.scrollBy({ left: direction * (track.clientWidth - 40), behavior: 'smooth' })
+  }
+
+  return (
+    <div className="mt-2 flex max-w-72 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => page(-1)}
+        aria-label="Xem sản phẩm trước"
+        className="grid size-7 shrink-0 place-items-center rounded-full border border-border bg-bg-elevated text-(length:--text-xs) text-fg-muted hover:bg-surface-muted"
+      >
+        ‹
+      </button>
+      <div ref={trackRef} className="flex w-full gap-2 overflow-x-auto pb-1 [scroll-snap-type:x_mandatory]">
+        {cards.map((card) => (
+          <div key={card.product_id} className="[scroll-snap-align:start]">
+            <ProductMiniCard card={card} />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => page(1)}
+        aria-label="Xem sản phẩm tiếp theo"
+        className="grid size-7 shrink-0 place-items-center rounded-full border border-border bg-bg-elevated text-(length:--text-xs) text-fg-muted hover:bg-surface-muted"
+      >
+        ›
+      </button>
+    </div>
+  )
+}
+
+/** Vertical stack of wider product rows. */
+function CardStack({ cards }: { cards: AssistantCard[] }) {
+  return (
+    <div className="mt-2 flex max-w-72 flex-col gap-2">
+      {cards.map((card) => (
+        <ProductMiniCard key={card.product_id} card={card} wide />
+      ))}
+    </div>
+  )
+}
+
+interface ReplySegment {
+  kind: 'point' | 'text'
+  text: string
+  ordinal?: number
+}
+
+/** Pure parse: list-marker lines become numbered points, blanks dropped. */
+function parseReplyLines(content: string): ReplySegment[] {
+  let ordinal = 0
+  const segments: ReplySegment[] = []
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const marker = trimmed.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/)
+    if (marker) {
+      ordinal += 1
+      segments.push({ kind: 'point', text: marker[1], ordinal })
+    } else {
+      segments.push({ kind: 'text', text: trimmed })
+    }
+  }
+  return segments
+}
+
+/**
+ * Assistant reply with ordered-point rendering: lines starting with a list
+ * marker get a 1-2-3 badge so comparison/list answers read as a ranking.
+ */
+function AssistantReply({ content }: { content: string }) {
+  const segments = parseReplyLines(content)
+  return (
+    <div className="flex flex-col gap-1.5">
+      {segments.map((seg, i) =>
+        seg.kind === 'point' ? (
+          <div key={i} className="flex items-start gap-2">
+            <span className="mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full bg-brand text-(length:--text-[10px]) font-bold text-accent-fg">
+              {seg.ordinal}
+            </span>
+            <span className="whitespace-pre-wrap">{seg.text}</span>
+          </div>
+        ) : (
+          <p key={i} className="whitespace-pre-wrap">
+            {seg.text}
+          </p>
+        ),
+      )}
+    </div>
+  )
+}
+
+/** Card display mode: horizontal arrows carousel or vertical stack. */
+type CardLayout = 'horizontal' | 'vertical'
+
+function ProductCards({ cards, entryIndex }: { cards: AssistantCard[]; entryIndex: number }) {
+  const [layout, setLayout] = useState<CardLayout>(() => (cards.length > 3 ? 'horizontal' : 'vertical'))
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setLayout((l) => (l === 'horizontal' ? 'vertical' : 'horizontal'))}
+        aria-label={layout === 'horizontal' ? 'Hiển thị danh sách dọc' : 'Hiển thị ngang có nút chuyển'}
+        title={layout === 'horizontal' ? 'Danh sách dọc' : 'Xem ngang'}
+        className="absolute -top-1 right-0 z-10 grid size-6 place-items-center rounded-full border border-border bg-bg-elevated text-(length:--text-[10px]) text-fg-muted hover:bg-surface-muted"
+      >
+        {layout === 'horizontal' ? '☰' : '⇄'}
+      </button>
+      {layout === 'horizontal' ? (
+        <CardCarousel key={`h-${entryIndex}`} cards={cards} />
+      ) : (
+        <CardStack key={`v-${entryIndex}`} cards={cards} />
+      )}
+    </div>
+  )
+}
+
+
 export function AssistantWidget() {
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<ChatEntry[]>([HELLO])
@@ -99,10 +252,21 @@ export function AssistantWidget() {
     if (!clean || pending) return
     setDraft('')
     setFailed(false)
+    const intent = detectIntent(clean)
     const next = [...entries, { role: 'user', content: clean } as ChatEntry]
     // Placeholder assistant entry streams deltas into place.
-    setEntries([...next, { role: 'assistant', content: '' } as ChatEntry])
+    setEntries([...next, { role: 'assistant', content: '', intent } as ChatEntry])
     setPending(true)
+    // Real-time Agent Activity UI: checklist steps stream in as tools fire.
+    const onActivity = (call: AgentCall) => {
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [...prev.slice(0, -1), { ...last, activity: [...(last.activity ?? []), call] }]
+      })
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
+    }
     const appendDelta = (delta: string) => {
       setEntries((prev) => {
         if (prev.length === 0) return prev
@@ -116,6 +280,7 @@ export function AssistantWidget() {
       const data = await postChat(
         next.map((e) => ({ role: e.role, content: e.content })),
         appendDelta,
+        onActivity,
       )
       setEntries((prev) => {
         if (prev.length === 0) return prev
@@ -191,14 +356,10 @@ export function AssistantWidget() {
                   : 'max-w-72 rounded-(--radius-md) bg-surface-muted px-3 py-2 text-(length:--text-sm) text-fg'
               }
             >
-              {entry.content}
+              {entry.role === 'assistant' && entry.content ? <AssistantReply content={entry.content} /> : entry.content}
             </div>
             {entry.cards && entry.cards.length > 0 ? (
-              <div className="mt-2 flex max-w-72 gap-2 overflow-x-auto pb-1">
-                {entry.cards.map((card) => (
-                  <ProductMiniCard key={card.product_id} card={card} />
-                ))}
-              </div>
+              <ProductCards cards={entry.cards} entryIndex={i} />
             ) : null}
             {entry.suggestions && entry.suggestions.length > 0 ? (
               <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">
@@ -216,11 +377,17 @@ export function AssistantWidget() {
             ) : null}
           </div>
         ))}
-        {pending ? (
-          <p className="text-(length:--text-xs) text-fg-muted" role="status">
-            Trợ lý đang trả lời…
-          </p>
-        ) : null}
+        {(() => {
+          const last = entries[entries.length - 1]
+          if (!pending || last?.role !== 'assistant') return null
+          const steps = last.activity ?? []
+          return (
+            <>
+              {!last.content ? <ThinkingBubble variant="shopping" intent={last.intent ?? 'default'} /> : null}
+              {steps.length > 0 ? <AgentActivityList calls={steps} /> : null}
+            </>
+          )
+        })()}
         {failed ? (
           <p className="text-(length:--text-xs) text-danger" role="alert">
             Không gửi được. Kiểm tra mạng rồi thử lại.

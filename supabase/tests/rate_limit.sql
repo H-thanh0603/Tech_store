@@ -48,5 +48,19 @@ select is(
   'assistant_chat bucket is allowlisted'
 );
 
+-- 7) Assistant DAILY buckets are allowlisted too — without them every chat
+-- request 429s DAILY_LIMITED as soon as the DB is reachable (fail-open on
+-- DB outage hides this in local dev).
+select is(
+  (select check_rate_limit('assistant_chat_daily', 'tap-assistant-1', 200, 1440)),
+  false,
+  'assistant_chat_daily bucket is allowlisted'
+);
+select is(
+  (select check_rate_limit('merchant_chat_daily', 'tap-assistant-1', 600, 1440)),
+  false,
+  'merchant_chat_daily bucket is allowlisted'
+);
+
 select finish();
 rollback;

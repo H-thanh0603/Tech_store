@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { readChatStream } from '@/lib/assistant/sse'
+import type { AgentCall } from '@/lib/assistant/activity'
+
+import { ThinkingBubble } from '@/components/assistant/thinking-bubble'
+import { AgentActivityList } from '@/components/assistant/agent-activity-list'
 
 interface StagedItem {
   productId: string
@@ -27,6 +31,8 @@ interface Entry {
   role: 'user' | 'assistant'
   content: string
   suggestions?: string[]
+  /** Real-time Agent Activity UI: tool calls streamed during this turn. */
+  activity?: AgentCall[]
 }
 
 interface PendingCard {
@@ -50,6 +56,7 @@ const HELLO: Entry = {
 async function postChat(
   messages: { role: string; content: string }[],
   onText: (delta: string) => void,
+  onActivity: (call: AgentCall) => void,
 ) {
   const res = await fetch('/api/v1/assistant/merchant/chat', {
     method: 'POST',
@@ -60,7 +67,7 @@ async function postChat(
     reply: string
     staged: StagedEnvelope[]
     suggestions: string[]
-  }>(res, onText)
+  }>(res, onText, onActivity)
 }
 
 async function postDecision(changeId: string, decision: 'apply' | 'discard') {
@@ -103,6 +110,15 @@ export function MerchantAssistant() {
     const next = [...entries, { role: 'user', content: clean } as Entry]
     setEntries([...next, { role: 'assistant', content: '' } as Entry])
     setPending(true)
+    // Real-time Agent Activity UI: checklist steps stream in as tools fire.
+    const onActivity = (call: AgentCall) => {
+      setEntries((prev) => {
+        if (prev.length === 0) return prev
+        const last = prev[prev.length - 1]
+        if (last.role !== 'assistant') return prev
+        return [...prev.slice(0, -1), { ...last, activity: [...(last.activity ?? []), call] }]
+      })
+    }
     const appendDelta = (delta: string) => {
       setEntries((prev) => {
         if (prev.length === 0) return prev
@@ -115,6 +131,7 @@ export function MerchantAssistant() {
       const data = await postChat(
         next.map((e) => ({ role: e.role, content: e.content })),
         appendDelta,
+        onActivity,
       )
       setEntries((prev) => {
         if (prev.length === 0) return prev
@@ -243,9 +260,17 @@ export function MerchantAssistant() {
               ) : null}
             </div>
           ))}
-          {pending ? (
-            <p className="text-(length:--text-xs) text-fg-muted" role="status">Trợ lý đang trả lời…</p>
-          ) : null}
+          {(() => {
+            const last = entries[entries.length - 1]
+            if (!pending || last?.role !== 'assistant') return null
+            const steps = last.activity ?? []
+            return (
+              <>
+                {!last.content ? <ThinkingBubble variant="merchant" /> : null}
+                {steps.length > 0 ? <AgentActivityList calls={steps} /> : null}
+              </>
+            )
+          })()}
           {failed ? (
             <p className="text-(length:--text-xs) text-danger" role="alert">
               Không gửi được. Thử lại nhé.

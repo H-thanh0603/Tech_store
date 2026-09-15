@@ -6,6 +6,8 @@ import { redirect } from 'next/navigation'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 import { getSupabaseServiceRoleClient } from '@/lib/supabase/service-role'
 
+import { friendlyAuthError } from './auth-messages'
+
 export type AuthFormState = {
   ok: boolean
   message?: string
@@ -83,9 +85,7 @@ export async function signInWithMagicLink(
   if (error) {
     return {
       ok: false,
-      message: error.message.includes('signups not allowed')
-        ? 'Đăng ký email chưa bật trên Supabase. Bật Email provider trong Auth settings.'
-        : error.message,
+      message: friendlyAuthError(error.message),
       mode: 'magic',
     }
   }
@@ -156,7 +156,7 @@ export async function signUpWithPassword(
     },
   })
   if (error) {
-    return { ok: false, message: error.message, mode: 'signup' }
+    return { ok: false, message: friendlyAuthError(error.message), mode: 'signup' }
   }
 
   // Session may be null if email confirmation is required.

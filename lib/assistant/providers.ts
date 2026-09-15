@@ -6,21 +6,25 @@
  *   to/from the same Anthropic-shaped params so the turn loop is untouched.
  * - `openrouter`: OpenRouter's OpenAI-compatible endpoint — same translator,
  *   any tool-capable model (e.g. `anthropic/claude-haiku-4-5`).
+ * - `tokenrouter`: any OpenAI-compatible gateway (base URL override via
+ *   TOKENROUTER_BASE_URL, default https://api.tokenrouter.com/v1) — same
+ *   translator, model via ASSISTANT_MODEL.
  *
- * Select with ASSISTANT_PROVIDER=anthropic|deepseek|openrouter (default
+ * Select with ASSISTANT_PROVIDER=anthropic|deepseek|openrouter|tokenrouter (default
  * anthropic). Keys are server-only: ANTHROPIC_API_KEY / DEEPSEEK_API_KEY /
- * OPENROUTER_API_KEY.
+ * OPENROUTER_API_KEY / TOKENROUTER_API_KEY.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
 
 import type { MessagesClient, ProviderStreamEvent, StreamParams } from './agent'
 
-export type AssistantProvider = 'anthropic' | 'deepseek' | 'openrouter'
+export type AssistantProvider = 'anthropic' | 'deepseek' | 'openrouter' | 'tokenrouter'
 
 export function resolveProvider(): AssistantProvider {
   if (process.env.ASSISTANT_PROVIDER === 'deepseek') return 'deepseek'
   if (process.env.ASSISTANT_PROVIDER === 'openrouter') return 'openrouter'
+  if (process.env.ASSISTANT_PROVIDER === 'tokenrouter') return 'tokenrouter'
   return 'anthropic'
 }
 
@@ -28,7 +32,22 @@ export function defaultModelFor(provider: AssistantProvider): string {
   if (process.env.ASSISTANT_MODEL) return process.env.ASSISTANT_MODEL
   if (provider === 'deepseek') return 'deepseek-chat'
   if (provider === 'openrouter') return 'anthropic/claude-haiku-4-5'
+  if (provider === 'tokenrouter') return 'z-ai/glm-5.3-free'
   return 'claude-haiku-4-5'
+}
+
+/**
+ * Reasoning models (e.g. GLM-5.3 on TokenRouter) spend completion budget on
+ * `reasoning_content` before the visible `content`, so they need a larger
+ * ceiling than the 1024 default. Translatable via ASSISTANT_MAX_TOKENS.
+ */
+export function defaultMaxTokensFor(provider: AssistantProvider): number {
+  if (process.env.ASSISTANT_MAX_TOKENS) {
+    const n = Number(process.env.ASSISTANT_MAX_TOKENS)
+    if (Number.isInteger(n) && n >= 256 && n <= 32000) return n
+  }
+  if (provider === 'tokenrouter') return 4096
+  return 1024
 }
 
 function createAnthropicClient(apiKey: string): MessagesClient {
@@ -262,7 +281,12 @@ export function fromDeepSeekResponse(json: {
     | { type: 'text'; text: string }
     | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   )[] = []
-  if (msg?.content) content.push({ type: 'text', text: msg.content })
+  const rawText = msg?.content ?? ''
+  const { text: cleanText, calls: textCalls } = extractGlmToolCalls(rawText)
+  if (cleanText) content.push({ type: 'text', text: cleanText })
+  for (const call of textCalls) {
+    content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
+  }
   for (const call of msg?.tool_calls ?? []) {
     let input: Record<string, unknown> = {}
     try {
@@ -276,7 +300,92 @@ export function fromDeepSeekResponse(json: {
     content.push({ type: 'tool_use', id: call.id, name: call.function?.name ?? '', input })
   }
   const finish = json.choices?.[0]?.finish_reason
-  return { content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
+  const hasCalls = textCalls.length > 0 || (msg?.tool_calls?.length ?? 0) > 0
+  return { content, stop_reason: finish === 'tool_calls' || hasCalls ? 'tool_use' : 'end_turn' }
+}
+
+/**
+ * GLM models behind some gateways sometimes emit tool calls as pseudo-XML
+ * text (`<tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value>...`)
+ * instead of OpenAI-style `tool_calls`. Rendered raw, that markup leaks
+ * into the chat UI — and the tool never runs. Parse those blocks back into
+ * real tool calls and strip them from the visible text.
+ */
+export interface GlmTextCall {
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+function coerceArgValue(raw: string): unknown {
+  const v = raw.trim()
+  if (v === '') return v
+  if (v === 'null' || v === 'NULL') return null
+  if (v === 'true') return true
+  if (v === 'false') return false
+  // JSON arrays/objects first (e.g. identifiers list), then numbers.
+  if ((v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']'))) {
+    try {
+      return JSON.parse(v) as unknown
+    } catch {
+      // Fall through to plain string.
+    }
+  }
+  // Quoted strings: strip one layer of matching quotes.
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    return v.slice(1, -1)
+  }
+  if (/^-?\d+$/.test(v)) {
+    const n = Number.parseInt(v, 10)
+    return Number.isSafeInteger(n) ? n : v
+  }
+  if (/^-?\d+\.\d+$/.test(v)) {
+    const n = Number.parseFloat(v)
+    return Number.isFinite(n) ? n : v
+  }
+  return v
+}
+
+/** Monotonic base so text-extracted ids stay unique across rounds/calls. */
+let glmTextCallSeq = 0
+
+/** Test-only reset for deterministic `glm-text-0` expectations. */
+export function _resetGlmTextSeqForTests(): void {
+  glmTextCallSeq = 0
+}
+
+export function extractGlmToolCalls(text: string): { text: string; calls: GlmTextCall[] } {
+  const calls: GlmTextCall[] = []
+  const base = glmTextCallSeq
+  let count = 0
+  const cleaned = text.replace(
+    /<tool_call>\s*([a-zA-Z0-9_]+)\s*((?:<arg_key>[\s\S]*?<\/arg_value>\s*)*)<\/tool_call>/g,
+    (_match, name: string, argsBody: string) => {
+      const toolName = String(name ?? '').trim()
+      // Skip empty/garbage names — dispatcher would permission-deny anyway,
+      // but don't mint a tool_use for markup noise.
+      if (!toolName) return ''
+      const input: Record<string, unknown> = {}
+      const argRe = /<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g
+      let m: RegExpExecArray | null
+      while ((m = argRe.exec(argsBody)) !== null) {
+        const key = m[1].trim()
+        if (!key) continue
+        const value = coerceArgValue(m[2])
+        if (key in input) {
+          const prev = input[key]
+          input[key] = Array.isArray(prev) ? [...prev, value] : [prev, value]
+        } else {
+          input[key] = value
+        }
+      }
+      calls.push({ id: `glm-text-${base + count}`, name: toolName, input })
+      count += 1
+      return ''
+    },
+  )
+  glmTextCallSeq += count
+  return { text: cleaned.trim(), calls }
 }
 
 /**
@@ -426,7 +535,41 @@ async function* streamOpenAICompatible(
   )[] = []
   if (fullText) content.push({ type: 'text', text: fullText })
   content.push(...toolUseBlocks(pending))
-  yield { type: 'message', content, stop_reason: finish === 'tool_calls' ? 'tool_use' : 'end_turn' }
+  const textIdx = content.findIndex((b) => b.type === 'text')
+  if (textIdx !== -1) {
+    // Streaming deltas reassemble the raw text, markup included — extract
+    // GLM pseudo-XML tool calls the same way as the non-stream path.
+    const block = content[textIdx]
+    if (block?.type === 'text') {
+      const { text: cleanText, calls: textCalls } = extractGlmToolCalls(block.text)
+      if (textCalls.length > 0) {
+        if (cleanText) block.text = cleanText
+        else content.splice(textIdx, 1)
+        for (const call of textCalls) {
+          content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
+        }
+      }
+    }
+  }
+  if (content.length === 0) {
+    // Same empty-generation flake as the non-stream path: fall back to one
+    // non-stream call so the turn still gets a usable response.
+    await sleep(1500)
+    const retry = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}`, ...extraHeaders },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    })
+    if (!retry.ok) throw new Error(`OpenAI-compatible HTTP ${retry.status}`)
+    const parsed = fromDeepSeekResponse(
+      (await retry.json()) as Parameters<typeof fromDeepSeekResponse>[0],
+    )
+    yield { type: 'message', content: parsed.content, stop_reason: parsed.stop_reason }
+    return
+  }
+  const hasToolUse = content.some((b) => b.type === 'tool_use')
+  yield { type: 'message', content, stop_reason: finish === 'tool_calls' || hasToolUse ? 'tool_use' : 'end_turn' }
 }
 
 function createOpenAICompatibleClient(
@@ -438,14 +581,30 @@ function createOpenAICompatibleClient(
   return {
     messages: {
       create: async (params) => {
+        const outBody = toDeepSeekRequest(params) as Record<string, unknown>
         const res = await fetchWithRetry(url, {
           method: 'POST',
           headers,
-          body: JSON.stringify(toDeepSeekRequest(params)),
+          body: JSON.stringify(outBody),
           signal: AbortSignal.timeout(60_000),
         })
         if (!res.ok) throw new Error(`OpenAI-compatible HTTP ${res.status}`)
-        return fromDeepSeekResponse(await res.json())
+        const parsed = fromDeepSeekResponse((await res.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+        // Free-tier gateways occasionally return HTTP 200 with zero content
+        // (no text, no tool calls). That response is useless to the turn loop,
+        // so retry once before handing it back.
+        if (parsed.content.length === 0) {
+          await sleep(1500)
+          const retry = await fetchWithRetry(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(outBody),
+            signal: AbortSignal.timeout(60_000),
+          })
+          if (!retry.ok) throw new Error(`OpenAI-compatible HTTP ${retry.status}`)
+          return fromDeepSeekResponse((await retry.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+        }
+        return parsed
       },
       stream: (params: StreamParams) =>
         streamOpenAICompatible(url, toDeepSeekRequest(params) as Record<string, unknown>, apiKey, extraHeaders),
@@ -465,6 +624,19 @@ function createOpenRouterClient(apiKey: string): MessagesClient {
   })
 }
 
+/** TokenRouter (or any OpenAI-compatible gateway): base URL ends with /chat/completions. */
+export function tokenRouterUrl(): string {
+  const raw = (process.env.TOKENROUTER_BASE_URL ?? 'https://api.tokenrouter.com/v1').replace(/\/$/, '')
+  return raw.endsWith('/chat/completions') ? raw : `${raw}/chat/completions`
+}
+
+function createTokenRouterClient(apiKey: string): MessagesClient {
+  return createOpenAICompatibleClient(tokenRouterUrl(), apiKey, {
+    'HTTP-Referer': process.env.SITE_URL ?? 'http://localhost:3000',
+    'X-Title': 'TechStore Assistant',
+  })
+}
+
 /** Build the configured provider client, or null when its key is missing. */
 export function createProviderClient(): MessagesClient | null {
   const provider = resolveProvider()
@@ -475,6 +647,10 @@ export function createProviderClient(): MessagesClient | null {
   if (provider === 'openrouter') {
     const apiKey = process.env.OPENROUTER_API_KEY
     return apiKey ? createOpenRouterClient(apiKey) : null
+  }
+  if (provider === 'tokenrouter') {
+    const apiKey = process.env.TOKENROUTER_API_KEY
+    return apiKey ? createTokenRouterClient(apiKey) : null
   }
   const apiKey = process.env.ANTHROPIC_API_KEY
   return apiKey ? createAnthropicClient(apiKey) : null

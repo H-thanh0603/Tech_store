@@ -8,6 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 
+import { agentCall, type AgentCallObserver } from './activity'
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
@@ -109,7 +110,15 @@ const DISABLED_REPLY =
 
 export async function runAssistantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date; cartTokenHash?: string | null; cartRpc?: CartRpcClient; memory?: MemoryFacts },
+  deps?: {
+    client?: MessagesClient
+    now?: Date
+    cartTokenHash?: string | null
+    cartRpc?: CartRpcClient
+    memory?: MemoryFacts
+    /** Real-time Agent Activity UI + audit: fired per tool call. */
+    activity?: AgentCallObserver
+  },
 ): Promise<TurnResult> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
@@ -190,6 +199,7 @@ export async function runAssistantTurn(
     for (const use of toolUses) {
       // present_suggestions ends the turn after its round (reference:
       // close_on_presentation) — still record the call's result for history.
+      deps?.activity?.(agentCall(use.name, use.input))
       const text = await dispatchTool(ctx, use.name, use.input)
       results.push({ type: 'tool_result', tool_use_id: use.id, content: text })
       if (use.name === TOOL_PRESENT_SUGGESTIONS) ctx.endTurn = true
@@ -215,7 +225,15 @@ export type ShoppingStreamEvent = StreamEvent<TurnResult>
  */
 export async function* streamAssistantTurn(
   history: ChatMessage[],
-  deps?: { client?: MessagesClient; now?: Date; cartTokenHash?: string | null; cartRpc?: CartRpcClient; memory?: MemoryFacts },
+  deps?: {
+    client?: MessagesClient
+    now?: Date
+    cartTokenHash?: string | null
+    cartRpc?: CartRpcClient
+    memory?: MemoryFacts
+    /** Real-time Agent Activity UI + audit: fired per tool call. */
+    activity?: AgentCallObserver
+  },
 ): AsyncGenerator<ShoppingStreamEvent> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
@@ -244,6 +262,7 @@ export async function* streamAssistantTurn(
     forcedTool:
       config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null,
     dispatch: (name, input) => dispatchTool(ctx, name, input),
+    onActivity: deps?.activity,
     shouldEnd: () => ctx.endTurn,
     fallbackReply:
       'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
