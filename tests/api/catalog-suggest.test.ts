@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rateLimited = vi.fn(async () => ({ data: false }))
-const suggestProducts = vi.fn(async () => [
+const suggestCards = [
   {
     id: 'p1',
     slug: 'iphone-15',
@@ -11,14 +11,18 @@ const suggestProducts = vi.fn(async () => [
     imageUrl: 'https://example.com/p1.jpg',
     inStock: true,
   },
-])
+]
+const suggestProducts = vi.fn(async (query: string) => {
+  void query
+  return suggestCards
+})
 
 vi.mock('@/lib/admin/supabase', () => ({
   getSupabaseAdminClient: () => ({ rpc: rateLimited }),
 }))
 
 vi.mock('@/lib/catalog/queries', () => ({
-  suggestProducts: (...args: unknown[]) => suggestProducts(...args),
+  suggestProducts: (query: string) => suggestProducts(query),
 }))
 
 vi.mock('next/headers', () => ({
