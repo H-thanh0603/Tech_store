@@ -34,7 +34,8 @@ async function writeMfaAudit(action: string, actor: AdminAuthState, payload: Rec
 
 // TOTP codes are 6 digits: without a limit, enrollment/challenge verify is a
 // brute-force oracle. 10 attempts / 15 min per staff account (SEC-003).
-// Fail-open so a limiter outage never locks staff out of admin.
+// Fail-CLOSED (H1): a limiter outage blocks verify rather than opening the
+// 6-digit oracle.
 async function mfaVerifyLimited(userId: string): Promise<boolean> {
   try {
     const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
@@ -45,7 +46,9 @@ async function mfaVerifyLimited(userId: string): Promise<boolean> {
     })
     return limited === true
   } catch {
-    return false
+    const { logger } = await import('@/lib/logger')
+    logger.warn('admin_mfa rate-limit fail-closed')
+    return true
   }
 }
 

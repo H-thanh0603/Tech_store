@@ -5,6 +5,7 @@
  */
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
+import { trustedClientIp } from '@/lib/net/ip'
 
 export const SHOPPING_CHAT_LIMIT = 20
 export const MERCHANT_CHAT_LIMIT = 60
@@ -17,12 +18,7 @@ export const MERCHANT_CHAT_DAILY_LIMIT = 600
 const DAY_MINUTES = 24 * 60
 
 export function clientIp(headerList: Pick<Headers, 'get'>, fallback?: string | null): string {
-  return (
-    headerList.get('x-real-ip')?.trim() ||
-    headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-    fallback?.split(',').at(-1)?.trim() ||
-    'unknown'
-  )
+  return trustedClientIp(headerList, fallback)
 }
 
 /** True when the caller exceeded the budget — respond 429. */
@@ -39,6 +35,9 @@ export async function isChatRateLimited(
     })
     return limited === true
   } catch {
+    // Fail-open for chat availability (cost guard, not auth) — but loud.
+    const { logger } = await import('@/lib/logger')
+    logger.warn('chat rate-limit fail-open', { action })
     return false
   }
 }
@@ -57,6 +56,8 @@ export async function isChatDailyLimited(
     })
     return limited === true
   } catch {
+    const { logger } = await import('@/lib/logger')
+    logger.warn('chat daily-limit fail-open', { action })
     return false
   }
 }

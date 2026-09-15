@@ -1,9 +1,8 @@
+import { trustedClientIp } from '@/lib/net/ip'
+
 export function getRateLimitIdentity(requestHeaders: Pick<Headers, 'get'>, sessionHash: string) {
-  // The edge proxy must overwrite x-real-ip or append the real client as the last XFF hop.
-  const edgeAddress =
-    requestHeaders.get('x-real-ip')?.trim() ||
-    requestHeaders.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-    'unknown'
+  // Platform-trusted IP (x-real-ip first, leftmost valid XFF second).
+  const edgeAddress = trustedClientIp(requestHeaders)
 
   return `${sessionHash}:${edgeAddress}`
 }

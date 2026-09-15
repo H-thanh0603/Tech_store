@@ -89,12 +89,21 @@ export async function verifyAgentToken(
     if (!data.scopes.includes(scope)) return { ok: false, error: 'FORBIDDEN' }
 
     const supabase = getSupabaseAdminClient()
-    const { data: limited } = await supabase.rpc('check_rate_limit', {
-      p_action: 'agents_intents',
-      p_identity: data.id,
-      p_limit: AGENT_INTENTS_LIMIT,
-      p_window_minutes: WINDOW_MINUTES,
-    })
+    let limited: unknown
+    try {
+      const res = await supabase.rpc('check_rate_limit', {
+        p_action: 'agents_intents',
+        p_identity: data.id,
+        p_limit: AGENT_INTENTS_LIMIT,
+        p_window_minutes: WINDOW_MINUTES,
+      })
+      if (res.error) throw res.error
+      limited = res.data
+    } catch {
+      // Fail-CLOSED (H1): money-adjacent write path — a limiter outage
+      // blocks new intents rather than unthrottling agent writes.
+      return { ok: false, error: 'RATE_LIMITED' }
+    }
     if (limited === true) return { ok: false, error: 'RATE_LIMITED' }
 
     await supabase.from('agent_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', data.id)

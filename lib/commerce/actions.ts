@@ -106,10 +106,8 @@ export async function applyCoupon(_: ActionState, formData: FormData): Promise<A
   // Brute-force protection: 10 attempts / 15m per cart+IP (API-007)
   try {
     const headerList = await headers()
-    const ip =
-      headerList.get('x-real-ip')?.trim() ||
-      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-      'unknown'
+    const { trustedClientIp } = await import('@/lib/net/ip')
+    const ip = trustedClientIp(headerList)
     const cartHash = await getCartTokenHash()
     const identity = `${cartHash}:${ip}`
     const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
@@ -209,11 +207,11 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     const { buildVnpayUrl } = await import('@/lib/commerce/vnpay')
     const { getSiteUrl } = await import('@/lib/site')
     const requestHeaders = await headers()
+    const { trustedClientIp } = await import('@/lib/net/ip')
     const vnpayUrl = buildVnpayUrl({
       orderCode: result.orderCode,
       amountVnd: Number(result.totals?.total ?? 0),
-      ipAddr:
-        requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1',
+      ipAddr: trustedClientIp(requestHeaders, '127.0.0.1'),
       returnUrl: `${getSiteUrl()}/api/vnpay/return`,
     })
     if (!vnpayUrl) {

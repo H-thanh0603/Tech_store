@@ -28,12 +28,12 @@ export async function adminLogin(
   }
 
   // Rate-limit admin login 20/15min per email+IP (SEC-002) — 5 was too low for E2E (CI does >5 logins per bucket)
+  // Fail-CLOSED (H1): a limiter outage blocks login attempts rather than
+  // opening a brute-force window on the staff account.
   try {
     const headerList = await headers()
-    const ip =
-      headerList.get('x-real-ip')?.trim() ||
-      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-      'unknown'
+    const { trustedClientIp } = await import('@/lib/net/ip')
+    const ip = trustedClientIp(headerList)
     const identity = `${parsed.data.email.toLowerCase()}:${ip}`
     const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
       p_action: 'admin_login',
@@ -50,6 +50,13 @@ export async function adminLogin(
     }
   } catch {
     // Rate-limit infra failure must not block admin login
+    const { logger } = await import('@/lib/logger')
+    logger.warn('admin_login rate-limit fail-closed')
+    return {
+      ok: false,
+      code: 'RATE_LIMITED',
+      message: 'Không xác thực được giới hạn đăng nhập lúc này. Thử lại sau ít phút.',
+    }
   }
 
   const supabase = await createSupabaseAuthClient()

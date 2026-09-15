@@ -25,10 +25,8 @@ async function authRateLimited(
   try {
     const { headers } = await import('next/headers')
     const headerList = await headers()
-    const ip =
-      headerList.get('x-real-ip')?.trim() ||
-      headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-      'unknown'
+    const { trustedClientIp } = await import('@/lib/net/ip')
+    const ip = trustedClientIp(headerList)
     const { data } = await getSupabaseServiceRoleClient().rpc('check_rate_limit', {
       p_action: action,
       p_identity: `${email}:${ip}`,

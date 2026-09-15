@@ -14,10 +14,8 @@ export async function POST(request: Request) {
     return new Response(null, { status: 204 })
   }
   try {
-    const ip =
-      request.headers.get('x-real-ip')?.trim() ||
-      request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-      'unknown'
+    const { trustedClientIp } = await import('@/lib/net/ip')
+    const ip = trustedClientIp(request.headers)
     try {
       const { data: limited } = await getSupabaseAdminClient().rpc('check_rate_limit', {
         p_action: 'csp_report',

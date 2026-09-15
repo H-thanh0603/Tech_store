@@ -5,6 +5,7 @@
  */
 
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
+import { trustedClientIp } from '@/lib/net/ip'
 import type { ProductCardData, ProductDetail } from '@/lib/catalog/types'
 import { getSiteUrl } from '@/lib/site'
 
@@ -22,12 +23,7 @@ const WINDOW_MINUTES = 15
 // Same IP resolution as the assistant endpoints: request.headers (not
 // next/headers) so the routes stay unit-testable.
 export function agentClientIp(headerList: Pick<Headers, 'get'>, fallback?: string | null): string {
-  return (
-    headerList.get('x-real-ip')?.trim() ||
-    headerList.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-    fallback?.split(',').at(-1)?.trim() ||
-    'unknown'
-  )
+  return trustedClientIp(headerList, fallback)
 }
 
 /** True when the caller exceeded the bucket — respond 429. Fail-open on limiter outage. */
