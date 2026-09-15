@@ -201,6 +201,10 @@ export async function fulfillmentOptions(input?: {
  * Phone-verified, read-only order lookup. Mirrors the verification the
  * `order_track` RPC performs (code + phone must match) but mints no access
  * token and sets no cookie — chat only reports status.
+ *
+ * H3: full 10-digit normalized phone required. Short suffixes (7–9 digits)
+ * are rejected — they turn the endpoint into a phone-oracle where one guess
+ * matches many strangers' orders.
  */
 export async function trackOrder(
   orderCode: string,
@@ -208,7 +212,7 @@ export async function trackOrder(
 ): Promise<OrderStatusSummary | null> {
   const code = orderCode.trim().toUpperCase().slice(0, 24)
   const digits = phone.replace(/\D/g, '').slice(-10)
-  if (code.length < 4 || digits.length < 8) return null
+  if (code.length < 4 || digits.length !== 10) return null
 
   const db = getSupabaseAdminClient()
   const { data: order, error } = await db
@@ -251,12 +255,19 @@ export interface OrderHistoryItem {
  * Phone-scoped recent orders (guest-safe history: no account, no token).
  * Returns null for an invalid phone, [] when the phone has no orders.
  * Item counts only — no payment details, no addresses.
+ *
+ * H3: full 10-digit phone required and matched exactly on the normalized
+ * suffix (no short-suffix ilike enumeration). Disable entirely with
+ * ASSISTANT_NO_ORDER_HISTORY=1 (assistantConfig.enableOrderHistory).
  */
 export async function orderHistory(phone: string): Promise<OrderHistoryItem[] | null> {
   const digits = phone.replace(/\D/g, '').slice(-10)
-  if (digits.length < 8) return null
+  if (digits.length !== 10) return null
 
   const db = getSupabaseAdminClient()
+  // Full-suffix match only: the leading % is unavoidable while numbers are
+  // stored formatted, but 10 digits keep the anonymity set at one subscriber
+  // instead of a whole prefix block. Never shorten this to 7–9 digits.
   const { data: orders, error } = await db
     .from('orders')
     .select('id, order_code, customer_phone, order_status, payment_status, total, created_at')

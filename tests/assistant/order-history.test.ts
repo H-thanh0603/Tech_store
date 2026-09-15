@@ -66,6 +66,12 @@ describe('orderHistory', () => {
     expect(await orderHistory('abc')).toBeNull()
     expect(await orderHistory('123')).toBeNull()
   })
+
+  it('rejects short phone suffixes (H3 oracle guard)', async () => {
+    // 8–9 digits must not match — only full 10-digit subscriber numbers.
+    expect(await orderHistory('901234567')).toBeNull()
+    expect(await orderHistory('01234567')).toBeNull()
+  })
 })
 
 describe('get_order_history tool', () => {
