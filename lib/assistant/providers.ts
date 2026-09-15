@@ -616,10 +616,19 @@ function createDeepSeekClient(apiKey: string): MessagesClient {
   return createOpenAICompatibleClient(DEEPSEEK_URL, apiKey)
 }
 
+/** Server-side site origin for gateway attribution headers. */
+export function gatewayReferer(): string {
+  return (
+    process.env.SITE_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    'http://localhost:3000'
+  )
+}
+
 /** OpenRouter recommends identifying headers; the key still stays server-side. */
 function createOpenRouterClient(apiKey: string): MessagesClient {
   return createOpenAICompatibleClient(OPENROUTER_URL, apiKey, {
-    'HTTP-Referer': process.env.SITE_URL ?? 'http://localhost:3000',
+    'HTTP-Referer': gatewayReferer(),
     'X-Title': 'TechStore Assistant',
   })
 }
@@ -632,7 +641,7 @@ export function tokenRouterUrl(): string {
 
 function createTokenRouterClient(apiKey: string): MessagesClient {
   return createOpenAICompatibleClient(tokenRouterUrl(), apiKey, {
-    'HTTP-Referer': process.env.SITE_URL ?? 'http://localhost:3000',
+    'HTTP-Referer': gatewayReferer(),
     'X-Title': 'TechStore Assistant',
   })
 }

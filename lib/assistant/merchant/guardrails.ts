@@ -135,7 +135,7 @@ export function checkGuardrails(
 
 // -- Signed envelope (stateless staging) -------------------------------------
 
-function stagingSecret(): string {
+export function stagingSecret(): string {
   const secret = process.env.ASSISTANT_STAGING_SECRET
   if (secret) return secret
   // Fail loud in production: stagings signed with a well-known dev secret
@@ -143,7 +143,13 @@ function stagingSecret(): string {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('ASSISTANT_STAGING_SECRET is required in production.')
   }
-  return 'dev-only-staging-secret-change-me'
+  // M3: the dev fallback is opt-in, never silent. Tests (VITEST) and local
+  // dev with ALLOW_DEV_STAGING=1 may use it; any other non-prod runtime with
+  // real data refuses rather than accepting forgeable envelopes.
+  if (process.env.VITEST || process.env.ALLOW_DEV_STAGING === '1') {
+    return 'dev-only-staging-secret-change-me'
+  }
+  throw new Error('ASSISTANT_STAGING_SECRET is required (or ALLOW_DEV_STAGING=1 for local dev).')
 }
 
 function canonical(change: StagedChange): string {

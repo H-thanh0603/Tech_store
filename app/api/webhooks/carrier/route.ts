@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 
 import { logger } from '@/lib/logger'
 
@@ -19,7 +20,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: 'BAD_JSON' }, { status: 400 })
   }
 
-  if (!expected || signature !== expected) {
+  // L2: constant-time compare like every other webhook in the codebase —
+  // plain !== leaks prefix-match timing to signature guessers.
+  const authorized =
+    expected.length > 0 &&
+    signature.length > 0 &&
+    (() => {
+      try {
+        const a = Buffer.from(signature)
+        const b = Buffer.from(expected)
+        return a.length === b.length && timingSafeEqual(a, b)
+      } catch {
+        return false
+      }
+    })()
+  if (!authorized) {
     logger.warn('carrier webhook unauthorized', { requestId, carrier })
     return NextResponse.json({ ok: false, code: 'UNAUTHORIZED' }, { status: 401 })
   }

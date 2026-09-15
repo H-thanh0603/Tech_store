@@ -26,6 +26,32 @@ async function writeImageAudit(
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
+/**
+ * M2: verify magic bytes server-side — the client-supplied MIME (file.type)
+ * is attacker-controlled and trivially forged (e.g. SVG/HTML labeled
+ * image/png). Only buffers whose leading bytes match the claimed image
+ * format are accepted.
+ */
+export function magicMatches(buffer: Buffer, mime: string): boolean {
+  if (buffer.length < 12) return false
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  const jpeg = [0xff, 0xd8, 0xff]
+  const gif87 = 'GIF87a'
+  const gif89 = 'GIF89a'
+  switch (mime) {
+    case 'image/png':
+      return png.every((b, i) => buffer[i] === b)
+    case 'image/jpeg':
+      return jpeg.every((b, i) => buffer[i] === b)
+    case 'image/gif':
+      return buffer.toString('ascii', 0, 6) === gif87 || buffer.toString('ascii', 0, 6) === gif89
+    case 'image/webp':
+      return buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP'
+    default:
+      return false
+  }
+}
+
 export type UploadResult = {
   ok: boolean
   url?: string
@@ -57,6 +83,10 @@ export async function uploadProductImage(file: File): Promise<UploadResult> {
   const path = `products/${filename}`
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  if (!magicMatches(buffer, file.type)) {
+    return { ok: false, error: 'File không phải ảnh hợp lệ (định dạng không khớp nội dung).' }
+  }
 
   const db = getSupabaseAdminClient()
   const { error } = await db.storage.from('product-images').upload(path, buffer, {

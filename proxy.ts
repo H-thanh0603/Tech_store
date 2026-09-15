@@ -84,6 +84,9 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set('x-nonce', nonce)
   requestHeaders.set('x-request-id', requestId)
   requestHeaders.set('Content-Security-Policy', csp)
+  // L1: downstream layouts need the pathname (admin layout redirects
+  // unauthenticated /admin/* away from protected pages).
+  requestHeaders.set('x-pathname', request.nextUrl.pathname)
 
   const response = await updateSession(request, requestHeaders)
   response.headers.set('Content-Security-Policy', csp)
