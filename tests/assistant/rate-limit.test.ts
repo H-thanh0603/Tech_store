@@ -18,8 +18,8 @@ function headersWithIp(ip: string): Headers {
 }
 
 describe('assistant rate limit', () => {
-  it('extracts the last forwarded hop as client ip', () => {
-    expect(clientIp(headersWithIp('9.9.9.9'))).toBe('9.9.9.9')
+  it('extracts the first forwarded hop as client ip (last hop is spoofable)', () => {
+    expect(clientIp(headersWithIp('9.9.9.9'))).toBe('1.1.1.1')
   })
 
   it('blocks when the RPC says so, fails open on error', async () => {

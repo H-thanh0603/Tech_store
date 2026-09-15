@@ -8,7 +8,12 @@ const {
 } = vi.hoisted(() => ({
   getAdminAuthState: vi.fn(),
   createSupabaseAuthClient: vi.fn(),
-  getSupabaseAdminClient: vi.fn(),
+  // Fail-closed limiter (SEC-003): undefined client rejects the rpc call, so
+  // challenge tests would RATE_LIMIT before verifying. Default: not limited.
+  getSupabaseAdminClient: vi.fn(() => ({
+    rpc: vi.fn(async () => ({ data: false })),
+    from: () => ({ insert: vi.fn(async () => ({ error: null })) }),
+  })),
   redirect: vi.fn(),
 }))
 
