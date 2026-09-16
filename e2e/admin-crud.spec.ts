@@ -1,7 +1,6 @@
-import { createHmac } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { expect, test } from '@playwright/test'
 
-import { expect, test, type Page } from '@playwright/test'
+import { ensureAdmin } from './admin-auth'
 
 /**
  * Admin login goes through the real /admin/login form against Supabase Auth.
@@ -9,38 +8,11 @@ import { expect, test, type Page } from '@playwright/test'
  * Credentials come from env or the seed script defaults.
  */
 const ADMIN_EMAIL = process.env.ADMIN_E2E_EMAIL ?? 'admin@techstore.local'
-const ADMIN_PASSWORD = process.env.ADMIN_E2E_PASSWORD ?? 'techstore-admin-e2e'
-const ADMIN_TOTP_SECRET = readFileSync('.admin-e2e-mfa-secret', 'utf8').trim()
 
 // Unique per run; shared across the serial suite below.
 const slug = `e2e-admin-${Date.now()}`
 const productName = `E2E Admin ${slug}`
 const sku = `SKU-${slug}`
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/admin/login')
-  await page.getByLabel('Email').fill(ADMIN_EMAIL)
-  await page.getByLabel('Mật khẩu').fill(ADMIN_PASSWORD)
-  await page.getByRole('button', { name: 'Đăng nhập' }).click()
-  await expect(page).toHaveURL(/\/admin\/mfa\/verify/)
-  await page.getByLabel('Mã xác minh 6 chữ số').fill(totp(ADMIN_TOTP_SECRET))
-  await page.getByRole('button', { name: 'Xác minh', exact: true }).click()
-  await expect(page).toHaveURL(/\/admin$/)
-}
-
-function totp(secret: string): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
-  let bits = ''
-  for (const char of secret.replace(/=+$/u, '').toUpperCase()) {
-    bits += alphabet.indexOf(char).toString(2).padStart(5, '0')
-  }
-  const key = Buffer.from(bits.match(/.{8}/gu)?.map((byte) => Number.parseInt(byte, 2)) ?? [])
-  const counter = Buffer.alloc(8)
-  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)))
-  const digest = createHmac('sha1', key).update(counter).digest()
-  const offset = digest[digest.length - 1] & 0x0f
-  return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0')
-}
 
 // One serial suite: the inventory tests depend on the product the create tests
 // make. Playwright runs separate `describe.serial` blocks in parallel even in
@@ -48,14 +20,16 @@ function totp(secret: string): string {
 // shipping the whole flow in order is the point of this spec.
 test.describe.serial('admin CRUD: create product → storefront → adjust inventory', () => {
   test('login form reaches the admin products page', async ({ page }) => {
-    await loginAsAdmin(page)
+    // Shared setup session usually skips the form entirely; the real MFA
+    // login flow is covered once by e2e/admin.setup.ts.
+    await ensureAdmin(page)
     await page.goto('/admin/products')
     await expect(page).toHaveURL(/\/admin\/products/)
     await expect(page.getByRole('link', { name: /\+ Sản phẩm mới/i })).toBeVisible()
   })
 
   test('admin settings exposes server-backed staff account management', async ({ page }) => {
-    await loginAsAdmin(page)
+    await ensureAdmin(page)
     await page.goto('/admin/settings')
 
     await expect(page.getByRole('heading', { name: 'Tài khoản nhân viên' })).toBeVisible()
@@ -64,7 +38,7 @@ test.describe.serial('admin CRUD: create product → storefront → adjust inven
   })
 
   test('create product form creates it and lands on the edit page', async ({ page }) => {
-    await loginAsAdmin(page)
+    await ensureAdmin(page)
     await page.goto('/admin/products/new')
     await page.getByLabel('Tên sản phẩm').fill(productName)
     await page.getByLabel('Slug').fill(slug)
@@ -81,7 +55,7 @@ test.describe.serial('admin CRUD: create product → storefront → adjust inven
   })
 
   test('product appears in the admin product list', async ({ page }) => {
-    await loginAsAdmin(page)
+    await ensureAdmin(page)
     await page.goto(`/admin/products?q=${encodeURIComponent(slug)}`)
     await expect(page.getByText(productName)).toBeVisible()
   })
@@ -93,7 +67,7 @@ test.describe.serial('admin CRUD: create product → storefront → adjust inven
   })
 
   test('restock raises on-hand in the inventory table', async ({ page }) => {
-    await loginAsAdmin(page)
+    await ensureAdmin(page)
 
     await page.goto(`/admin/inventory?q=${encodeURIComponent(sku)}`)
     const row = page.getByRole('row', { name: new RegExp(sku) })
@@ -115,7 +89,7 @@ test.describe.serial('admin CRUD: create product → storefront → adjust inven
   })
 
   test('adjustment history records the restock', async ({ page }) => {
-    await loginAsAdmin(page)
+    await ensureAdmin(page)
     await page.goto(`/admin/inventory?q=${encodeURIComponent(sku)}`)
     const row = page.getByRole('row', { name: new RegExp(sku) })
     await expect(row).toBeVisible()

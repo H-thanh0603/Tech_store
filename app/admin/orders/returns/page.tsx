@@ -56,8 +56,31 @@ export default async function AdminReturnsPage({
     p_page: 1,
     p_page_size: 50,
   })
-  const root = (data ?? {}) as { rows?: ReturnRow[]; total?: number }
-  const rows = error ? [] : (root.rows ?? [])
+  const root = (data ?? {}) as { rows?: Array<Record<string, unknown>>; total?: number }
+  // RPC returns snake_case (row_to_json); normalize to the camelCase shape
+  // ReturnsTable expects. Missing mapping renders "Invalid Date · sp" rows.
+  const rows: ReturnRow[] = error
+    ? []
+    : (root.rows ?? []).map((r) => ({
+        id: String(r.id),
+        order_id: String(r.order_id),
+        orderCode: String(r.order_code),
+        orderStatus: String(r.order_status),
+        customerName: String(r.customer_name),
+        requestedByPhone: String(r.requested_by_phone),
+        reasonCode: String(r.reason_code),
+        customerNote: r.customer_note == null ? null : String(r.customer_note),
+        status: String(r.status),
+        refundAmount: r.refund_amount == null ? null : String(r.refund_amount),
+        adminNote: r.admin_note == null ? null : String(r.admin_note),
+        decidedAt: r.decided_at == null ? null : String(r.decided_at),
+        decidedByLabel: r.decided_by_label == null ? null : String(r.decided_by_label),
+        createdAt: String(r.created_at),
+        orderTotal: String(r.order_total),
+        paymentMethod: String(r.payment_method),
+        paymentStatus: String(r.payment_status),
+        itemCount: Number(r.item_count) || 0,
+      }))
 
   return (
     <section className="space-y-6">
