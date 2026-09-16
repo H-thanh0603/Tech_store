@@ -23,7 +23,7 @@ import {
   type DispatchContext,
 } from './tools'
 import type { CartRpcClient } from './cart'
-import type { CardSummary } from './backend'
+import type { CardSummary, CompareResult, PlanDraft } from './backend'
 import type { MemoryFacts } from './memory'
 
 export interface ChatMessage {
@@ -35,6 +35,10 @@ export interface TurnResult {
   reply: string
   cards: CardSummary[]
   suggestions: string[]
+  /** Side-by-side compare matrix (compare flow) — rendered as a table. */
+  comparison?: CompareResult | null
+  /** Interactive shopping plan (plan flow) — checklist + add-all. */
+  plan?: PlanDraft | null
   /** True when the assistant is not configured (missing API key). */
   disabled?: boolean
 }
@@ -174,6 +178,8 @@ export async function runAssistantTurn(
         reply: 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.',
         cards: ctx.cards,
         suggestions: [],
+        comparison: ctx.comparison,
+        plan: ctx.plan,
       }
     }
 
@@ -215,6 +221,8 @@ export async function runAssistantTurn(
     reply: reply || 'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
     cards: ctx.cards.slice(0, 6),
     suggestions: ctx.suggestions,
+    comparison: ctx.comparison,
+    plan: ctx.plan,
   }
 }
 
@@ -273,6 +281,8 @@ export async function* streamAssistantTurn(
       reply,
       cards: ctx.cards.slice(0, 6),
       suggestions: ctx.suggestions,
+      comparison: ctx.comparison,
+      plan: ctx.plan,
     }),
   })
 }

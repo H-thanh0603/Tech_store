@@ -175,6 +175,8 @@ export async function POST(request: Request) {
     reply: result.reply,
     cards: result.cards,
     suggestions: result.suggestions,
+    comparison: result.comparison ?? null,
+    plan: result.plan ?? null,
     disabled: result.disabled ?? false,
   })
   if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))

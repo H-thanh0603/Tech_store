@@ -23,11 +23,45 @@ interface AssistantCard {
   url: string
 }
 
+interface CompareMatrix {
+  rows: Array<{
+    product_id: string
+    slug: string
+    name: string
+    brand: string
+    min_price: number
+    has_discount: boolean
+    in_stock: boolean
+    key_specs: Array<{ label: string; value: string }>
+    url: string
+  }>
+  summary: { cheapest: { slug: string; min_price: number } | null; inStock: string[] }
+}
+
+interface ShoppingPlan {
+  title: string
+  lines: Array<{
+    product_id: string
+    slug: string
+    name: string
+    unit_price: number
+    quantity: number
+    line_total: number
+    url: string
+  }>
+  total: number
+  budget: number | null
+  overBudget: boolean
+  rejected: Array<{ identifier: string; reason: string }>
+}
+
 interface ChatEntry {
   role: 'user' | 'assistant'
   content: string
   cards?: AssistantCard[]
   suggestions?: string[]
+  comparison?: CompareMatrix | null
+  plan?: ShoppingPlan | null
   /** Detected intent of the user message that triggered this entry. */
   intent?: ShoppingIntent
   /** Real-time Agent Activity UI: tool calls streamed during this turn. */
@@ -60,6 +94,8 @@ async function postChat(
     reply: string
     cards: AssistantCard[]
     suggestions: string[]
+    comparison: CompareMatrix | null
+    plan: ShoppingPlan | null
   }>(res, onText, onActivity)
 }
 
@@ -159,6 +195,134 @@ function CardStack({ cards }: { cards: AssistantCard[] }) {
       {cards.map((card) => (
         <ProductMiniCard key={card.product_id} card={card} wide />
       ))}
+    </div>
+  )
+}
+
+/** Spec labels worth their own rows in the compare matrix. */
+function specRows(matrix: CompareMatrix): string[] {
+  const seen: string[] = []
+  for (const row of matrix.rows) {
+    for (const spec of row.key_specs) {
+      if (!seen.includes(spec.label)) seen.push(spec.label)
+    }
+  }
+  return seen.slice(0, 6)
+}
+
+/**
+ * Side-by-side compare matrix (1): the row data already exists server-side
+ * (compareProducts) but used to die as model prose. Cheapest column gets a
+ * badge; out-of-stock cells are dimmed.
+ */
+function CompareMatrixView({ matrix }: { matrix: CompareMatrix }) {
+  const specs = specRows(matrix)
+  const cheapest = matrix.summary.cheapest?.slug
+  return (
+    <div className="mt-2 max-w-72 overflow-x-auto rounded-(--radius-md) border border-border bg-bg-elevated">
+      <table className="w-full min-w-64 text-left text-(length:--text-xs)">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="px-2 py-1.5 font-medium text-fg-muted" />
+            {matrix.rows.map((row) => (
+              <th key={row.slug} className="max-w-24 px-2 py-1.5 align-top">
+                <Link href={row.url} className="line-clamp-2 font-semibold text-fg hover:text-brand">
+                  {row.name}
+                </Link>
+                {row.slug === cheapest ? (
+                  <span className="mt-0.5 inline-block rounded-full bg-brand/10 px-1.5 py-0.5 text-(length:--text-[10px]) font-bold text-brand">
+                    Rẻ nhất
+                  </span>
+                ) : null}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border">
+            <td className="px-2 py-1.5 font-medium text-fg-muted">Giá</td>
+            {matrix.rows.map((row) => (
+              <td key={row.slug} className="px-2 py-1.5 font-semibold text-brand">
+                {formatPrice(row.min_price)}
+              </td>
+            ))}
+          </tr>
+          <tr className="border-b border-border">
+            <td className="px-2 py-1.5 font-medium text-fg-muted">Tồn kho</td>
+            {matrix.rows.map((row) => (
+              <td key={row.slug} className={`px-2 py-1.5 ${row.in_stock ? '' : 'opacity-50'}`}>
+                {row.in_stock ? 'Còn hàng' : 'Hết hàng'}
+              </td>
+            ))}
+          </tr>
+          {specs.map((label) => (
+            <tr key={label} className="border-b border-border last:border-0">
+              <td className="px-2 py-1.5 font-medium text-fg-muted">{label}</td>
+              {matrix.rows.map((row) => (
+                <td key={row.slug} className="max-w-24 truncate px-2 py-1.5" title={row.key_specs.find((s) => s.label === label)?.value ?? '—'}>
+                  {row.key_specs.find((s) => s.label === label)?.value ?? '—'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * Interactive shopping plan (2): checklist with per-line qty, budget bar,
+ * and one "add all" that posts a single chat command (human-confirm gate
+ * still applies server-side).
+ */
+function ShoppingPlanView({ plan, onSend }: { plan: ShoppingPlan; onSend: (text: string) => void }) {
+  const pct = plan.budget ? Math.min(100, Math.round((plan.total / plan.budget) * 100)) : null
+  const addAll = `Thêm cả plan "${plan.title}" vào giỏ giúp mình`
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-2">
+      <p className="text-(length:--text-xs) font-semibold text-fg">{plan.title}</p>
+      <ul className="mt-1.5 flex flex-col gap-1">
+        {plan.lines.map((line) => (
+          <li key={line.slug} className="flex items-center justify-between gap-2 text-(length:--text-xs)">
+            <Link href={line.url} className="line-clamp-1 flex-1 text-fg hover:text-brand">
+              {line.name} × {line.quantity}
+            </Link>
+            <span className="shrink-0 font-semibold text-brand">{formatPrice(line.line_total)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1.5 flex items-center justify-between border-t border-border pt-1.5 text-(length:--text-xs)">
+        <span className="font-medium text-fg-muted">Tổng</span>
+        <span className="font-bold text-fg">{formatPrice(plan.total)}</span>
+      </div>
+      {plan.budget != null && pct != null ? (
+        <div className="mt-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+            <div
+              className={`h-full rounded-full ${plan.overBudget ? 'bg-danger' : 'bg-brand'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className={`mt-0.5 text-(length:--text-[11px]) ${plan.overBudget ? 'font-semibold text-danger' : 'text-fg-muted'}`}>
+            {plan.overBudget
+              ? `Vượt ngân sách ${formatPrice(plan.budget)} — bỏ bớt 1 món nhé?`
+              : `${pct}% ngân sách ${formatPrice(plan.budget)}`}
+          </p>
+        </div>
+      ) : null}
+      {plan.rejected.length > 0 ? (
+        <p className="mt-1 text-(length:--text-[11px]) text-fg-muted">
+          Bỏ qua {plan.rejected.length} món: {plan.rejected[0].reason}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onSend(addAll)}
+        className="mt-2 w-full rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
+      >
+        Thêm cả plan vào giỏ
+      </button>
     </div>
   )
 }
@@ -288,7 +452,14 @@ export function AssistantWidget() {
         if (last.role !== 'assistant') return prev
         return [
           ...prev.slice(0, -1),
-          { role: 'assistant', content: data.reply, cards: data.cards, suggestions: data.suggestions },
+          {
+            role: 'assistant',
+            content: data.reply,
+            cards: data.cards,
+            suggestions: data.suggestions,
+            comparison: data.comparison,
+            plan: data.plan,
+          },
         ]
       })
     } catch {
@@ -360,6 +531,12 @@ export function AssistantWidget() {
             </div>
             {entry.cards && entry.cards.length > 0 ? (
               <ProductCards cards={entry.cards} entryIndex={i} />
+            ) : null}
+            {entry.comparison && entry.comparison.rows.length > 0 ? (
+              <CompareMatrixView matrix={entry.comparison} />
+            ) : null}
+            {entry.plan && entry.plan.lines.length > 0 ? (
+              <ShoppingPlanView plan={entry.plan} onSend={sendSuggestion} />
             ) : null}
             {entry.suggestions && entry.suggestions.length > 0 ? (
               <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">

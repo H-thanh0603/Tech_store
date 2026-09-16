@@ -17,7 +17,9 @@ import {
   searchProducts,
   trackOrder,
   type CardSummary,
+  type CompareResult,
   type OrderStatusSummary,
+  type PlanDraft,
   type ProductDetailSummary,
 } from './backend'
 import { absentTools, assistantConfig } from './config'
@@ -53,6 +55,10 @@ export interface DispatchContext {
   seenIds: Map<string, string>
   /** Product cards to render under the reply. */
   cards: CardSummary[]
+  /** Side-by-side compare matrix to render (compare flow). */
+  comparison: CompareResult | null
+  /** Interactive shopping plan to render (plan flow). */
+  plan: PlanDraft | null
   /** Chips recorded via present_suggestions (ends the turn). */
   suggestions: string[]
   endTurn: boolean
@@ -75,6 +81,8 @@ export function createDispatchContext(init?: {
   return {
     seenIds: new Map(),
     cards: [],
+    comparison: null,
+    plan: null,
     suggestions: [],
     endTurn: false,
     cartTokenHash: init?.cartTokenHash ?? null,
@@ -443,6 +451,8 @@ export async function dispatchTool(
             url: row.url,
           })
         }
+        // Render the matrix client-side (chatbot text alone buries it).
+        ctx.comparison = compared.rows.length > 0 ? compared : null
         return fencePayload({ result: 'ok', ...compared })
       }
       case TOOL_CREATE_PLAN: {
@@ -455,6 +465,8 @@ export async function dispatchTool(
           },
           ctx.seenIds,
         )
+        // Render the interactive plan client-side (checklist + add-all).
+        ctx.plan = plan.lines.length > 0 ? plan : null
         return fencePayload({ result: 'ok', plan })
       }
       case TOOL_GET_CART: {
