@@ -18,12 +18,28 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'admin-setup',
+      testMatch: /admin\.setup\.ts/,
+    },
+    {
+      // No credentials: guest flows + redirect guards. Must NOT inherit the
+      // admin storageState, or guest-redirect assertions see a session.
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /admin-(crud|csv-import|bulk-price|returns)\.spec\.ts/,
+    },
+    {
+      // Single shared admin session from admin-setup (MFA verify is
+      // fail-closed 10/15min — per-test logins burn the bucket and flake).
+      name: 'chromium-admin',
+      use: { ...devices['Desktop Chrome'], storageState: 'test-results/.admin-auth.json' },
+      testMatch: /admin-(crud|csv-import|bulk-price|returns)\.spec\.ts/,
+      dependencies: ['admin-setup'],
     },
     {
       name: 'mobile',
       use: { ...devices['Pixel 7'] },
+      testIgnore: /admin-(setup|crud|csv-import|bulk-price|returns)\.spec\.ts/,
     },
   ],
   webServer: {

@@ -169,6 +169,10 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
 
   let inserted = 0
   let updated = 0
+  // Publish-after-variant: the DB trigger rejects publishing a product with
+  // no active variant, so rows are created unpublished first; rows whose CSV
+  // asks for is_published are flipped after their variant lands below.
+  const pendingPublish: string[] = []
   for (let i = 0; i < validated.length; i += CHUNK) {
     const batch = validated.slice(i, i + CHUNK).map((r) => ({
       slug: r.slug,
@@ -176,7 +180,7 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
       description: r.description,
       category_id: categoryBySlug.get(r.category_slug)!,
       brand_id: brandBySlug.get(r.brand_slug)!,
-      is_published: r.is_published,
+      is_published: false,
       is_featured: r.is_featured,
       is_archived: r.is_archived,
     }))
@@ -191,9 +195,10 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
       })
       continue
     }
-    for (const r of batch) {
-      if (existingSlugs.has(r.slug)) updated += 1
+    for (let j = 0; j < batch.length; j += 1) {
+      if (existingSlugs.has(batch[j].slug)) updated += 1
       else inserted += 1
+      if (validated[i + j].is_published) pendingPublish.push(batch[j].slug)
     }
   }
 
@@ -293,6 +298,19 @@ export async function importProductsCsv(input: string): Promise<ProductImportSum
           })
         }
       }
+    }
+  }
+
+  // Flip publish AFTER variants land: rows whose CSV asked for
+  // is_published can only satisfy the DB trigger once an active variant
+  // exists. Rows without a variant stay unpublished (same as before).
+  if (pendingPublish.length > 0 && variantsUpserted > 0) {
+    const { error: publishError } = await db
+      .from('products')
+      .update({ is_published: true })
+      .in('slug', pendingPublish)
+    if (publishError) {
+      rejected.push({ row: 0, reason: `Lỗi publish sau import: ${publishError.message}` })
     }
   }
 
