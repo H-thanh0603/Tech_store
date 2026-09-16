@@ -62,6 +62,10 @@ interface ChatEntry {
   suggestions?: string[]
   comparison?: CompareMatrix | null
   plan?: ShoppingPlan | null
+  /** Current cart snapshot (item count + subtotal) for header chip. */
+  cart?: { item_count: number; subtotal: number } | null
+  /** Budget from memory for persistent budget chip. */
+  budget_vnd?: number | null
   /** Detected intent of the user message that triggered this entry. */
   intent?: ShoppingIntent
   /** Real-time Agent Activity UI: tool calls streamed during this turn. */
@@ -96,6 +100,8 @@ async function postChat(
     suggestions: string[]
     comparison: CompareMatrix | null
     plan: ShoppingPlan | null
+    cart: { item_count: number; subtotal: number } | null
+    budget_vnd: number | null
   }>(res, onText, onActivity)
 }
 
@@ -114,35 +120,52 @@ function assistantSessionId(): string {
   }
 }
 
-function ProductMiniCard({ card, wide = false }: { card: AssistantCard; wide?: boolean }) {
+interface ProductMiniCardProps {
+  card: AssistantCard
+  wide?: boolean
+  onAddToCart?: (card: AssistantCard) => void
+}
+
+function ProductMiniCard({ card, wide = false, onAddToCart }: ProductMiniCardProps) {
   return (
-    <Link
-      href={card.url}
-      className={
-        wide
-          ? 'flex w-full shrink-0 gap-2 overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
-          : 'flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
-      }
-    >
-      <div
+    <div className={wide ? 'flex w-full shrink-0 gap-2' : 'flex w-40 shrink-0 flex-col'}>
+      <Link
+        href={card.url}
         className={
           wide
-            ? 'relative h-16 w-16 shrink-0 bg-bg-secondary/60'
-            : 'relative aspect-[4/3] bg-bg-secondary/60'
+            ? 'flex w-full shrink-0 gap-2 overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
+            : 'flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
         }
       >
-        {card.image ? (
-          <Image src={card.image} alt={card.name} fill sizes="160px" className="object-cover" />
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col gap-1 p-2">
-        <p className="line-clamp-2 text-(length:--text-xs) font-medium text-fg">{card.name}</p>
-        <p className="text-(length:--text-xs) font-semibold text-brand">{formatPrice(card.price)}</p>
-        <p className="text-(length:--text-xs) text-fg-muted">
-          {card.in_stock ? 'Còn hàng' : 'Hết hàng'}
-        </p>
-      </div>
-    </Link>
+        <div
+          className={
+            wide
+              ? 'relative h-16 w-16 shrink-0 bg-bg-secondary/60'
+              : 'relative aspect-[4/3] bg-bg-secondary/60'
+          }
+        >
+          {card.image ? (
+            <Image src={card.image} alt={card.name} fill sizes="160px" className="object-cover" />
+          ) : null}
+        </div>
+        <div className="flex flex-1 flex-col gap-1 p-2">
+          <p className="line-clamp-2 text-(length:--text-xs) font-medium text-fg">{card.name}</p>
+          <p className="text-(length:--text-xs) font-semibold text-brand">{formatPrice(card.price)}</p>
+          <p className="text-(length:--text-xs) text-fg-muted">
+            {card.in_stock ? 'Còn hàng' : 'Hết hàng'}
+          </p>
+        </div>
+      </Link>
+      {onAddToCart && card.in_stock && (
+        <button
+          type="button"
+          onClick={() => onAddToCart(card)}
+          className="mt-2 w-full rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
+        >
+          Thêm vào giỏ
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -150,7 +173,7 @@ function ProductMiniCard({ card, wide = false }: { card: AssistantCard; wide?: b
  * Horizontal card carousel: arrows on both sides page the strip. Scroll is
  * driven imperatively so the arrows work even without native smooth snapping.
  */
-function CardCarousel({ cards }: { cards: AssistantCard[] }) {
+function CardCarousel({ cards, onAddToCart }: { cards: AssistantCard[]; onAddToCart: (card: AssistantCard) => void }) {
   const trackRef = useRef<HTMLDivElement>(null)
 
   function page(direction: 1 | -1) {
@@ -172,7 +195,7 @@ function CardCarousel({ cards }: { cards: AssistantCard[] }) {
       <div ref={trackRef} className="flex w-full gap-2 overflow-x-auto pb-1 [scroll-snap-type:x_mandatory]">
         {cards.map((card) => (
           <div key={card.product_id} className="[scroll-snap-align:start]">
-            <ProductMiniCard card={card} />
+            <ProductMiniCard card={card} onAddToCart={onAddToCart} />
           </div>
         ))}
       </div>
@@ -189,11 +212,11 @@ function CardCarousel({ cards }: { cards: AssistantCard[] }) {
 }
 
 /** Vertical stack of wider product rows. */
-function CardStack({ cards }: { cards: AssistantCard[] }) {
+function CardStack({ cards, onAddToCart }: { cards: AssistantCard[]; onAddToCart: (card: AssistantCard) => void }) {
   return (
     <div className="mt-2 flex max-w-72 flex-col gap-2">
       {cards.map((card) => (
-        <ProductMiniCard key={card.product_id} card={card} wide />
+        <ProductMiniCard key={card.product_id} card={card} wide onAddToCart={onAddToCart} />
       ))}
     </div>
   )
@@ -380,7 +403,7 @@ function AssistantReply({ content }: { content: string }) {
 /** Card display mode: horizontal arrows carousel or vertical stack. */
 type CardLayout = 'horizontal' | 'vertical'
 
-function ProductCards({ cards, entryIndex }: { cards: AssistantCard[]; entryIndex: number }) {
+function ProductCards({ cards, entryIndex, onAddToCart }: { cards: AssistantCard[]; entryIndex: number; onAddToCart: (card: AssistantCard) => void }) {
   const [layout, setLayout] = useState<CardLayout>(() => (cards.length > 3 ? 'horizontal' : 'vertical'))
   return (
     <div className="relative">
@@ -394,9 +417,9 @@ function ProductCards({ cards, entryIndex }: { cards: AssistantCard[]; entryInde
         {layout === 'horizontal' ? '☰' : '⇄'}
       </button>
       {layout === 'horizontal' ? (
-        <CardCarousel key={`h-${entryIndex}`} cards={cards} />
+        <CardCarousel key={`h-${entryIndex}`} cards={cards} onAddToCart={onAddToCart} />
       ) : (
-        <CardStack key={`v-${entryIndex}`} cards={cards} />
+        <CardStack key={`v-${entryIndex}`} cards={cards} onAddToCart={onAddToCart} />
       )}
     </div>
   )
@@ -459,6 +482,8 @@ export function AssistantWidget() {
             suggestions: data.suggestions,
             comparison: data.comparison,
             plan: data.plan,
+            cart: data.cart,
+            budget_vnd: data.budget_vnd,
           },
         ]
       })
@@ -507,6 +532,18 @@ export function AssistantWidget() {
           <p className="text-(length:--text-sm) font-semibold text-fg">Trợ lý TechStore</p>
           <p className="text-(length:--text-xs) text-fg-muted">Tư vấn chọn máy · Tra cứu đơn</p>
         </div>
+        <div className="flex items-center gap-2">
+          {entries.length > 0 && entries[entries.length - 1].budget_vnd && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-1 text-(length:--text-xs) font-medium text-brand">
+              💰 Ngân sách: {formatPrice(entries[entries.length - 1].budget_vnd!)}
+            </span>
+          )}
+          {entries.length > 0 && entries[entries.length - 1].cart && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-1 text-(length:--text-xs) font-medium text-brand">
+              🛒 {entries[entries.length - 1].cart!.item_count} món · {formatPrice(entries[entries.length - 1].cart!.subtotal)}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -530,7 +567,11 @@ export function AssistantWidget() {
               {entry.role === 'assistant' && entry.content ? <AssistantReply content={entry.content} /> : entry.content}
             </div>
             {entry.cards && entry.cards.length > 0 ? (
-              <ProductCards cards={entry.cards} entryIndex={i} />
+              <ProductCards
+                cards={entry.cards}
+                entryIndex={i}
+                onAddToCart={(card) => sendSuggestion(`Thêm ${card.name} vào giỏ giúp mình`)}
+              />
             ) : null}
             {entry.comparison && entry.comparison.rows.length > 0 ? (
               <CompareMatrixView matrix={entry.comparison} />

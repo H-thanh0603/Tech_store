@@ -5,7 +5,7 @@ import type { AgentCallObserver } from '@/lib/assistant/activity'
 import { logAgentActivity } from '@/lib/assistant/activity-log'
 import { runAssistantTurn, streamAssistantTurn, type ChatMessage } from '@/lib/assistant/agent'
 import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
-import { cartSetCookie, ensureCartToken, parseCartToken } from '@/lib/assistant/cart'
+import { cartSetCookie, ensureCartToken, parseCartToken, getChatCart } from '@/lib/assistant/cart'
 import { assistantConfig } from '@/lib/assistant/config'
 import { detectJailbreak, JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
@@ -171,12 +171,16 @@ export async function POST(request: Request) {
 
   const result = await runAssistantTurn(history, { cartTokenHash, memory, activity })
   persistMemory()
+  // Fetch cart snapshot for header chip
+  const cart = cartTokenHash ? await getChatCart(cartTokenHash) : null
   const response = NextResponse.json({
     reply: result.reply,
     cards: result.cards,
     suggestions: result.suggestions,
     comparison: result.comparison ?? null,
     plan: result.plan ?? null,
+    cart: cart ?? null,
+    budget_vnd: memory?.budget_vnd ?? null,
     disabled: result.disabled ?? false,
   })
   if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))

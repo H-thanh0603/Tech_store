@@ -39,6 +39,10 @@ export interface TurnResult {
   comparison?: CompareResult | null
   /** Interactive shopping plan (plan flow) — checklist + add-all. */
   plan?: PlanDraft | null
+  /** Current cart snapshot (item count + subtotal) for header chip. */
+  cart?: { item_count: number; subtotal: number } | null
+  /** Budget from memory for persistent budget chip. */
+  budget_vnd?: number | null
   /** True when the assistant is not configured (missing API key). */
   disabled?: boolean
 }
@@ -223,6 +227,8 @@ export async function runAssistantTurn(
     suggestions: ctx.suggestions,
     comparison: ctx.comparison,
     plan: ctx.plan,
+    cart: null,
+    budget_vnd: null,
   }
 }
 
@@ -283,6 +289,8 @@ export async function* streamAssistantTurn(
       suggestions: ctx.suggestions,
       comparison: ctx.comparison,
       plan: ctx.plan,
+      cart: null,
+      budget_vnd: null,
     }),
   })
 }
