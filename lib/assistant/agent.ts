@@ -23,7 +23,8 @@ import {
   type DispatchContext,
 } from './tools'
 import type { CartRpcClient } from './cart'
-import type { CardSummary, CompareResult, PlanDraft } from './backend'
+import { getChatCart } from './cart'
+import type { CardSummary, CompareResult, FulfillmentOptions, OrderStatusSummary, PlanDraft } from './backend'
 import type { MemoryFacts } from './memory'
 
 export interface ChatMessage {
@@ -39,6 +40,10 @@ export interface TurnResult {
   comparison?: CompareResult | null
   /** Interactive shopping plan (plan flow) — checklist + add-all. */
   plan?: PlanDraft | null
+  /** Order tracking result (track_order flow) — rendered inline. */
+  tracking?: OrderStatusSummary | null
+  /** Fulfillment options (get_fulfillment_options flow) — rendered before checkout. */
+  fulfillment?: FulfillmentOptions | null
   /** Current cart snapshot (item count + subtotal) for header chip. */
   cart?: { item_count: number; subtotal: number } | null
   /** Budget from memory for persistent budget chip. */
@@ -88,6 +93,20 @@ export interface MessagesClient {
 
 const HISTORY_TAIL_MESSAGES = 12
 const HISTORY_TEXT_CHARS = 2000
+
+/** Best-effort post-turn cart snapshot for the header chip (fail-open). */
+async function cartSnapshot(
+  cartTokenHash: string | null | undefined,
+  cartRpc?: CartRpcClient,
+): Promise<{ item_count: number; subtotal: number } | null> {
+  if (!cartTokenHash) return null
+  try {
+    const cart = await getChatCart(cartTokenHash, cartRpc)
+    return { item_count: cart.item_count, subtotal: cart.subtotal }
+  } catch {
+    return null
+  }
+}
 
 export function toAnthropicHistory(history: ChatMessage[]): Anthropic.MessageParam[] {
   // Context management: cap the tail so a long chat cannot blow the context
@@ -184,6 +203,10 @@ export async function runAssistantTurn(
         suggestions: [],
         comparison: ctx.comparison,
         plan: ctx.plan,
+        tracking: ctx.tracking,
+        fulfillment: ctx.fulfillment,
+        cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
+        budget_vnd: deps?.memory?.budget_vnd ?? null,
       }
     }
 
@@ -227,8 +250,10 @@ export async function runAssistantTurn(
     suggestions: ctx.suggestions,
     comparison: ctx.comparison,
     plan: ctx.plan,
-    cart: null,
-    budget_vnd: null,
+    tracking: ctx.tracking,
+    fulfillment: ctx.fulfillment,
+    cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
+    budget_vnd: deps?.memory?.budget_vnd ?? null,
   }
 }
 
@@ -283,14 +308,16 @@ export async function* streamAssistantTurn(
     shouldEnd: () => ctx.endTurn,
     fallbackReply:
       'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
-    finish: (reply) => ({
+    finish: async (reply) => ({
       reply,
       cards: ctx.cards.slice(0, 6),
       suggestions: ctx.suggestions,
       comparison: ctx.comparison,
       plan: ctx.plan,
-      cart: null,
-      budget_vnd: null,
+      tracking: ctx.tracking,
+      fulfillment: ctx.fulfillment,
+      cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
+      budget_vnd: deps?.memory?.budget_vnd ?? null,
     }),
   })
 }

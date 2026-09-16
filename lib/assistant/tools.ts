@@ -18,6 +18,7 @@ import {
   trackOrder,
   type CardSummary,
   type CompareResult,
+  type FulfillmentOptions,
   type OrderStatusSummary,
   type PlanDraft,
   type ProductDetailSummary,
@@ -59,6 +60,10 @@ export interface DispatchContext {
   comparison: CompareResult | null
   /** Interactive shopping plan to render (plan flow). */
   plan: PlanDraft | null
+  /** Order tracking result to render inline (track_order flow). */
+  tracking: OrderStatusSummary | null
+  /** Fulfillment options to render before checkout (fulfillment flow). */
+  fulfillment: FulfillmentOptions | null
   /** Chips recorded via present_suggestions (ends the turn). */
   suggestions: string[]
   endTurn: boolean
@@ -83,6 +88,8 @@ export function createDispatchContext(init?: {
     cards: [],
     comparison: null,
     plan: null,
+    tracking: null,
+    fulfillment: null,
     suggestions: [],
     endTurn: false,
     cartTokenHash: init?.cartTokenHash ?? null,
@@ -533,6 +540,7 @@ export async function dispatchTool(
           subtotal: typeof input.subtotal === 'number' ? input.subtotal : undefined,
           itemCount: typeof input.item_count === 'number' ? input.item_count : undefined,
         })
+        ctx.fulfillment = options
         return fencePayload({ result: 'ok', fulfillment: options })
       }
       case TOOL_TRACK_ORDER: {
@@ -546,6 +554,7 @@ export async function dispatchTool(
             hint: 'Không tìm thấy đơn với mã + SĐT này. Kiểm tra lại hoặc hướng dẫn khách vào /track-order.',
           })
         }
+        ctx.tracking = summary
         return fencePayload({ result: 'ok', order: summary })
       }
       case TOOL_SEARCH_POLICIES: {

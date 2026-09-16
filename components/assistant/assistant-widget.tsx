@@ -55,6 +55,37 @@ interface ShoppingPlan {
   rejected: Array<{ identifier: string; reason: string }>
 }
 
+interface OrderTracking {
+  orderCode: string
+  orderStatus: string
+  paymentStatus: string
+  paymentMethod: string
+  total: number
+  itemCount: number
+  createdAt: string
+}
+
+interface FulfillmentInfo {
+  delivery: {
+    rate_name: string
+    base_rate: number
+    per_item_rate: number
+    free_threshold: number
+    quote: { fee: number; is_free: boolean } | null
+  } | null
+  pickup_stores: Array<{
+    id: string
+    name: string
+    phone: string | null
+    province: string
+    district: string
+    address: string
+    opening_hours: string
+  }>
+  carriers: string[]
+  note: string
+}
+
 interface ChatEntry {
   role: 'user' | 'assistant'
   content: string
@@ -62,6 +93,10 @@ interface ChatEntry {
   suggestions?: string[]
   comparison?: CompareMatrix | null
   plan?: ShoppingPlan | null
+  /** Order tracking result (track_order flow) — rendered inline. */
+  tracking?: OrderTracking | null
+  /** Fulfillment options (get_fulfillment_options flow) — rendered before checkout. */
+  fulfillment?: FulfillmentInfo | null
   /** Current cart snapshot (item count + subtotal) for header chip. */
   cart?: { item_count: number; subtotal: number } | null
   /** Budget from memory for persistent budget chip. */
@@ -100,6 +135,8 @@ async function postChat(
     suggestions: string[]
     comparison: CompareMatrix | null
     plan: ShoppingPlan | null
+    tracking: OrderTracking | null
+    fulfillment: FulfillmentInfo | null
     cart: { item_count: number; subtotal: number } | null
     budget_vnd: number | null
   }>(res, onText, onActivity)
@@ -350,6 +387,100 @@ function ShoppingPlanView({ plan, onSend }: { plan: ShoppingPlan; onSend: (text:
   )
 }
 
+/**
+ * Order tracking inline view (4): timeline + next action.
+ */
+function OrderTrackingView({ tracking }: { tracking: OrderTracking }) {
+  const statusLabels: Record<string, string> = {
+    pending: 'Chờ xử lý',
+    confirmed: 'Đã xác nhận',
+    packing: 'Đang đóng gói',
+    shipping: 'Đang giao',
+    completed: 'Hoàn tất',
+    cancelled: 'Đã hủy',
+    expired: 'Hết hạn',
+    return_requested: 'Yêu cầu trả hàng',
+    returned: 'Đã trả hàng',
+  }
+  const paymentLabels: Record<string, string> = {
+    pending: 'Chờ thanh toán',
+    paid: 'Đã thanh toán',
+    expired: 'Hết hạn',
+    refunded: 'Đã hoàn tiền',
+  }
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-3">
+      <p className="text-(length:--text-xs) font-semibold text-fg">Đơn {tracking.orderCode}</p>
+      <div className="mt-1.5 flex items-center gap-2 text-(length:--text-xs)">
+        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-(length:--text-[10px]) font-medium text-brand">
+          {statusLabels[tracking.orderStatus] ?? tracking.orderStatus}
+        </span>
+        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-(length:--text-[10px]) font-medium text-brand">
+          {paymentLabels[tracking.paymentStatus] ?? tracking.paymentStatus}
+        </span>
+      </div>
+      <p className="mt-1.5 text-(length:--text-xs) text-fg-muted">Tổng: {formatPrice(tracking.total)} · {tracking.itemCount} món</p>
+    </div>
+  )
+}
+
+/**
+ * Fulfillment options inline view (7): delivery fee + pickup stores before checkout.
+ */
+function FulfillmentView({ fulfillment }: { fulfillment: FulfillmentInfo }) {
+  const fee = fulfillment.delivery?.quote?.fee ?? 0
+  const isFree = fulfillment.delivery?.quote?.is_free ?? false
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-3">
+      <p className="text-(length:--text-xs) font-semibold text-fg">Tùy chọn giao nhận</p>
+      {fulfillment.delivery ? (
+        <div className="mt-1.5 space-y-1 text-(length:--text-xs)">
+          <div className="flex justify-between">
+            <span className="text-fg-muted">{fulfillment.delivery.rate_name}</span>
+            <span className={`font-semibold ${isFree ? 'text-success' : 'text-brand'}`}>
+              {isFree ? 'Miễn phí ship' : formatPrice(fee)}
+            </span>
+          </div>
+          {fulfillment.delivery.free_threshold > 0 && (
+            <p className="text-(length:--text-[11px]) text-fg-muted">
+              Miễn phí ship từ {formatPrice(fulfillment.delivery.free_threshold)}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-(length:--text-xs) text-fg-muted">Chưa có phí ship chính xác — tính khi checkout.</p>
+      )}
+      {fulfillment.pickup_stores.length > 0 && (
+        <div className="mt-2">
+          <p className="text-(length:--text-xs) font-medium text-fg">Nhận tại cửa hàng ({fulfillment.pickup_stores.length})</p>
+          <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+            {fulfillment.pickup_stores.slice(0, 3).map((store) => (
+              <li key={store.id} className="text-(length:--text-xs) text-fg-muted truncate">
+                {store.name} — {store.province}, {store.district}
+              </li>
+            ))}
+            {fulfillment.pickup_stores.length > 3 && (
+              <li className="text-(length:--text-[11px]) text-brand">+{fulfillment.pickup_stores.length - 3} cửa hàng khác</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Contextual follow-up chips (5): when the model sends no suggestions,
+ * derive them from what the turn actually produced. */
+function fallbackSuggestions(entry: ChatEntry): string[] {
+  if (entry.tracking) return ['Đơn này khi nào giao tới?', 'Tôi muốn đổi ý / trả hàng', 'Xem đơn khác']
+  if (entry.plan) return ['Chốt đơn này', 'Bỏ bớt 1 món cho vừa ngân sách', 'Xem phí ship']
+  if (entry.comparison) return ['Lấy con rẻ nhất', 'So sánh thêm 1 con nữa', 'Xem chi tiết con ưng nhất']
+  if (entry.fulfillment) return ['Chốt đơn, giao tận nơi', 'Tôi qua cửa hàng lấy', 'Xem giỏ hàng']
+  if (entry.cart && entry.cart.item_count > 0) return ['Xem giỏ hàng', 'Phí ship bao nhiêu?', 'Chốt đơn']
+  if (entry.cards && entry.cards.length > 0) return ['So sánh 2 con đầu', 'Con nào rẻ nhất?', 'Thêm con ưng nhất vào giỏ']
+  return []
+}
+
 interface ReplySegment {
   kind: 'point' | 'text'
   text: string
@@ -482,6 +613,8 @@ export function AssistantWidget() {
             suggestions: data.suggestions,
             comparison: data.comparison,
             plan: data.plan,
+            tracking: data.tracking,
+            fulfillment: data.fulfillment,
             cart: data.cart,
             budget_vnd: data.budget_vnd,
           },
@@ -579,20 +712,30 @@ export function AssistantWidget() {
             {entry.plan && entry.plan.lines.length > 0 ? (
               <ShoppingPlanView plan={entry.plan} onSend={sendSuggestion} />
             ) : null}
-            {entry.suggestions && entry.suggestions.length > 0 ? (
-              <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">
-                {entry.suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => sendSuggestion(s)}
-                    className="rounded-full border border-brand/40 px-2.5 py-1 text-(length:--text-xs) font-medium text-brand hover:bg-brand/10"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            {entry.tracking ? <OrderTrackingView tracking={entry.tracking} /> : null}
+            {entry.fulfillment ? <FulfillmentView fulfillment={entry.fulfillment} /> : null}
+            {(() => {
+              const chips =
+                entry.suggestions && entry.suggestions.length > 0
+                  ? entry.suggestions
+                  : entry.role === 'assistant' && entry.content
+                    ? fallbackSuggestions(entry)
+                    : []
+              return chips.length > 0 ? (
+                <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">
+                  {chips.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => sendSuggestion(s)}
+                      className="rounded-full border border-brand/40 px-2.5 py-1 text-(length:--text-xs) font-medium text-brand hover:bg-brand/10"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : null
+            })()}
           </div>
         ))}
         {(() => {

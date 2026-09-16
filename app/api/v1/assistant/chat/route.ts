@@ -171,16 +171,19 @@ export async function POST(request: Request) {
 
   const result = await runAssistantTurn(history, { cartTokenHash, memory, activity })
   persistMemory()
-  // Fetch cart snapshot for header chip
-  const cart = cartTokenHash ? await getChatCart(cartTokenHash) : null
+  // Header chips prefer the post-turn snapshot from the agent (cart may have
+  // changed mid-turn); fall back to a fresh fetch when the turn errored early.
+  const cart = result.cart ?? (cartTokenHash ? await getChatCart(cartTokenHash) : null)
   const response = NextResponse.json({
     reply: result.reply,
     cards: result.cards,
     suggestions: result.suggestions,
     comparison: result.comparison ?? null,
     plan: result.plan ?? null,
+    tracking: result.tracking ?? null,
+    fulfillment: result.fulfillment ?? null,
     cart: cart ?? null,
-    budget_vnd: memory?.budget_vnd ?? null,
+    budget_vnd: result.budget_vnd ?? memory?.budget_vnd ?? null,
     disabled: result.disabled ?? false,
   })
   if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))
