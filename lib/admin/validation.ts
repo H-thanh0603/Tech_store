@@ -12,6 +12,12 @@ const slugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug chỉ gồm a-z, 0-9 và dấu gạch ngang.')
 
 const money = z.coerce.number().finite().min(0).max(999_999_999)
+// Optional money from HTML forms: '' must stay undefined, not coerce to 0
+// (a 0 sale_price makes min(coalesce(sale,regular)) report 0đ everywhere).
+const optionalMoney = z.preprocess(
+  (v) => (v === '' || v === undefined ? undefined : v),
+  money.optional(),
+)
 
 export const adminAccountLoginSchema = z.object({
   email: z.string().trim().email('Email không hợp lệ.'),
@@ -56,7 +62,7 @@ export const productUpsertSchema = z.object({
 export const createProductSchema = productUpsertSchema.extend({
   sku: z.string().trim().min(2).max(64),
   regularPrice: money,
-  salePrice: money.optional().or(z.literal('')),
+  salePrice: optionalMoney,
   quantity: z.coerce.number().int().min(0).max(1_000_000),
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).default(5),
   attributesJson: z.string().trim().max(2000).optional().or(z.literal('')),
@@ -69,14 +75,14 @@ export const variantUpsertSchema = z
     variantId: uuid.optional().or(z.literal('')),
     sku: z.string().trim().min(2).max(64),
     regularPrice: money,
-    salePrice: money.optional().or(z.literal('')),
+    salePrice: optionalMoney,
     isActive: z.coerce.boolean().optional().default(true),
     quantity: z.coerce.number().int().min(0).max(1_000_000),
     lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).default(5),
     attributesJson: z.string().trim().max(2000).optional().or(z.literal('')),
   })
   .superRefine((value, ctx) => {
-    if (value.salePrice !== '' && value.salePrice !== undefined) {
+    if (value.salePrice !== undefined) {
       const sale = Number(value.salePrice)
       if (sale > value.regularPrice) {
         ctx.addIssue({

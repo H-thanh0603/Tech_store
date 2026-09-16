@@ -47,7 +47,7 @@ jobs:
       - name: Seed E2E admin
         run: npm run admin:seed
       - name: E2E smoke
-        run: npm run test:e2e -- --project=chromium
+        run: npm run test:e2e -- --project=chromium --project=chromium-admin
         env:
           CI: true
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
