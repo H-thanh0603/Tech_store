@@ -64,6 +64,9 @@ describe('compare_products', () => {
     expect(payload.summary.cheapest.slug).toBe('pixel-9')
     expect(payload.summary.inStock).toEqual(['iphone-15', 'pixel-9'])
     expect(ctx.cards).toHaveLength(2)
+    // Rendered client-side as a matrix, not buried in prose.
+    expect(ctx.comparison?.rows).toHaveLength(2)
+    expect(ctx.comparison?.summary.cheapest?.slug).toBe('pixel-9')
   })
 
   it('reports unknown identifiers instead of guessing', async () => {
@@ -105,6 +108,9 @@ describe('create_shopping_plan', () => {
     expect(payload.plan.total).toBe(20000000 + 2 * 18000000)
     expect(payload.plan.overBudget).toBe(true)
     expect(payload.plan.rejected).toEqual([])
+    // Rendered client-side as an interactive checklist + add-all.
+    expect(ctx.plan?.lines).toHaveLength(2)
+    expect(ctx.plan?.total).toBe(20000000 + 2 * 18000000)
   })
 
   it('rejects bad quantities and unknown products', async () => {
