@@ -23,11 +23,84 @@ interface AssistantCard {
   url: string
 }
 
+interface CompareMatrix {
+  rows: Array<{
+    product_id: string
+    slug: string
+    name: string
+    brand: string
+    min_price: number
+    has_discount: boolean
+    in_stock: boolean
+    key_specs: Array<{ label: string; value: string }>
+    url: string
+  }>
+  summary: { cheapest: { slug: string; min_price: number } | null; inStock: string[] }
+}
+
+interface ShoppingPlan {
+  title: string
+  lines: Array<{
+    product_id: string
+    slug: string
+    name: string
+    unit_price: number
+    quantity: number
+    line_total: number
+    url: string
+  }>
+  total: number
+  budget: number | null
+  overBudget: boolean
+  rejected: Array<{ identifier: string; reason: string }>
+}
+
+interface OrderTracking {
+  orderCode: string
+  orderStatus: string
+  paymentStatus: string
+  paymentMethod: string
+  total: number
+  itemCount: number
+  createdAt: string
+}
+
+interface FulfillmentInfo {
+  delivery: {
+    rate_name: string
+    base_rate: number
+    per_item_rate: number
+    free_threshold: number
+    quote: { fee: number; is_free: boolean } | null
+  } | null
+  pickup_stores: Array<{
+    id: string
+    name: string
+    phone: string | null
+    province: string
+    district: string
+    address: string
+    opening_hours: string
+  }>
+  carriers: string[]
+  note: string
+}
+
 interface ChatEntry {
   role: 'user' | 'assistant'
   content: string
   cards?: AssistantCard[]
   suggestions?: string[]
+  comparison?: CompareMatrix | null
+  plan?: ShoppingPlan | null
+  /** Order tracking result (track_order flow) — rendered inline. */
+  tracking?: OrderTracking | null
+  /** Fulfillment options (get_fulfillment_options flow) — rendered before checkout. */
+  fulfillment?: FulfillmentInfo | null
+  /** Current cart snapshot (item count + subtotal) for header chip. */
+  cart?: { item_count: number; subtotal: number } | null
+  /** Budget from memory for persistent budget chip. */
+  budget_vnd?: number | null
   /** Detected intent of the user message that triggered this entry. */
   intent?: ShoppingIntent
   /** Real-time Agent Activity UI: tool calls streamed during this turn. */
@@ -60,6 +133,12 @@ async function postChat(
     reply: string
     cards: AssistantCard[]
     suggestions: string[]
+    comparison: CompareMatrix | null
+    plan: ShoppingPlan | null
+    tracking: OrderTracking | null
+    fulfillment: FulfillmentInfo | null
+    cart: { item_count: number; subtotal: number } | null
+    budget_vnd: number | null
   }>(res, onText, onActivity)
 }
 
@@ -78,35 +157,52 @@ function assistantSessionId(): string {
   }
 }
 
-function ProductMiniCard({ card, wide = false }: { card: AssistantCard; wide?: boolean }) {
+interface ProductMiniCardProps {
+  card: AssistantCard
+  wide?: boolean
+  onAddToCart?: (card: AssistantCard) => void
+}
+
+function ProductMiniCard({ card, wide = false, onAddToCart }: ProductMiniCardProps) {
   return (
-    <Link
-      href={card.url}
-      className={
-        wide
-          ? 'flex w-full shrink-0 gap-2 overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
-          : 'flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
-      }
-    >
-      <div
+    <div className={wide ? 'flex w-full shrink-0 gap-2' : 'flex w-40 shrink-0 flex-col'}>
+      <Link
+        href={card.url}
         className={
           wide
-            ? 'relative h-16 w-16 shrink-0 bg-bg-secondary/60'
-            : 'relative aspect-[4/3] bg-bg-secondary/60'
+            ? 'flex w-full shrink-0 gap-2 overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
+            : 'flex w-40 shrink-0 flex-col overflow-hidden rounded-(--radius-md) border border-border bg-bg-elevated'
         }
       >
-        {card.image ? (
-          <Image src={card.image} alt={card.name} fill sizes="160px" className="object-cover" />
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col gap-1 p-2">
-        <p className="line-clamp-2 text-(length:--text-xs) font-medium text-fg">{card.name}</p>
-        <p className="text-(length:--text-xs) font-semibold text-brand">{formatPrice(card.price)}</p>
-        <p className="text-(length:--text-xs) text-fg-muted">
-          {card.in_stock ? 'Còn hàng' : 'Hết hàng'}
-        </p>
-      </div>
-    </Link>
+        <div
+          className={
+            wide
+              ? 'relative h-16 w-16 shrink-0 bg-bg-secondary/60'
+              : 'relative aspect-[4/3] bg-bg-secondary/60'
+          }
+        >
+          {card.image ? (
+            <Image src={card.image} alt={card.name} fill sizes="160px" className="object-cover" />
+          ) : null}
+        </div>
+        <div className="flex flex-1 flex-col gap-1 p-2">
+          <p className="line-clamp-2 text-(length:--text-xs) font-medium text-fg">{card.name}</p>
+          <p className="text-(length:--text-xs) font-semibold text-brand">{formatPrice(card.price)}</p>
+          <p className="text-(length:--text-xs) text-fg-muted">
+            {card.in_stock ? 'Còn hàng' : 'Hết hàng'}
+          </p>
+        </div>
+      </Link>
+      {onAddToCart && card.in_stock && (
+        <button
+          type="button"
+          onClick={() => onAddToCart(card)}
+          className="mt-2 w-full rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
+        >
+          Thêm vào giỏ
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -114,7 +210,7 @@ function ProductMiniCard({ card, wide = false }: { card: AssistantCard; wide?: b
  * Horizontal card carousel: arrows on both sides page the strip. Scroll is
  * driven imperatively so the arrows work even without native smooth snapping.
  */
-function CardCarousel({ cards }: { cards: AssistantCard[] }) {
+function CardCarousel({ cards, onAddToCart }: { cards: AssistantCard[]; onAddToCart: (card: AssistantCard) => void }) {
   const trackRef = useRef<HTMLDivElement>(null)
 
   function page(direction: 1 | -1) {
@@ -136,7 +232,7 @@ function CardCarousel({ cards }: { cards: AssistantCard[] }) {
       <div ref={trackRef} className="flex w-full gap-2 overflow-x-auto pb-1 [scroll-snap-type:x_mandatory]">
         {cards.map((card) => (
           <div key={card.product_id} className="[scroll-snap-align:start]">
-            <ProductMiniCard card={card} />
+            <ProductMiniCard card={card} onAddToCart={onAddToCart} />
           </div>
         ))}
       </div>
@@ -153,14 +249,236 @@ function CardCarousel({ cards }: { cards: AssistantCard[] }) {
 }
 
 /** Vertical stack of wider product rows. */
-function CardStack({ cards }: { cards: AssistantCard[] }) {
+function CardStack({ cards, onAddToCart }: { cards: AssistantCard[]; onAddToCart: (card: AssistantCard) => void }) {
   return (
     <div className="mt-2 flex max-w-72 flex-col gap-2">
       {cards.map((card) => (
-        <ProductMiniCard key={card.product_id} card={card} wide />
+        <ProductMiniCard key={card.product_id} card={card} wide onAddToCart={onAddToCart} />
       ))}
     </div>
   )
+}
+
+/** Spec labels worth their own rows in the compare matrix. */
+function specRows(matrix: CompareMatrix): string[] {
+  const seen: string[] = []
+  for (const row of matrix.rows) {
+    for (const spec of row.key_specs) {
+      if (!seen.includes(spec.label)) seen.push(spec.label)
+    }
+  }
+  return seen.slice(0, 6)
+}
+
+/**
+ * Side-by-side compare matrix (1): the row data already exists server-side
+ * (compareProducts) but used to die as model prose. Cheapest column gets a
+ * badge; out-of-stock cells are dimmed.
+ */
+function CompareMatrixView({ matrix }: { matrix: CompareMatrix }) {
+  const specs = specRows(matrix)
+  const cheapest = matrix.summary.cheapest?.slug
+  return (
+    <div className="mt-2 max-w-72 overflow-x-auto rounded-(--radius-md) border border-border bg-bg-elevated">
+      <table className="w-full min-w-64 text-left text-(length:--text-xs)">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="px-2 py-1.5 font-medium text-fg-muted" />
+            {matrix.rows.map((row) => (
+              <th key={row.slug} className="max-w-24 px-2 py-1.5 align-top">
+                <Link href={row.url} className="line-clamp-2 font-semibold text-fg hover:text-brand">
+                  {row.name}
+                </Link>
+                {row.slug === cheapest ? (
+                  <span className="mt-0.5 inline-block rounded-full bg-brand/10 px-1.5 py-0.5 text-(length:--text-[10px]) font-bold text-brand">
+                    Rẻ nhất
+                  </span>
+                ) : null}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border">
+            <td className="px-2 py-1.5 font-medium text-fg-muted">Giá</td>
+            {matrix.rows.map((row) => (
+              <td key={row.slug} className="px-2 py-1.5 font-semibold text-brand">
+                {formatPrice(row.min_price)}
+              </td>
+            ))}
+          </tr>
+          <tr className="border-b border-border">
+            <td className="px-2 py-1.5 font-medium text-fg-muted">Tồn kho</td>
+            {matrix.rows.map((row) => (
+              <td key={row.slug} className={`px-2 py-1.5 ${row.in_stock ? '' : 'opacity-50'}`}>
+                {row.in_stock ? 'Còn hàng' : 'Hết hàng'}
+              </td>
+            ))}
+          </tr>
+          {specs.map((label) => (
+            <tr key={label} className="border-b border-border last:border-0">
+              <td className="px-2 py-1.5 font-medium text-fg-muted">{label}</td>
+              {matrix.rows.map((row) => (
+                <td key={row.slug} className="max-w-24 truncate px-2 py-1.5" title={row.key_specs.find((s) => s.label === label)?.value ?? '—'}>
+                  {row.key_specs.find((s) => s.label === label)?.value ?? '—'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * Interactive shopping plan (2): checklist with per-line qty, budget bar,
+ * and one "add all" that posts a single chat command (human-confirm gate
+ * still applies server-side).
+ */
+function ShoppingPlanView({ plan, onSend }: { plan: ShoppingPlan; onSend: (text: string) => void }) {
+  const pct = plan.budget ? Math.min(100, Math.round((plan.total / plan.budget) * 100)) : null
+  const addAll = `Thêm cả plan "${plan.title}" vào giỏ giúp mình`
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-2">
+      <p className="text-(length:--text-xs) font-semibold text-fg">{plan.title}</p>
+      <ul className="mt-1.5 flex flex-col gap-1">
+        {plan.lines.map((line) => (
+          <li key={line.slug} className="flex items-center justify-between gap-2 text-(length:--text-xs)">
+            <Link href={line.url} className="line-clamp-1 flex-1 text-fg hover:text-brand">
+              {line.name} × {line.quantity}
+            </Link>
+            <span className="shrink-0 font-semibold text-brand">{formatPrice(line.line_total)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1.5 flex items-center justify-between border-t border-border pt-1.5 text-(length:--text-xs)">
+        <span className="font-medium text-fg-muted">Tổng</span>
+        <span className="font-bold text-fg">{formatPrice(plan.total)}</span>
+      </div>
+      {plan.budget != null && pct != null ? (
+        <div className="mt-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+            <div
+              className={`h-full rounded-full ${plan.overBudget ? 'bg-danger' : 'bg-brand'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className={`mt-0.5 text-(length:--text-[11px]) ${plan.overBudget ? 'font-semibold text-danger' : 'text-fg-muted'}`}>
+            {plan.overBudget
+              ? `Vượt ngân sách ${formatPrice(plan.budget)} — bỏ bớt 1 món nhé?`
+              : `${pct}% ngân sách ${formatPrice(plan.budget)}`}
+          </p>
+        </div>
+      ) : null}
+      {plan.rejected.length > 0 ? (
+        <p className="mt-1 text-(length:--text-[11px]) text-fg-muted">
+          Bỏ qua {plan.rejected.length} món: {plan.rejected[0].reason}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onSend(addAll)}
+        className="mt-2 w-full rounded-(--radius-md) bg-brand px-3 py-1.5 text-(length:--text-xs) font-semibold text-accent-fg hover:bg-brand-hover"
+      >
+        Thêm cả plan vào giỏ
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Order tracking inline view (4): timeline + next action.
+ */
+function OrderTrackingView({ tracking }: { tracking: OrderTracking }) {
+  const statusLabels: Record<string, string> = {
+    pending: 'Chờ xử lý',
+    confirmed: 'Đã xác nhận',
+    packing: 'Đang đóng gói',
+    shipping: 'Đang giao',
+    completed: 'Hoàn tất',
+    cancelled: 'Đã hủy',
+    expired: 'Hết hạn',
+    return_requested: 'Yêu cầu trả hàng',
+    returned: 'Đã trả hàng',
+  }
+  const paymentLabels: Record<string, string> = {
+    pending: 'Chờ thanh toán',
+    paid: 'Đã thanh toán',
+    expired: 'Hết hạn',
+    refunded: 'Đã hoàn tiền',
+  }
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-3">
+      <p className="text-(length:--text-xs) font-semibold text-fg">Đơn {tracking.orderCode}</p>
+      <div className="mt-1.5 flex items-center gap-2 text-(length:--text-xs)">
+        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-(length:--text-[10px]) font-medium text-brand">
+          {statusLabels[tracking.orderStatus] ?? tracking.orderStatus}
+        </span>
+        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-(length:--text-[10px]) font-medium text-brand">
+          {paymentLabels[tracking.paymentStatus] ?? tracking.paymentStatus}
+        </span>
+      </div>
+      <p className="mt-1.5 text-(length:--text-xs) text-fg-muted">Tổng: {formatPrice(tracking.total)} · {tracking.itemCount} món</p>
+    </div>
+  )
+}
+
+/**
+ * Fulfillment options inline view (7): delivery fee + pickup stores before checkout.
+ */
+function FulfillmentView({ fulfillment }: { fulfillment: FulfillmentInfo }) {
+  const fee = fulfillment.delivery?.quote?.fee ?? 0
+  const isFree = fulfillment.delivery?.quote?.is_free ?? false
+  return (
+    <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-3">
+      <p className="text-(length:--text-xs) font-semibold text-fg">Tùy chọn giao nhận</p>
+      {fulfillment.delivery ? (
+        <div className="mt-1.5 space-y-1 text-(length:--text-xs)">
+          <div className="flex justify-between">
+            <span className="text-fg-muted">{fulfillment.delivery.rate_name}</span>
+            <span className={`font-semibold ${isFree ? 'text-success' : 'text-brand'}`}>
+              {isFree ? 'Miễn phí ship' : formatPrice(fee)}
+            </span>
+          </div>
+          {fulfillment.delivery.free_threshold > 0 && (
+            <p className="text-(length:--text-[11px]) text-fg-muted">
+              Miễn phí ship từ {formatPrice(fulfillment.delivery.free_threshold)}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-(length:--text-xs) text-fg-muted">Chưa có phí ship chính xác — tính khi checkout.</p>
+      )}
+      {fulfillment.pickup_stores.length > 0 && (
+        <div className="mt-2">
+          <p className="text-(length:--text-xs) font-medium text-fg">Nhận tại cửa hàng ({fulfillment.pickup_stores.length})</p>
+          <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+            {fulfillment.pickup_stores.slice(0, 3).map((store) => (
+              <li key={store.id} className="text-(length:--text-xs) text-fg-muted truncate">
+                {store.name} — {store.province}, {store.district}
+              </li>
+            ))}
+            {fulfillment.pickup_stores.length > 3 && (
+              <li className="text-(length:--text-[11px]) text-brand">+{fulfillment.pickup_stores.length - 3} cửa hàng khác</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Contextual follow-up chips (5): when the model sends no suggestions,
+ * derive them from what the turn actually produced. */
+function fallbackSuggestions(entry: ChatEntry): string[] {
+  if (entry.tracking) return ['Đơn này khi nào giao tới?', 'Tôi muốn đổi ý / trả hàng', 'Xem đơn khác']
+  if (entry.plan) return ['Chốt đơn này', 'Bỏ bớt 1 món cho vừa ngân sách', 'Xem phí ship']
+  if (entry.comparison) return ['Lấy con rẻ nhất', 'So sánh thêm 1 con nữa', 'Xem chi tiết con ưng nhất']
+  if (entry.fulfillment) return ['Chốt đơn, giao tận nơi', 'Tôi qua cửa hàng lấy', 'Xem giỏ hàng']
+  if (entry.cart && entry.cart.item_count > 0) return ['Xem giỏ hàng', 'Phí ship bao nhiêu?', 'Chốt đơn']
+  if (entry.cards && entry.cards.length > 0) return ['So sánh 2 con đầu', 'Con nào rẻ nhất?', 'Thêm con ưng nhất vào giỏ']
+  return []
 }
 
 interface ReplySegment {
@@ -216,7 +534,7 @@ function AssistantReply({ content }: { content: string }) {
 /** Card display mode: horizontal arrows carousel or vertical stack. */
 type CardLayout = 'horizontal' | 'vertical'
 
-function ProductCards({ cards, entryIndex }: { cards: AssistantCard[]; entryIndex: number }) {
+function ProductCards({ cards, entryIndex, onAddToCart }: { cards: AssistantCard[]; entryIndex: number; onAddToCart: (card: AssistantCard) => void }) {
   const [layout, setLayout] = useState<CardLayout>(() => (cards.length > 3 ? 'horizontal' : 'vertical'))
   return (
     <div className="relative">
@@ -230,9 +548,9 @@ function ProductCards({ cards, entryIndex }: { cards: AssistantCard[]; entryInde
         {layout === 'horizontal' ? '☰' : '⇄'}
       </button>
       {layout === 'horizontal' ? (
-        <CardCarousel key={`h-${entryIndex}`} cards={cards} />
+        <CardCarousel key={`h-${entryIndex}`} cards={cards} onAddToCart={onAddToCart} />
       ) : (
-        <CardStack key={`v-${entryIndex}`} cards={cards} />
+        <CardStack key={`v-${entryIndex}`} cards={cards} onAddToCart={onAddToCart} />
       )}
     </div>
   )
@@ -288,7 +606,18 @@ export function AssistantWidget() {
         if (last.role !== 'assistant') return prev
         return [
           ...prev.slice(0, -1),
-          { role: 'assistant', content: data.reply, cards: data.cards, suggestions: data.suggestions },
+          {
+            role: 'assistant',
+            content: data.reply,
+            cards: data.cards,
+            suggestions: data.suggestions,
+            comparison: data.comparison,
+            plan: data.plan,
+            tracking: data.tracking,
+            fulfillment: data.fulfillment,
+            cart: data.cart,
+            budget_vnd: data.budget_vnd,
+          },
         ]
       })
     } catch {
@@ -336,6 +665,18 @@ export function AssistantWidget() {
           <p className="text-(length:--text-sm) font-semibold text-fg">Trợ lý TechStore</p>
           <p className="text-(length:--text-xs) text-fg-muted">Tư vấn chọn máy · Tra cứu đơn</p>
         </div>
+        <div className="flex items-center gap-2">
+          {entries.length > 0 && entries[entries.length - 1].budget_vnd && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-1 text-(length:--text-xs) font-medium text-brand">
+              💰 Ngân sách: {formatPrice(entries[entries.length - 1].budget_vnd!)}
+            </span>
+          )}
+          {entries.length > 0 && entries[entries.length - 1].cart && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-1 text-(length:--text-xs) font-medium text-brand">
+              🛒 {entries[entries.length - 1].cart!.item_count} món · {formatPrice(entries[entries.length - 1].cart!.subtotal)}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -359,22 +700,42 @@ export function AssistantWidget() {
               {entry.role === 'assistant' && entry.content ? <AssistantReply content={entry.content} /> : entry.content}
             </div>
             {entry.cards && entry.cards.length > 0 ? (
-              <ProductCards cards={entry.cards} entryIndex={i} />
+              <ProductCards
+                cards={entry.cards}
+                entryIndex={i}
+                onAddToCart={(card) => sendSuggestion(`Thêm ${card.name} vào giỏ giúp mình`)}
+              />
             ) : null}
-            {entry.suggestions && entry.suggestions.length > 0 ? (
-              <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">
-                {entry.suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => sendSuggestion(s)}
-                    className="rounded-full border border-brand/40 px-2.5 py-1 text-(length:--text-xs) font-medium text-brand hover:bg-brand/10"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+            {entry.comparison && entry.comparison.rows.length > 0 ? (
+              <CompareMatrixView matrix={entry.comparison} />
             ) : null}
+            {entry.plan && entry.plan.lines.length > 0 ? (
+              <ShoppingPlanView plan={entry.plan} onSend={sendSuggestion} />
+            ) : null}
+            {entry.tracking ? <OrderTrackingView tracking={entry.tracking} /> : null}
+            {entry.fulfillment ? <FulfillmentView fulfillment={entry.fulfillment} /> : null}
+            {(() => {
+              const chips =
+                entry.suggestions && entry.suggestions.length > 0
+                  ? entry.suggestions
+                  : entry.role === 'assistant' && entry.content
+                    ? fallbackSuggestions(entry)
+                    : []
+              return chips.length > 0 ? (
+                <div className="mt-2 flex max-w-72 flex-wrap gap-1.5">
+                  {chips.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => sendSuggestion(s)}
+                      className="rounded-full border border-brand/40 px-2.5 py-1 text-(length:--text-xs) font-medium text-brand hover:bg-brand/10"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : null
+            })()}
           </div>
         ))}
         {(() => {

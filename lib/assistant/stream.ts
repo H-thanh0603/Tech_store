@@ -30,7 +30,7 @@ interface StreamDriver<R> {
   shouldEnd: () => boolean
   /** Fallback reply when the model produced no text. */
   fallbackReply: string
-  finish: (reply: string) => R
+  finish: (reply: string) => R | Promise<R>
 }
 
 export async function* streamTurn<R>(
@@ -105,7 +105,7 @@ export async function* streamTurn<R>(
       }
     } catch {
       const reply = replyParts.join('').trim() || 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.'
-      yield { type: 'result', result: driver.finish(reply) }
+      yield { type: 'result', result: await driver.finish(reply) }
       return
     }
 
@@ -127,5 +127,5 @@ export async function* streamTurn<R>(
   }
 
   const reply = replyParts.join('').trim() || driver.fallbackReply
-  yield { type: 'result', result: driver.finish(reply) }
+  yield { type: 'result', result: await driver.finish(reply) }
 }
