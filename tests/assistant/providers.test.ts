@@ -29,8 +29,13 @@ const baseParams = {
 
 describe('assistant providers', () => {
   it('defaults to anthropic, switches on env', () => {
-    const saved = process.env.ASSISTANT_PROVIDER
+    // The assistant credentials come from `.env.assistant` (loaded once by the
+    // test setup), so the model-provider defaults read them off process.env.
+    // Isolate this test by saving/restoring the env it mutates.
+    const savedProvider = process.env.ASSISTANT_PROVIDER
+    const savedModel = process.env.ASSISTANT_MODEL
     delete process.env.ASSISTANT_PROVIDER
+    delete process.env.ASSISTANT_MODEL
     expect(resolveProvider()).toBe('anthropic')
     process.env.ASSISTANT_PROVIDER = 'deepseek'
     expect(resolveProvider()).toBe('deepseek')
@@ -39,8 +44,10 @@ describe('assistant providers', () => {
     process.env.ASSISTANT_PROVIDER = 'openrouter'
     expect(resolveProvider()).toBe('openrouter')
     expect(defaultModelFor('openrouter')).toBe('anthropic/claude-haiku-4-5')
-    if (saved === undefined) delete process.env.ASSISTANT_PROVIDER
-    else process.env.ASSISTANT_PROVIDER = saved
+    if (savedProvider === undefined) delete process.env.ASSISTANT_PROVIDER
+    else process.env.ASSISTANT_PROVIDER = savedProvider
+    if (savedModel === undefined) delete process.env.ASSISTANT_MODEL
+    else process.env.ASSISTANT_MODEL = savedModel
   })
 
   it('builds an OpenRouter client only when its key is set', () => {
@@ -105,7 +112,10 @@ describe('assistant providers', () => {
           message: {
             content: null,
             tool_calls: [
-              { id: 'call-1', function: { name: 'search_products', arguments: '{"query":"laptop"}' } },
+              {
+                id: 'call-1',
+                function: { name: 'search_products', arguments: '{"query":"laptop"}' },
+              },
             ],
           },
           finish_reason: 'tool_calls',
@@ -207,5 +217,15 @@ describe('assistant providers', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('disables hidden reasoning only when ASSISTANT_REASONING=0', () => {
+    const saved = process.env.ASSISTANT_REASONING
+    delete process.env.ASSISTANT_REASONING
+    expect(toDeepSeekRequest(baseParams)).not.toHaveProperty('reasoning')
+    process.env.ASSISTANT_REASONING = '0'
+    expect(toDeepSeekRequest(baseParams)).toMatchObject({ reasoning: { enabled: false } })
+    if (saved === undefined) delete process.env.ASSISTANT_REASONING
+    else process.env.ASSISTANT_REASONING = saved
   })
 })

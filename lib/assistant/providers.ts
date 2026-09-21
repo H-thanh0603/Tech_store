@@ -46,7 +46,6 @@ export function defaultMaxTokensFor(provider: AssistantProvider): number {
     const n = Number(process.env.ASSISTANT_MAX_TOKENS)
     if (Number.isInteger(n) && n >= 256 && n <= 32000) return n
   }
-  if (provider === 'tokenrouter') return 4096
   return 1024
 }
 
@@ -258,6 +257,11 @@ export function toDeepSeekRequest(params: {
     messages: dsMessages,
     tools,
     tool_choice,
+    // Free-tier reasoning models (e.g. nex-n2.5-pro via 9router) burn ~30s
+    // on hidden chain-of-thought before the first chunk, with zero benefit
+    // for tool-calling turns. ASSISTANT_REASONING=0 skips it (1-2s first
+    // chunk, tool calls verified intact).
+    ...(process.env.ASSISTANT_REASONING === '0' ? { reasoning: { enabled: false } } : {}),
   }
 }
 
@@ -572,6 +576,55 @@ async function* streamOpenAICompatible(
   yield { type: 'message', content, stop_reason: finish === 'tool_calls' || hasToolUse ? 'tool_use' : 'end_turn' }
 }
 
+export function parseOpenAICompatibleBody(text: string): Parameters<typeof fromDeepSeekResponse>[0] {
+  return parseJsonPrefix(text) as Parameters<typeof fromDeepSeekResponse>[0]
+}
+
+/**
+ * Parse the first complete top-level JSON value out of a body that may have
+ * SSE `data: [DONE]` trailers appended (9router and similar gateways glue
+ * them straight onto `}` with no newline).
+ */
+export function parseJsonPrefix(text: string): unknown {
+  const sseAt = text.search(/\s*data:/)
+  const head = (sseAt === -1 ? text : text.slice(0, sseAt)).trim()
+  try {
+    return JSON.parse(head)
+  } catch {
+    const end = scanJsonEnd(head)
+    if (end !== -1) return JSON.parse(head.slice(0, end))
+    throw new Error('bad JSON')
+  }
+}
+
+/** Index just past the first complete top-level JSON value, or -1. */
+function scanJsonEnd(s: string): number {
+  let depth = 0
+  let inStr = false
+  let esc = false
+  let started = false
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{' || ch === '[') {
+      depth += 1
+      started = true
+    } else if (ch === '}' || ch === ']') {
+      depth -= 1
+      if (started && depth === 0) return i + 1
+    }
+  }
+  return -1
+}
+
+export type OpenAICompatibleMessage = ReturnType<typeof fromDeepSeekResponse>
+
 function createOpenAICompatibleClient(
   url: string,
   apiKey: string,
@@ -589,7 +642,13 @@ function createOpenAICompatibleClient(
           signal: AbortSignal.timeout(60_000),
         })
         if (!res.ok) throw new Error(`OpenAI-compatible HTTP ${res.status}`)
-        const parsed = fromDeepSeekResponse((await res.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+        const text = await res.text()
+        let parsed: OpenAICompatibleMessage
+        try {
+          parsed = fromDeepSeekResponse(parseOpenAICompatibleBody(text))
+        } catch {
+          throw new Error(`OpenAI-compatible bad JSON (first 120 chars): ${text.slice(0, 120)}`)
+        }
         // Free-tier gateways occasionally return HTTP 200 with zero content
         // (no text, no tool calls). That response is useless to the turn loop,
         // so retry once before handing it back.
@@ -602,7 +661,12 @@ function createOpenAICompatibleClient(
             signal: AbortSignal.timeout(60_000),
           })
           if (!retry.ok) throw new Error(`OpenAI-compatible HTTP ${retry.status}`)
-          return fromDeepSeekResponse((await retry.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+          const retryText = await retry.text()
+          try {
+            return fromDeepSeekResponse(parseOpenAICompatibleBody(retryText))
+          } catch {
+            throw new Error(`OpenAI-compatible bad JSON (first 120 chars): ${retryText.slice(0, 120)}`)
+          }
         }
         return parsed
       },
