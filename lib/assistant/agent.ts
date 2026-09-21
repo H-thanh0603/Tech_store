@@ -12,7 +12,7 @@ import { agentCall, type AgentCallObserver } from './activity'
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { hasHumanCartConfirm } from './cart-confirm'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
-import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
+import { createProviderClient, isModelOverloadError, isUnsupportedReasonerModel, modelFallbackChain, REASONER_GUARD_REPLY, resolveProvider } from './providers'
 import { streamTurn, type StreamEvent } from './stream'
 import {
   buildAnthropicTools,
@@ -227,27 +227,38 @@ export async function runAssistantTurn(
           : { type: 'auto' }
 
     let response: MinimalMessage
-    try {
-      response = await client.messages.create({
-        model: config.model,
-        max_tokens: config.maxTokens,
-        system,
-        tools,
-        tool_choice,
-        messages,
-      })
-    } catch {
-      return {
-        reply: 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.',
-        cards: ctx.cards,
-        suggestions: [],
-        comparison: ctx.comparison,
-        plan: ctx.plan,
-        tracking: ctx.tracking,
-        fulfillment: ctx.fulfillment,
-        cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
-        budget_vnd: deps?.memory?.budget_vnd ?? null,
-        toolFilter,
+    // Model fallback: round 0 failure on quota/overload retries once per
+    // ASSISTANT_MODEL_FALLBACK model instead of failing the whole turn.
+    const models = modelFallbackChain(config.model)
+    let modelIndex = 0
+    for (;;) {
+      try {
+        response = await client.messages.create({
+          model: models[modelIndex] ?? config.model,
+          max_tokens: config.maxTokens,
+          system,
+          tools,
+          tool_choice,
+          messages,
+        })
+        break
+      } catch (error) {
+        const next = round === 0 && isModelOverloadError(error) ? modelIndex + 1 : -1
+        if (next <= 0 || next >= models.length) {
+          return {
+            reply: 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.',
+            cards: ctx.cards,
+            suggestions: [],
+            comparison: ctx.comparison,
+            plan: ctx.plan,
+            tracking: ctx.tracking,
+            fulfillment: ctx.fulfillment,
+            cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
+            budget_vnd: deps?.memory?.budget_vnd ?? null,
+            toolFilter,
+          }
+        }
+        modelIndex = next
       }
     }
 
@@ -325,6 +336,10 @@ export async function* streamAssistantTurn(
   }
 
   const config = assistantConfig
+  if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
+    yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [], toolFilter: fullShoppingSummary() } }
+    return
+  }
   const ctx: DispatchContext = createDispatchContext({
     cartTokenHash: deps?.cartTokenHash ?? null,
     cartRpc: deps?.cartRpc,

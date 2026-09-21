@@ -33,6 +33,8 @@ interface Entry {
   suggestions?: string[]
   /** Real-time Agent Activity UI: tool calls streamed during this turn. */
   activity?: AgentCall[]
+  /** JEV tool-filter measurement (same shape as shopping). */
+  toolFilter?: { source: string; buckets: string[]; sent: number; full: number } | null
 }
 
 interface PendingCard {
@@ -62,11 +64,14 @@ async function postChat(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ messages: messages.slice(-10), stream: true }),
+    signal: AbortSignal.timeout(90_000),
   })
   return readChatStream<{
     reply: string
     staged: StagedEnvelope[]
     suggestions: string[]
+    toolFilter?: Entry['toolFilter']
+    tool_filter?: Entry['toolFilter']
   }>(res, onText, onActivity)
 }
 
@@ -110,6 +115,7 @@ export function MerchantAssistant() {
     const next = [...entries, { role: 'user', content: clean } as Entry]
     setEntries([...next, { role: 'assistant', content: '' } as Entry])
     setPending(true)
+    let streamedChars = 0
     // Real-time Agent Activity UI: checklist steps stream in as tools fire.
     const onActivity = (call: AgentCall) => {
       setEntries((prev) => {
@@ -120,6 +126,7 @@ export function MerchantAssistant() {
       })
     }
     const appendDelta = (delta: string) => {
+      streamedChars += delta.length
       setEntries((prev) => {
         if (prev.length === 0) return prev
         const last = prev[prev.length - 1]
@@ -128,18 +135,28 @@ export function MerchantAssistant() {
       })
     }
     try {
-      const data = await postChat(
-        next.map((e) => ({ role: e.role, content: e.content })),
-        appendDelta,
-        onActivity,
-      )
+      const payload = next.map((e) => ({ role: e.role, content: e.content }))
+      let data: Awaited<ReturnType<typeof postChat>>
+      try {
+        data = await postChat(payload, appendDelta, onActivity)
+      } catch (firstError) {
+        const msg = firstError instanceof Error ? firstError.message : ''
+        if (streamedChars > 0 || msg.startsWith('HTTP ')) throw firstError
+        data = await postChat(payload, appendDelta, onActivity)
+      }
       setEntries((prev) => {
         if (prev.length === 0) return prev
         const last = prev[prev.length - 1]
         if (last.role !== 'assistant') return prev
         return [
           ...prev.slice(0, -1),
-          { role: 'assistant', content: data.reply, suggestions: data.suggestions },
+          {
+            role: 'assistant',
+            content: data.reply,
+            suggestions: data.suggestions,
+            activity: last.activity,
+            toolFilter: data.toolFilter ?? data.tool_filter ?? null,
+          },
         ]
       })
       if (data.staged.length > 0) {
@@ -257,6 +274,15 @@ export function MerchantAssistant() {
                     </button>
                   ))}
                 </div>
+              ) : null}
+              {entry.activity && entry.activity.length > 0 ? (
+                <AgentActivityList calls={entry.activity} />
+              ) : null}
+              {entry.toolFilter ? (
+                <p className="mt-1.5 max-w-96 text-(length:--text-[11px]) text-fg-muted">
+                  ⚡ JEV {entry.toolFilter.source} · {entry.toolFilter.buckets.join('+')} ·{' '}
+                  {entry.toolFilter.sent}/{entry.toolFilter.full} tools
+                </p>
               ) : null}
             </div>
           ))}
