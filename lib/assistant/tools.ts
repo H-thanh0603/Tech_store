@@ -108,6 +108,7 @@ const toolInputSchemas: Record<string, z.ZodType> = {
     category: z.string().trim().max(80).optional(),
     brand: z.string().trim().max(80).optional(),
     max_price: z.number().positive().max(1_000_000_000).optional(),
+    sort: z.enum(['relevance', 'price-asc', 'price-desc', 'newest']).optional(),
   }),
   [TOOL_GET_PRODUCT_DETAILS]: z.object({ identifier: z.string().trim().min(1).max(160) }),
   [TOOL_COMPARE_PRODUCTS]: z.object({
@@ -171,7 +172,7 @@ export function buildAnthropicTools(): Anthropic.Tool[] {
     tools.push({
       name: TOOL_SEARCH_PRODUCTS,
       description:
-        'Tìm sản phẩm trong catalog TechStore theo tên/nhu cầu. Luôn gọi trước khi mô tả sản phẩm đang bán. Trả về tối đa 6 sản phẩm kèm giá VND, tồn kho, ảnh và link.',
+        'Tìm sản phẩm trong catalog TechStore theo tên/nhu cầu. Luôn gọi trước khi mô tả sản phẩm đang bán. Trả về tối đa 6 sản phẩm kèm giá VND, tồn kho, ảnh và link. Khách hỏi "rẻ nhất/giá thấp nhất" thì gọi với sort=price-asc (không tự suy ra từ kết quả relevance).',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -179,6 +180,12 @@ export function buildAnthropicTools(): Anthropic.Tool[] {
           category: { type: 'string', description: 'Slug danh mục: laptop, dien-thoai, phu-kien, pc, man-hinh, am-thanh, dong-ho, hang-cu' },
           brand: { type: 'string', description: 'Slug thương hiệu: apple, dell, samsung, asus, sony, jbl, xiaomi' },
           max_price: { type: 'number', description: 'Giá trần VND khi khách nêu ngân sách' },
+          sort: {
+            type: 'string',
+            enum: ['relevance', 'price-asc', 'price-desc', 'newest'],
+            description:
+              'Sắp xếp kết quả. Khách hỏi "rẻ nhất / giá thấp nhất" → price-asc; "đắt nhất" → price-desc; "mới về" → newest. Mặc định relevance.',
+          },
         },
         required: ['query'],
       },
@@ -321,7 +328,7 @@ export function buildAnthropicTools(): Anthropic.Tool[] {
       },
     })
   }
-  if (assistantConfig.enableOrderHistory && !absent.has(TOOL_TRACK_ORDER)) {
+  if (!absent.has(TOOL_TRACK_ORDER)) {
     tools.push({
       name: TOOL_ORDER_HISTORY,
       description:
@@ -419,18 +426,49 @@ export async function dispatchTool(
     }
     switch (name) {
       case TOOL_SEARCH_PRODUCTS: {
-        const query = String(input.query ?? '')
+        const rawQuery = String(input.query ?? '')
         const filters = {
           category: typeof input.category === 'string' ? input.category : undefined,
           brand: typeof input.brand === 'string' ? input.brand : undefined,
           maxPrice: typeof input.max_price === 'number' ? input.max_price : undefined,
+          sort:
+            input.sort === 'price-asc' || input.sort === 'price-desc' || input.sort === 'newest' || input.sort === 'relevance'
+              ? (input.sort as 'relevance' | 'price-asc' | 'price-desc' | 'newest')
+              : undefined,
         }
+        // Generic wording ("sản phẩm", "tất cả"…) + an explicit sort means
+        // "browse the whole catalog ordered by price", not a text match —
+        // full-text search on such words returns featured (expensive) items.
+        const generic = /^(t[ảa]t c[ảa]|all|m[ọo]i (s[ảa]n ph[ẩa]m|th[ứu])|s[ảa]n ph[ẩa]m|sp|m[ặa]t h[àa]ng|đ[ồo]|h[àa]ng)\b.{0,40}$/i.test(rawQuery.trim())
+        const query = generic && filters.sort ? '' : rawQuery
         const { products, total } = await searchProducts(query, filters)
         for (const p of products) rememberProduct(ctx, p)
         if (products.length === 0) {
           return fencePayload({ result: 'empty', hint: 'Không tìm thấy sản phẩm phù hợp. Hãy thử từ khóa rộng hơn.' })
         }
-        return fencePayload({ result: 'ok', total, products })
+        // Jev re-rank (fail-open): semantic relevance over DB order, except
+        // when the user asked for an explicit price/newest sort. The
+        // re-ordered list goes BOTH to ctx.cards (UI) and the fenced
+        // payload (what the LLM sees) — otherwise the model still reads
+        // the old DB order.
+        let visible = products
+        // JEV_RERANK=0 skips the re-rank call (Vercel evaluate ~5s/call):
+        // keeps DB order, still fast. Default ON for quality.
+        if ((!filters.sort || filters.sort === 'relevance') && process.env.JEV_RERANK !== '0') {
+          try {
+            const { jevRankIndices, applyRankOrder } = await import('./jev')
+            const indices = await jevRankIndices(query, products)
+            if (indices) {
+              visible = applyRankOrder(products, indices)
+              const tail = ctx.cards.slice(-products.length)
+              const head = ctx.cards.slice(0, Math.max(0, ctx.cards.length - products.length))
+              ctx.cards = head.concat(applyRankOrder(tail, indices))
+            }
+          } catch {
+            // Fail-open: keep DB order.
+          }
+        }
+        return fencePayload({ result: 'ok', total, products: visible })
       }
       case TOOL_GET_PRODUCT_DETAILS: {
         const detail = await getProductDetails(String(input.identifier ?? ''), ctx.seenIds)
