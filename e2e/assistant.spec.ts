@@ -19,14 +19,18 @@ test.describe('shopping assistant smoke', () => {
   })
 
   test('chat without a model key replies disabled, not broken', async ({ page }) => {
+    // Free-tier gateways can take well over half a minute for a full answer.
+    test.setTimeout(120_000)
     await page.goto('/')
     await page.getByRole('button', { name: /mở trợ lý mua sắm/i }).click()
     await page.getByPlaceholder(/hỏi về máy, giá, đơn hàng/i).fill('laptop học tập')
     await page.getByRole('button', { name: /^gửi$/i }).click()
     // No provider key in test env: graceful disabled reply. Local dev may
-    // have a key configured (then a failure surfaces the busy fallback) —
+    // have a key configured (then a real answer with prices comes back) —
     // either way the widget must answer, not break.
-    await expect(page.getByText(/chưa được cấu hình|đang bận/i)).toBeVisible({ timeout: 15_000 })
+    await expect(
+      page.getByText(/chưa được cấu hình|đang bận|\d{1,3}(\.\d{3})+\s?đ/).first(),
+    ).toBeVisible({ timeout: 100_000 })
   })
 
   test('chat endpoint validates bad bodies', async ({ request }) => {

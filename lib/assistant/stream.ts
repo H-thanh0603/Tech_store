@@ -28,8 +28,8 @@ interface StreamDriver<R> {
   onActivity?: (call: AgentCall) => void
   /** Return true when the turn should stop after this round (e.g. suggestions). */
   shouldEnd: () => boolean
-  /** Fallback reply when the model produced no text. */
-  fallbackReply: string
+  /** Fallback reply when the model produced no text (lazy: sees final tool state). */
+  fallbackReply: string | (() => string)
   finish: (reply: string) => R | Promise<R>
 }
 
@@ -126,6 +126,6 @@ export async function* streamTurn<R>(
     if (driver.shouldEnd()) break
   }
 
-  const reply = replyParts.join('').trim() || driver.fallbackReply
+  const reply = replyParts.join('').trim() || (typeof driver.fallbackReply === 'function' ? driver.fallbackReply() : driver.fallbackReply)
   yield { type: 'result', result: await driver.finish(reply) }
 }

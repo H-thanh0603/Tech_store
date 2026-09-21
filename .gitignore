@@ -32,7 +32,13 @@ dev-server.log
 .playwright-mcp
 
 
+# Assistant credentials (LLM chat + Jev decision layer). Template committed.
+.env.assistant
+.env.assistant.local
 # ops-bootstrap wizard secrets (one-time go-live run)
+.env.local.bak
+.env.*.bak
+*.bak
 .env.ops-wizard
 # MFA recovery codes — never commit
 recovery-codes.txt
