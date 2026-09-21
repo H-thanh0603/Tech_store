@@ -128,6 +128,9 @@ const HELLO: ChatEntry = {
   ],
 }
 
+/** Stream hangs on free-tier gateways: abort at 90s so the widget can retry. */
+const CHAT_TIMEOUT_MS = 90_000
+
 async function postChat(
   messages: { role: string; content: string }[],
   onText: (delta: string) => void,
@@ -137,6 +140,7 @@ async function postChat(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ messages: messages.slice(-10), stream: true, sessionId: assistantSessionId() }),
+    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
   })
   return readChatStream<{
     reply: string
@@ -609,6 +613,7 @@ export function AssistantWidget() {
     // Placeholder assistant entry streams deltas into place.
     setEntries([...next, { role: 'assistant', content: '', intent } as ChatEntry])
     setPending(true)
+    let streamedChars = 0
     // Real-time Agent Activity UI: checklist steps stream in as tools fire.
     const onActivity = (call: AgentCall) => {
       setEntries((prev) => {
@@ -620,6 +625,7 @@ export function AssistantWidget() {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
     }
     const appendDelta = (delta: string) => {
+      streamedChars += delta.length
       setEntries((prev) => {
         if (prev.length === 0) return prev
         const last = prev[prev.length - 1]
@@ -629,11 +635,16 @@ export function AssistantWidget() {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
     }
     try {
-      const data = await postChat(
-        next.map((e) => ({ role: e.role, content: e.content })),
-        appendDelta,
-        onActivity,
-      )
+      const payload = next.map((e) => ({ role: e.role, content: e.content }))
+      let data: Awaited<ReturnType<typeof postChat>>
+      try {
+        data = await postChat(payload, appendDelta, onActivity)
+      } catch (firstError) {
+        // Retry once when nothing arrived yet (network blip / gateway 503).
+        // Partial streamed text stays — the retry only replaces the call.
+        if (streamedChars > 0) throw firstError
+        data = await postChat(payload, appendDelta, onActivity)
+      }
       // Header cart badge: refresh without reload when the turn touched the cart.
       if (data.cart) {
         try {
