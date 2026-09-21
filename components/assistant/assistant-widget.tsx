@@ -86,6 +86,13 @@ interface FulfillmentInfo {
   note: string
 }
 
+interface ToolFilterInfo {
+  source: string
+  buckets: string[]
+  sent: number
+  full: number
+}
+
 interface ChatEntry {
   role: 'user' | 'assistant'
   content: string
@@ -105,6 +112,8 @@ interface ChatEntry {
   intent?: ShoppingIntent
   /** Real-time Agent Activity UI: tool calls streamed during this turn. */
   activity?: AgentCall[]
+  /** JEV tool-filter measurement for this turn (which buckets, how many schemas). */
+  toolFilter?: ToolFilterInfo | null
 }
 
 const HELLO: ChatEntry = {
@@ -139,6 +148,9 @@ async function postChat(
     fulfillment: FulfillmentInfo | null
     cart: { item_count: number; subtotal: number } | null
     budget_vnd: number | null
+    /** Stream path uses camelCase; non-stream route returns snake_case. */
+    toolFilter?: ToolFilterInfo | null
+    tool_filter?: ToolFilterInfo | null
   }>(res, onText, onActivity)
 }
 
@@ -531,6 +543,28 @@ function AssistantReply({ content }: { content: string }) {
   )
 }
 
+/**
+ * JEV tool-filter badge: which buckets the turn used, from where, and how
+ * many tool schemas the model actually saw (sent/full). Proves JEV ran.
+ */
+function JevBadge({ info }: { info: ToolFilterInfo }) {
+  const sourceLabels: Record<string, string> = {
+    keyword: 'từ khóa',
+    history: 'kế thừa turn trước',
+    jev: 'JEV chọn',
+    full: 'full toolset',
+  }
+  const pct = info.full > 0 ? Math.round((info.sent / info.full) * 100) : 100
+  return (
+    <p
+      className="mt-1.5 max-w-72 text-(length:--text-[11px]) text-fg-muted"
+      title={`JEV tool-filter: ${info.source} → ${info.buckets.join(', ')} (${info.sent}/${info.full} schemas)`}
+    >
+      ⚡ JEV {sourceLabels[info.source] ?? info.source} · {info.buckets.join('+')} · {info.sent}/{info.full} tools ({pct}%)
+    </p>
+  )
+}
+
 /** Card display mode: horizontal arrows carousel or vertical stack. */
 type CardLayout = 'horizontal' | 'vertical'
 
@@ -600,6 +634,14 @@ export function AssistantWidget() {
         appendDelta,
         onActivity,
       )
+      // Header cart badge: refresh without reload when the turn touched the cart.
+      if (data.cart) {
+        try {
+          window.dispatchEvent(new Event('cart:updated'))
+        } catch {
+          // Non-browser render: ignore.
+        }
+      }
       setEntries((prev) => {
         if (prev.length === 0) return prev
         const last = prev[prev.length - 1]
@@ -617,6 +659,7 @@ export function AssistantWidget() {
             fulfillment: data.fulfillment,
             cart: data.cart,
             budget_vnd: data.budget_vnd,
+            toolFilter: data.toolFilter ?? data.tool_filter ?? null,
           },
         ]
       })
@@ -714,6 +757,7 @@ export function AssistantWidget() {
             ) : null}
             {entry.tracking ? <OrderTrackingView tracking={entry.tracking} /> : null}
             {entry.fulfillment ? <FulfillmentView fulfillment={entry.fulfillment} /> : null}
+            {entry.toolFilter ? <JevBadge info={entry.toolFilter} /> : null}
             {(() => {
               const chips =
                 entry.suggestions && entry.suggestions.length > 0
