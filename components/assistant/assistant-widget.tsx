@@ -640,9 +640,11 @@ export function AssistantWidget() {
       try {
         data = await postChat(payload, appendDelta, onActivity)
       } catch (firstError) {
-        // Retry once when nothing arrived yet (network blip / gateway 503).
-        // Partial streamed text stays — the retry only replaces the call.
-        if (streamedChars > 0) throw firstError
+        // Retry once on network/timeout failures when nothing arrived yet.
+        // HTTP errors (429/403/...) must NOT retry — that would double
+        // rate-limit consumption and abuse-ban logging.
+        const msg = firstError instanceof Error ? firstError.message : ''
+        if (streamedChars > 0 || msg.startsWith('HTTP ')) throw firstError
         data = await postChat(payload, appendDelta, onActivity)
       }
       // Header cart badge: refresh without reload when the turn touched the cart.
@@ -670,6 +672,8 @@ export function AssistantWidget() {
             fulfillment: data.fulfillment,
             cart: data.cart,
             budget_vnd: data.budget_vnd,
+            intent: last.intent,
+            activity: last.activity,
             toolFilter: data.toolFilter ?? data.tool_filter ?? null,
           },
         ]

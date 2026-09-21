@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createProviderClient,
   defaultModelFor,
+  isModelOverloadError,
+  modelFallbackChain,
   _resetGlmTextSeqForTests,
   extractGlmToolCalls,
   fetchWithRetry,
@@ -227,5 +229,42 @@ describe('assistant providers', () => {
     expect(toDeepSeekRequest(baseParams)).toMatchObject({ reasoning: { enabled: false } })
     if (saved === undefined) delete process.env.ASSISTANT_REASONING
     else process.env.ASSISTANT_REASONING = saved
+  })
+
+  it('builds a bounded model fallback chain', () => {
+    const saved = process.env.ASSISTANT_MODEL_FALLBACK
+    delete process.env.ASSISTANT_MODEL_FALLBACK
+    expect(modelFallbackChain('a')).toEqual(['a'])
+    process.env.ASSISTANT_MODEL_FALLBACK = 'b, a, c, d'
+    expect(modelFallbackChain('a')).toEqual(['a', 'b', 'c'])
+    if (saved === undefined) delete process.env.ASSISTANT_MODEL_FALLBACK
+    else process.env.ASSISTANT_MODEL_FALLBACK = saved
+  })
+
+  it('detects quota/overload errors for model retry', () => {
+    expect(isModelOverloadError(new Error('HTTP 503'))).toBe(true)
+    expect(isModelOverloadError(new Error('quota exceeded'))).toBe(true)
+    expect(isModelOverloadError(new Error('syntax error'))).toBe(false)
+  })
+
+  it('gives each retry attempt a fresh timeout signal', async () => {
+    const seen: (AbortSignal | null)[] = []
+    const fail = { ok: false, status: 503, headers: new Headers() } as unknown as Response
+    const ok = { ok: true, status: 200, headers: new Headers() } as unknown as Response
+    const fetchMock = vi
+      .fn<(...args: unknown[]) => Promise<Response>>()
+      .mockImplementation(async (_url: unknown, init: unknown) => {
+        seen.push((init as { signal?: AbortSignal | null }).signal ?? null)
+        return seen.length === 1 ? fail : ok
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const res = await fetchWithRetry('https://example.test', { signal: AbortSignal.timeout(1) }, 2)
+      expect(res).toBe(ok)
+      expect(seen).toHaveLength(2)
+      expect(seen[0]).not.toBe(seen[1])
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

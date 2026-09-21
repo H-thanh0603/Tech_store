@@ -50,7 +50,13 @@ export function parseCartToken(cookieHeader: string | null): string | null {
     const idx = part.indexOf('=')
     if (idx < 0) continue
     if (part.slice(0, idx).trim() === CART_COOKIE) {
-      const value = decodeURIComponent(part.slice(idx + 1).trim())
+      // Malformed percent-encoding must not 500 the route: skip the cookie.
+      let value: string
+      try {
+        value = decodeURIComponent(part.slice(idx + 1).trim())
+      } catch {
+        return null
+      }
       return value || null
     }
   }

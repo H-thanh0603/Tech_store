@@ -417,12 +417,30 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Honor provider Retry-After (seconds or HTTP date); else exponential backoff. */
+function retryDelayMs(res: Response, attempt: number): number {
+  const raw = res.headers?.get?.('retry-after')
+  if (raw) {
+    const secs = Number(raw)
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 30_000)
+    const date = Date.parse(raw)
+    if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), 30_000)
+  }
+  return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
+}
+
 export async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
   let lastError: unknown = null
+  // A caller-supplied AbortSignal fires once: reusing it across attempts
+  // would abort retries instantly. Strip it; each attempt gets its own.
+  const { signal: _callerSignal, ...baseInit } = init
+  void _callerSignal
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const res = await fetch(url, init)
+      const res = await fetch(url, { ...baseInit, signal: AbortSignal.timeout(60_000) })
       if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === attempts - 1) return res
+      await sleep(retryDelayMs(res, attempt))
+      continue
     } catch (error) {
       lastError = error
       if (attempt === attempts - 1) throw error
@@ -727,4 +745,23 @@ export function createProviderClient(): MessagesClient | null {
   }
   const apiKey = process.env.ANTHROPIC_API_KEY
   return apiKey ? createAnthropicClient(apiKey) : null
+}
+
+/**
+ * Fallback model chain: `ASSISTANT_MODEL_FALLBACK="model-a,model-b"`.
+ * The turn loop tries the primary model first; on quota/overload errors
+ * it retries round 0 once per fallback model instead of failing the turn.
+ */
+export function modelFallbackChain(primary: string): string[] {
+  const extra = (process.env.ASSISTANT_MODEL_FALLBACK ?? '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter((m) => m && m !== primary)
+  return [primary, ...extra].slice(0, 3)
+}
+
+/** True when the error looks like quota/overload (worth a model retry). */
+export function isModelOverloadError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return /503|502|429|overloaded|quota|rate limit|temporarily/i.test(msg)
 }

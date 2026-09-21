@@ -119,7 +119,14 @@ export async function* streamTurn<R>(
       // Real-time Agent Activity UI: mỗi tool call được đẩy ra SSE để UI vẽ
       // checklist từng bước agent đang làm (nhãn chuẩn hóa, đã redact).
       yield { type: 'activity', call }
-      const text = await driver.dispatch(use.name, use.input)
+      // A throwing dispatch must not kill the whole turn (one bad tool ≠
+      // 500): fence it as an error result so the model can recover.
+      let text: string
+      try {
+        text = await driver.dispatch(use.name, use.input)
+      } catch (error) {
+        text = `Tool tạm thời không khả dụng (${error instanceof Error ? error.message : 'unknown'}).`
+      }
       results.push({ type: 'tool_result', tool_use_id: use.id, content: text })
     }
     messages.push({ role: 'user', content: results })

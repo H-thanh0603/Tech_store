@@ -14,16 +14,25 @@ import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 const BAN_1H_THRESHOLD = 3
 const BAN_24H_THRESHOLD = 6
 
+/** Short ban cache: bans change slowly, DB every turn is wasteful. */
+const BAN_CACHE_TTL_MS = 60_000
+const banCache = new Map<string, { banned: boolean; at: number }>()
+
 export async function isBanned(identityHash: string): Promise<boolean> {
+  const hit = banCache.get(identityHash)
+  if (hit && Date.now() - hit.at < BAN_CACHE_TTL_MS) return hit.banned
   try {
     const { data } = await getSupabaseAdminClient()
       .from('abuse_bans')
       .select('until')
       .eq('identity_hash', identityHash)
       .maybeSingle()
-    return !!data && new Date(data.until).getTime() > Date.now()
+    const banned = !!data && new Date(data.until).getTime() > Date.now()
+    if (banCache.size > 1000) banCache.clear()
+    banCache.set(identityHash, { banned, at: Date.now() })
+    return banned
   } catch {
-    return false
+    return hit?.banned ?? false
   }
 }
 
@@ -48,7 +57,7 @@ export async function recordViolation(
       .select('id', { count: 'exact', head: true })
       .eq('identity_hash', identityHash)
       .gte('created_at', since)
-      .in('kind', ['jailbreak:prompt-injection', 'jailbreak:system-exfil', 'fence-forgery', 'system-exfil'])
+      .in('kind', ['jailbreak:prompt-injection', 'jailbreak:system-exfil', 'jailbreak:fence-forgery', 'fence-forgery', 'system-exfil'])
     const hits = count ?? 0
     if (hits >= BAN_24H_THRESHOLD) {
       await upsertBan(db, identityHash, 'repeated jailbreak attempts (24h)', 24)
