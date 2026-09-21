@@ -28,12 +28,15 @@ export async function GET(request?: NextRequest) {
   const requestId = request?.headers.get('x-request-id') ?? crypto.randomUUID()
   const baseHeaders = { 'Cache-Control': 'no-store', 'x-request-id': requestId }
   if (!wantsDb) {
+    const jev = jevStatus()
     return NextResponse.json(
       {
         ok: true,
         service: 'techstore',
         timestamp: new Date().toISOString(),
-        jev: jevStatus(),
+        jev,
+        // Degraded but alive: chat runs on keyword fallback while JEV fails.
+        degraded: 'lastError' in jev,
       },
       {
         status: 200,

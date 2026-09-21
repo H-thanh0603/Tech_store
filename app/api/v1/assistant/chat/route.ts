@@ -69,8 +69,9 @@ export async function POST(request: Request) {
         reply: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 15 * 60,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(15 * 60) } },
     )
   }
   if (await isChatDailyLimited('assistant_chat', ip)) {
@@ -81,8 +82,9 @@ export async function POST(request: Request) {
         reply: 'Bạn đã dùng hết lượt hỏi hôm nay — quay lại ngày mai nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 24 * 3600,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(24 * 3600) } },
     )
   }
 

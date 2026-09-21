@@ -78,6 +78,8 @@ describe('shopping tool filter', () => {
   })
 
   it('fails open to full tools on low confidence or gateway error', async () => {
+    const { _resetJevWarnForTests } = await import('@/lib/assistant/jev')
+    _resetJevWarnForTests()
     vi.stubEnv('JEV_API_KEY', 'test-key')
     vi.stubEnv('JEV_API', 'chat')
     const full = buildAnthropicTools().length

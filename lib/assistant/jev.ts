@@ -102,6 +102,33 @@ export function isJevEnabled(): boolean {
 let lastJevError: string | null = null
 let jevWarned = false
 
+/** Short-lived decision cache: identical gray texts skip the gateway. */
+const DECIDE_CACHE_MAX = 100
+const DECIDE_CACHE_TTL_MS = 5 * 60_000
+const decideCache = new Map<string, { decision: JevDecision; at: number }>()
+
+function decideCacheKey(question: string, choices: readonly string[], context: string): string {
+  return `${question}\n${choices.join('|')}\n${context.slice(0, 400)}`
+}
+
+function decideCacheGet(key: string): JevDecision | null {
+  const hit = decideCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > DECIDE_CACHE_TTL_MS) {
+    decideCache.delete(key)
+    return null
+  }
+  return hit.decision
+}
+
+function decideCacheSet(key: string, decision: JevDecision): void {
+  if (decideCache.size >= DECIDE_CACHE_MAX) {
+    const oldest = decideCache.keys().next().value
+    if (oldest !== undefined) decideCache.delete(oldest)
+  }
+  decideCache.set(key, { decision, at: Date.now() })
+}
+
 export function jevLastError(): string | null {
   return lastJevError
 }
@@ -118,6 +145,7 @@ function warnJevOnce(reason: string): void {
 export function _resetJevWarnForTests(): void {
   jevWarned = false
   lastJevError = null
+  decideCache.clear()
 }
 export async function jevDecide(input: {
   question: string
@@ -129,7 +157,14 @@ export async function jevDecide(input: {
   if (!apiKey) return null
   const { question, choices, context, fetchFn } = input
   if (choices.length < 2) return null
-  if (jevApi() === 'evaluate') return jevDecideEvaluate({ question, choices, context, apiKey, fetchFn })
+  const cacheKey = decideCacheKey(question, choices, context)
+  const cached = decideCacheGet(cacheKey)
+  if (cached) return cached
+  if (jevApi() === 'evaluate') {
+    const decision = await jevDecideEvaluate({ question, choices, context, apiKey, fetchFn })
+    if (decision) decideCacheSet(cacheKey, decision)
+    return decision
+  }
   const doFetch = fetchFn ?? fetch
   const system =
     'You are Jev, a System One decision model. Return typed decisions, never prose. ' +
@@ -171,7 +206,10 @@ export async function jevDecide(input: {
     }
     const decision = parseJevDecision(raw, choices)
     if (!decision) warnJevOnce('chat bad JSON')
-    else lastJevError = null
+    else {
+      lastJevError = null
+      decideCacheSet(cacheKey, decision)
+    }
     return decision
   } catch {
     warnJevOnce('chat network/timeout')

@@ -234,4 +234,18 @@ describe('jev decision layer', () => {
     expect(Object.keys(bodies[0].questions)).toEqual(['rel_0', 'rel_1', 'rel_2'])
     expect(out).toEqual([1, 2, 0])
   })
+
+  it('caches identical decisions to skip the gateway', async () => {
+    const { _resetJevWarnForTests } = await import('@/lib/assistant/jev')
+    _resetJevWarnForTests()
+    vi.stubEnv('JEV_API_KEY', 'test-key')
+    vi.stubEnv('JEV_API', 'chat')
+    const fetchFn = vi.fn(jsonFetch('{"choice":"gray","confidence":0.8}'))
+    const args = { question: 'q?', choices: CHOICES, context: 'repeat me' } as const
+    const first = await jevDecide({ ...args, fetchFn: fetchFn as unknown as typeof fetch })
+    const second = await jevDecide({ ...args, fetchFn: fetchFn as unknown as typeof fetch })
+    expect(first).toMatchObject({ choice: 'gray' })
+    expect(second).toMatchObject({ choice: 'gray' })
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
 })
