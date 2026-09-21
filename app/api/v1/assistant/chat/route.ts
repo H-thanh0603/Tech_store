@@ -8,6 +8,7 @@ import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/ab
 import { cartSetCookie, ensureCartToken, parseCartToken, getChatCart } from '@/lib/assistant/cart'
 import { assistantConfig } from '@/lib/assistant/config'
 import { detectJailbreak, JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
+import { resolveShoppingScope } from '@/lib/assistant/jev'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
 import { createProviderClient } from '@/lib/assistant/providers'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
@@ -68,8 +69,9 @@ export async function POST(request: Request) {
         reply: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 15 * 60,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(15 * 60) } },
     )
   }
   if (await isChatDailyLimited('assistant_chat', ip)) {
@@ -80,8 +82,9 @@ export async function POST(request: Request) {
         reply: 'Bạn đã dùng hết lượt hỏi hôm nay — quay lại ngày mai nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 24 * 3600,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(24 * 3600) } },
     )
   }
 
@@ -123,6 +126,23 @@ export async function POST(request: Request) {
       suggestions: SHOPPING_SCOPE_SUGGESTIONS,
       disabled: false,
     })
+  }
+  // Jev semantic triage (fail-open): keyword gate above stays the fast
+  // path; gray/off-topic messages get a second opinion from Jev before
+  // burning the main-model budget. Only a confident Jev off-topic blocks.
+  try {
+    const scoped = await resolveShoppingScope(lastText)
+    if (scoped.verdict === 'off-topic' && scoped.source === 'keyword+jev') {
+      return NextResponse.json({
+        code: 'OFF_SCOPE',
+        reply: SHOPPING_SCOPE_REFUSAL,
+        cards: [],
+        suggestions: SHOPPING_SCOPE_SUGGESTIONS,
+        disabled: false,
+      })
+    }
+  } catch {
+    // Fail-open: continue to the normal turn.
   }
 
   // The widget shares the storefront guest cart: reuse the browser's cart
@@ -185,6 +205,7 @@ export async function POST(request: Request) {
     cart: cart ?? null,
     budget_vnd: result.budget_vnd ?? memory?.budget_vnd ?? null,
     disabled: result.disabled ?? false,
+    tool_filter: result.toolFilter ?? null,
   })
   if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))
   return response

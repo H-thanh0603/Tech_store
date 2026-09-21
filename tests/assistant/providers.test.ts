@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createProviderClient,
   defaultModelFor,
+  isModelOverloadError,
+  modelFallbackChain,
   _resetGlmTextSeqForTests,
   extractGlmToolCalls,
   fetchWithRetry,
@@ -29,8 +31,13 @@ const baseParams = {
 
 describe('assistant providers', () => {
   it('defaults to anthropic, switches on env', () => {
-    const saved = process.env.ASSISTANT_PROVIDER
+    // The assistant credentials come from `.env.assistant` (loaded once by the
+    // test setup), so the model-provider defaults read them off process.env.
+    // Isolate this test by saving/restoring the env it mutates.
+    const savedProvider = process.env.ASSISTANT_PROVIDER
+    const savedModel = process.env.ASSISTANT_MODEL
     delete process.env.ASSISTANT_PROVIDER
+    delete process.env.ASSISTANT_MODEL
     expect(resolveProvider()).toBe('anthropic')
     process.env.ASSISTANT_PROVIDER = 'deepseek'
     expect(resolveProvider()).toBe('deepseek')
@@ -39,8 +46,10 @@ describe('assistant providers', () => {
     process.env.ASSISTANT_PROVIDER = 'openrouter'
     expect(resolveProvider()).toBe('openrouter')
     expect(defaultModelFor('openrouter')).toBe('anthropic/claude-haiku-4-5')
-    if (saved === undefined) delete process.env.ASSISTANT_PROVIDER
-    else process.env.ASSISTANT_PROVIDER = saved
+    if (savedProvider === undefined) delete process.env.ASSISTANT_PROVIDER
+    else process.env.ASSISTANT_PROVIDER = savedProvider
+    if (savedModel === undefined) delete process.env.ASSISTANT_MODEL
+    else process.env.ASSISTANT_MODEL = savedModel
   })
 
   it('builds an OpenRouter client only when its key is set', () => {
@@ -105,7 +114,10 @@ describe('assistant providers', () => {
           message: {
             content: null,
             tool_calls: [
-              { id: 'call-1', function: { name: 'search_products', arguments: '{"query":"laptop"}' } },
+              {
+                id: 'call-1',
+                function: { name: 'search_products', arguments: '{"query":"laptop"}' },
+              },
             ],
           },
           finish_reason: 'tool_calls',
@@ -204,6 +216,53 @@ describe('assistant providers', () => {
       const res = await fetchWithRetry('https://example.test', {}, 3)
       expect(res).toBe(bad)
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('disables hidden reasoning only when ASSISTANT_REASONING=0', () => {
+    const saved = process.env.ASSISTANT_REASONING
+    delete process.env.ASSISTANT_REASONING
+    expect(toDeepSeekRequest(baseParams)).not.toHaveProperty('reasoning')
+    process.env.ASSISTANT_REASONING = '0'
+    expect(toDeepSeekRequest(baseParams)).toMatchObject({ reasoning: { enabled: false } })
+    if (saved === undefined) delete process.env.ASSISTANT_REASONING
+    else process.env.ASSISTANT_REASONING = saved
+  })
+
+  it('builds a bounded model fallback chain', () => {
+    const saved = process.env.ASSISTANT_MODEL_FALLBACK
+    delete process.env.ASSISTANT_MODEL_FALLBACK
+    expect(modelFallbackChain('a')).toEqual(['a'])
+    process.env.ASSISTANT_MODEL_FALLBACK = 'b, a, c, d'
+    expect(modelFallbackChain('a')).toEqual(['a', 'b', 'c'])
+    if (saved === undefined) delete process.env.ASSISTANT_MODEL_FALLBACK
+    else process.env.ASSISTANT_MODEL_FALLBACK = saved
+  })
+
+  it('detects quota/overload errors for model retry', () => {
+    expect(isModelOverloadError(new Error('HTTP 503'))).toBe(true)
+    expect(isModelOverloadError(new Error('quota exceeded'))).toBe(true)
+    expect(isModelOverloadError(new Error('syntax error'))).toBe(false)
+  })
+
+  it('gives each retry attempt a fresh timeout signal', async () => {
+    const seen: (AbortSignal | null)[] = []
+    const fail = { ok: false, status: 503, headers: new Headers() } as unknown as Response
+    const ok = { ok: true, status: 200, headers: new Headers() } as unknown as Response
+    const fetchMock = vi
+      .fn<(...args: unknown[]) => Promise<Response>>()
+      .mockImplementation(async (_url: unknown, init: unknown) => {
+        seen.push((init as { signal?: AbortSignal | null }).signal ?? null)
+        return seen.length === 1 ? fail : ok
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const res = await fetchWithRetry('https://example.test', { signal: AbortSignal.timeout(1) }, 2)
+      expect(res).toBe(ok)
+      expect(seen).toHaveLength(2)
+      expect(seen[0]).not.toBe(seen[1])
     } finally {
       vi.unstubAllGlobals()
     }

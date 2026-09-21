@@ -1,7 +1,14 @@
+import { loadAssistantEnv } from '@/lib/env/assistant-env'
+
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+
+// Vitest loads no dotenv file of its own. The assistant credentials live in
+// `.env.assistant` (template: `.env.assistant.example`), so load them once
+// here — fail-open (quiet) — before any assistant test reads them.
+loadAssistantEnv({ quiet: true })
 
 // jsdom implements no media queries, but components that respect
 // `prefers-reduced-motion` legitimately call matchMedia during mount. The stub
@@ -72,7 +79,10 @@ if (typeof window !== 'undefined' && typeof window.localStorage === 'undefined')
     },
   } as Storage
   Object.defineProperty(window, 'localStorage', { value: localStorageStub, configurable: true })
-  Object.defineProperty(globalThis, 'localStorage', { value: localStorageStub, configurable: true })
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: localStorageStub,
+    configurable: true,
+  })
 }
 
 // Vitest does not auto-unmount RTL renders between tests, so without this the

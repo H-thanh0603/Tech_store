@@ -8,7 +8,14 @@
  * Model-driven memory extraction and image input are OFF by default
  * (enable_* switches); their flows park under skills/_staged/.
  */
+import { loadAssistantEnv } from '@/lib/env/assistant-env'
+
 import { defaultMaxTokensFor, defaultModelFor, resolveProvider } from './providers'
+
+// Credentials for the LLM + Jev layer live in `.env.assistant` (see
+// `.env.assistant.example`). Loading here as well as in next.config.ts keeps
+// any server entry point — including future standalone scripts — consistent.
+loadAssistantEnv()
 
 export interface AssistantConfig {
   assistantName: string
@@ -60,7 +67,13 @@ export const assistantConfig: AssistantConfig = {
 export function absentTools(config: AssistantConfig): ReadonlySet<string> {
   const names = new Set<string>()
   if (!config.enableCart) {
-    for (const t of ['get_cart', 'add_to_cart', 'update_cart_item', 'remove_from_cart', 'checkout']) {
+    for (const t of [
+      'get_cart',
+      'add_to_cart',
+      'update_cart_item',
+      'remove_from_cart',
+      'checkout',
+    ]) {
       names.add(t)
     }
   }

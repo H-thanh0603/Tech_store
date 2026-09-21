@@ -54,6 +54,12 @@ export async function POST(request: Request) {
   // H5: a null-actor row (staged without a bound staff id) is NEVER approvable —
   // SoD cannot be evaluated without a known stager, so reject and force re-stage.
   const meta = await getStagedDecisionMeta(parsed.data.changeId)
+  if (meta && meta.status !== 'staged') {
+    return NextResponse.json(
+      { ok: false, code: 'ALREADY_DECIDED', message: 'Change đã được xử lý trước đó.' },
+      { status: 409 },
+    )
+  }
   if (meta?.expiresAt && new Date(meta.expiresAt).getTime() < Date.now()) {
     await markStagedDecided(signed.change.id, 'discarded', session.userId)
     return NextResponse.json(

@@ -44,7 +44,13 @@ export type CardSummary = ReturnType<typeof toCardSummary>
 
 export async function searchProducts(
   query: string,
-  filters?: { category?: string; brand?: string; maxPrice?: number; inStock?: boolean },
+  filters?: {
+    category?: string
+    brand?: string
+    maxPrice?: number
+    inStock?: boolean
+    sort?: 'relevance' | 'price-asc' | 'price-desc' | 'newest'
+  },
 ): Promise<{ products: ReturnType<typeof toCardSummary>[]; total: number }> {
   const result = await getProducts({
     query: query.trim().slice(0, 120) || undefined,
@@ -52,7 +58,7 @@ export async function searchProducts(
     brand: filters?.brand,
     maxPrice: filters?.maxPrice,
     inStock: filters?.inStock ?? true,
-    sort: 'relevance',
+    sort: filters?.sort ?? 'relevance',
     page: 1,
   })
   const products = result.products.slice(0, assistantConfig.searchLimit).map(toCardSummary)
