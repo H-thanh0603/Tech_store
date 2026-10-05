@@ -75,4 +75,32 @@ describe('handleVnpayCallback', () => {
     expect(result.ok).toBe(true)
     expect(result.ipnResponseCode).toBe('00')
   })
+
+  it('rejects a replay with a mismatched amount (no double-settle)', async () => {
+    rpc.mockResolvedValueOnce({ data: { code: 'AMOUNT_MISMATCH' }, error: null })
+
+    const result = await handleVnpayCallback({ ...successfulParams, vnp_Amount: '99999999' })
+
+    expect(result.ok).toBe(false)
+    expect(result.ipnResponseCode).toBe('04')
+  })
+
+  it('rejects a conflicting payment state without settling', async () => {
+    rpc.mockResolvedValueOnce({ data: { code: 'PAYMENT_CONFLICT' }, error: null })
+
+    const result = await handleVnpayCallback(successfulParams)
+
+    expect(result.ok).toBe(false)
+    expect(result.ipnResponseCode).toBe('02')
+  })
+
+  it('fails closed with 99 on unknown database codes', async () => {
+    // Unknown future codes must never settle the order.
+    rpc.mockResolvedValueOnce({ data: { code: 'SOMETHING_NEW' }, error: null })
+
+    const result = await handleVnpayCallback(successfulParams)
+
+    expect(result.ok).toBe(false)
+    expect(result.ipnResponseCode).toBe('99')
+  })
 })

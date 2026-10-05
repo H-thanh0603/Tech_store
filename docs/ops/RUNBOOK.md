@@ -64,6 +64,22 @@ Free Supabase projects **pause** after inactivity. Unpause in dashboard before d
 2. TOTP bị lộ/mất → Admin khác đặt lại MFA trong `/admin/settings`.
 3. Supabase service role bị lộ → rotate key, update Vercel và redeploy. Không đặt service role trong `NEXT_PUBLIC_*`.
 
+### Key inventory (Q20) — cập nhật mỗi lần xoay
+
+| Key | Lưu ở | Xoay khi | Hạn tiếp theo |
+|---|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Vercel prod env + password manager | Lộ / nhân sự rời / 180 ngày | +180d từ launch |
+| `ADMIN_SECRET` (legacy admin auth) | Vercel prod env | 180 ngày | +180d từ launch |
+| `ASSISTANT_STAGING_SECRET` | Vercel prod env | Lộ / 180 ngày | +180d từ launch |
+| `VNPAY_SECRET` (+ `VNPAY_SECRET_PREVIOUS` giữ 24–48h khi xoay) | Vercel prod env | Lộ / 180 ngày | +180d từ launch |
+| `CRON_SECRET` | Vercel prod env + GitHub Secrets | Lộ / 180 ngày | +180d từ launch |
+| `TOKEN_PEPPER` | Vercel prod env | Hạn chế xoay (làm mất hiệu lực token hash cũ) — chỉ khi lộ, kèm dual-read migration | Khi lộ |
+| `RESEND_API_KEY` | Vercel prod env | Lộ / 180 ngày | +180d từ launch |
+| `BACKUP_PASSPHRASE` | GitHub Secrets + password manager (KHÔNG trong repo) | Lộ / 365 ngày | +365d từ launch |
+| Agent tokens `tsa_*` | DB (hash HMAC) | Thu hồi theo token, không xoay pepper | — |
+
+Quy trình xoay: tạo mới → cập nhật Vercel/GitHub Secrets → redeploy → xác minh `/api/health?check=config` + smoke → thu hồi cũ. Ghi ngày xoay vào bảng trên.
+
 ---
 
 ## Rollback

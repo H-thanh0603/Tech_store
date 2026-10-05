@@ -13,6 +13,7 @@ import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './co
 import { hasHumanCartConfirm } from './cart-confirm'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
 import { createProviderClient, isModelOverloadError, isUnsupportedReasonerModel, modelFallbackChain, REASONER_GUARD_REPLY, resolveProvider } from './providers'
+import { resolveModelTier, selectRoutedModel, type ModelTier } from './jev'
 import { streamTurn, type StreamEvent } from './stream'
 import {
   buildAnthropicTools,
@@ -56,6 +57,8 @@ export interface TurnResult {
   budget_vnd?: number | null
   /** True when the assistant is not configured (missing API key). */
   disabled?: boolean
+  /** Model tier JEV chọn cho turn này (simple → model rẻ, hard → model khỏe). */
+  modelTier?: { tier: ModelTier; source: string }
   /**
    * Tool-filter measurement: which buckets the turn sent, from where
    * (keyword/history/jev/full) and how many schemas went to the model.
@@ -205,9 +208,15 @@ export async function runAssistantTurn(
   // Tool-filter layer: shrink the schema the model sees to the buckets the
   // message needs (fail-open full set). Gray follow-ups inherit the
   // previous turn's buckets without a JEV call. The forced gate tool must
-  // be present.
+  // be present. Model tier resolves in parallel so routing adds no serial
+  // latency on top of the tool-filter Jev call.
   const prevTexts = prevUserTexts(history)
-  const filter = await resolveShoppingTools(userText, { prevTexts })
+  const [filter, tierVerdict] = await Promise.all([
+    resolveShoppingTools(userText, { prevTexts }),
+    resolveModelTier(userText),
+  ])
+  const turnModel = selectRoutedModel(config.model, tierVerdict.tier)
+  const modelTier = { tier: tierVerdict.tier, source: tierVerdict.source }
   let tools = filter.tools
   if (forcedTool && !tools.some((t) => t.name === forcedTool)) {
     const def = buildAnthropicTools().find((t) => t.name === forcedTool)
@@ -229,12 +238,12 @@ export async function runAssistantTurn(
     let response: MinimalMessage
     // Model fallback: round 0 failure on quota/overload retries once per
     // ASSISTANT_MODEL_FALLBACK model instead of failing the whole turn.
-    const models = modelFallbackChain(config.model)
+    const models = modelFallbackChain(turnModel)
     let modelIndex = 0
     for (;;) {
       try {
         response = await client.messages.create({
-          model: models[modelIndex] ?? config.model,
+          model: models[modelIndex] ?? turnModel,
           max_tokens: config.maxTokens,
           system,
           tools,
@@ -256,6 +265,7 @@ export async function runAssistantTurn(
             cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
             budget_vnd: deps?.memory?.budget_vnd ?? null,
             toolFilter,
+            modelTier,
           }
         }
         modelIndex = next
@@ -307,6 +317,7 @@ export async function runAssistantTurn(
     cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
     budget_vnd: deps?.memory?.budget_vnd ?? null,
     toolFilter,
+    modelTier,
   }
 }
 
@@ -353,7 +364,12 @@ export async function* streamAssistantTurn(
 
   const forcedToolName =
     config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null
-  const streamFilter = await resolveShoppingTools(userText, { prevTexts: prevUserTexts(history) })
+  const [streamFilter, streamTier] = await Promise.all([
+    resolveShoppingTools(userText, { prevTexts: prevUserTexts(history) }),
+    resolveModelTier(userText),
+  ])
+  const streamModel = selectRoutedModel(config.model, streamTier.tier)
+  const streamTierInfo = { tier: streamTier.tier, source: streamTier.source }
   let streamTools = streamFilter.tools
   if (forcedToolName && !streamTools.some((t) => t.name === forcedToolName)) {
     const def = buildAnthropicTools().find((t) => t.name === forcedToolName)
@@ -362,7 +378,7 @@ export async function* streamAssistantTurn(
   const streamFilterSummary = shoppingFilterSummary({ ...streamFilter, tools: streamTools })
 
   yield* streamTurn<TurnResult>(client, {
-    model: config.model,
+    model: streamModel,
     maxTokens: config.maxTokens,
     maxIterations: config.maxToolIterations,
     system,
@@ -384,6 +400,7 @@ export async function* streamAssistantTurn(
       cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
       budget_vnd: deps?.memory?.budget_vnd ?? null,
       toolFilter: streamFilterSummary,
+      modelTier: streamTierInfo,
     }),
   })
 }

@@ -35,6 +35,25 @@ if (!url || !serviceKey || !anonKey) {
 const email = env.ADMIN_E2E_EMAIL || 'admin@techstore.local'
 const password = env.ADMIN_E2E_PASSWORD || 'techstore-admin-e2e'
 
+// Q32/Q78 guard: default credentials may only target a LOCAL Supabase.
+// Against anything else the caller must pass explicit ADMIN_E2E_EMAIL +
+// ADMIN_E2E_PASSWORD (and confirm prod with ALLOW_PROD_SEED=1), so a
+// stray `.env.local` with the production service_role key can never mint
+// a weak default admin on prod by accident.
+const isLocalTarget = /localhost|127\.0\.0\.1/.test(url)
+const usingDefaults = !env.ADMIN_E2E_EMAIL || !env.ADMIN_E2E_PASSWORD
+if (usingDefaults && !isLocalTarget) {
+  console.error(
+    'Refusing to seed DEFAULT admin credentials against a non-local Supabase URL. ' +
+      'Set ADMIN_E2E_EMAIL and ADMIN_E2E_PASSWORD explicitly.',
+  )
+  process.exit(1)
+}
+if (env.NODE_ENV === 'production' && env.ALLOW_PROD_SEED !== '1') {
+  console.error('Refusing to seed admin on NODE_ENV=production without ALLOW_PROD_SEED=1.')
+  process.exit(1)
+}
+
 const supabase = createClient(url, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 })

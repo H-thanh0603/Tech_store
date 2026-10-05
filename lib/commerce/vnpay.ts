@@ -12,18 +12,27 @@ export interface VnpayConfig {
   paymentUrl: string
 }
 
+export const VNPAY_LIVE_URL = 'https://www.vnpayment.vn/paymentv2/vpcpay.html'
+export const VNPAY_SANDBOX_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
+
 export function getVnpayConfig(): VnpayConfig | null {
   const tmnCode = process.env.VNPAY_TMN_CODE
   const secret = process.env.VNPAY_SECRET
   if (!tmnCode || !secret) return null
+  const paymentUrl = process.env.VNP_URL ?? VNPAY_SANDBOX_URL
+  // Q155: never take REAL money through the SANDBOX gateway. Production
+  // requires an explicit live VNP_URL — a missing override fails loud
+  // instead of silently routing customers to the test gateway.
+  if (process.env.NODE_ENV === 'production' && paymentUrl.includes('sandbox')) {
+    throw new Error('VNP_URL must point at the live VNPay gateway in production.')
+  }
   return {
     tmnCode,
     secret,
     // Rotation không downtime: đặt secret mới vào VNPAY_SECRET, giữ secret cũ
     // ở VNPAY_SECRET_PREVIOUS trong 24-48h để IPN đang bay vẫn verify được.
     previousSecret: process.env.VNPAY_SECRET_PREVIOUS || undefined,
-    paymentUrl:
-      process.env.VNP_URL ?? 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    paymentUrl,
   }
 }
 

@@ -1,18 +1,100 @@
 [
   {
     "prompt": "doanh thu tuần này thế nào, có gì cần xử lý?",
-    "expect": { "tool": "get_business_snapshot", "contains": [], "forbid": [] }
+    "expect": {
+      "tool": "get_business_snapshot",
+      "contains": [],
+      "forbid": []
+    }
   },
   {
     "prompt": "giảm 10% giá 2 món vừa xem, ghi chú xả hàng tồn",
-    "expect": { "tool": "stage_price_change", "contains": ["staged"], "forbid": ["applied", "đã áp dụng"] }
+    "expect": {
+      "tool": "stage_price_change",
+      "contains": [
+        "staged"
+      ],
+      "forbid": [
+        "applied",
+        "đã áp dụng"
+      ]
+    }
   },
   {
     "prompt": "nhập thêm 50 chiếc cho mã vừa hết hàng",
-    "expect": { "tool": "stage_stock_change", "contains": ["staged"], "forbid": ["đã nhập"] }
+    "expect": {
+      "tool": "stage_stock_change",
+      "contains": [
+        "staged"
+      ],
+      "forbid": [
+        "đã nhập"
+      ]
+    }
   },
   {
     "prompt": "soạn brief sale 9.9 giảm 20% kèm cách chạy tay",
-    "expect": { "tool": "draft_campaign_brief", "contains": ["execution"], "forbid": ["đã tạo coupon"] }
+    "expect": {
+      "tool": "draft_campaign_brief",
+      "contains": [
+        "execution"
+      ],
+      "forbid": [
+        "đã tạo coupon"
+      ]
+    }
+  },
+  {
+    "prompt": "hàng nào sắp hết cần nhập thêm",
+    "expect": {
+      "tool": "get_inventory_alerts",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "đơn nào đang gặp vấn đề cần xử lý",
+    "expect": {
+      "tool": "get_order_issues",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "bản tin vận hành mới nhất có gì",
+    "expect": {
+      "tool": "get_latest_digest",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "ẩn món hết thời khỏi catalog, ghi chú dọn kho",
+    "expect": {
+      "tool": "stage_publish_change",
+      "contains": [
+        "staged"
+      ],
+      "forbid": [
+        "applied",
+        "đã áp dụng"
+      ]
+    }
+  },
+  {
+    "prompt": "phân tích hiệu quả bán tuần qua theo danh mục",
+    "expect": {
+      "tool": "run_analysis",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "các thay đổi đang chờ duyệt gồm những gì",
+    "expect": {
+      "tool": "get_pending_changes",
+      "contains": [],
+      "forbid": []
+    }
   }
 ]

@@ -12,21 +12,55 @@ function jevStatus() {
 }
 
 /**
+ * Q16 boot-visibility: which required env groups are present. Booleans only —
+ * safe to expose; pair with `npm run agent:smoke` for a functional check.
+ */
+function configStatus() {
+  const vnpUrl = process.env.VNP_URL ?? ''
+  return {
+    supabase: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    serviceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    siteUrl: Boolean(process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL),
+    // Q97: localhost fallback is dev-only; prod without SITE_URL is misconfig.
+    siteUrlFallbackLocalhost:
+      process.env.NODE_ENV === 'production' &&
+      !process.env.NEXT_PUBLIC_SITE_URL &&
+      !process.env.SITE_URL,
+    tokenPepper: (process.env.TOKEN_PEPPER?.length ?? 0) >= 32,
+    cronSecret: Boolean(process.env.CRON_SECRET),
+    stagingSecret: Boolean(process.env.ASSISTANT_STAGING_SECRET),
+    vnpayLive: !vnpUrl.includes('sandbox'),
+    assistantProvider: process.env.ASSISTANT_PROVIDER ?? 'anthropic',
+  }
+}
+
+/**
  * Public health probe for deploy platforms and uptime checks.
  *
  * - `GET /api/health`              - liveness only, never touches the database
  * - `GET /api/health?check=db`     - exercises a real Supabase query (anon + RLS)
  *                                    so a paused/throttled free-tier project is
  *                                    reported as 503 instead of false-ok.
+ * - `GET /api/health?check=config` - Q16/Q97: non-sensitive config presence
+ *                                    (booleans only, never values) so a deploy
+ *                                    missing required env is visible in one call.
  *
  * The DB check is intentionally cheap: a `head + count` over the smallest
  * anon-readable table. It fails open if the env is misconfigured so the
- * liveness probe never wedges the deploy.
+ * liveness probe never wedges the deploy. The exact count is never
+ * serialized (Q58: no catalog-size disclosure).
  */
 export async function GET(request?: NextRequest) {
-  const wantsDb = request?.nextUrl.searchParams.get('check') === 'db'
+  const check = request?.nextUrl.searchParams.get('check')
+  const wantsDb = check === 'db'
   const requestId = request?.headers.get('x-request-id') ?? crypto.randomUUID()
   const baseHeaders = { 'Cache-Control': 'no-store', 'x-request-id': requestId }
+  if (check === 'config') {
+    return NextResponse.json(
+      { ok: true, service: 'techstore', config: configStatus(), timestamp: new Date().toISOString() },
+      { status: 200, headers: baseHeaders },
+    )
+  }
   if (!wantsDb) {
     const jev = jevStatus()
     return NextResponse.json(
@@ -92,13 +126,15 @@ export async function GET(request?: NextRequest) {
   const latencyMs = Date.now() - start
 
   if (error) {
+    // Q58: never serialize DB internals (message/code can fingerprint the
+    // engine or leak schema hints). The detail goes to Sentry only.
+    const { logger } = await import('@/lib/logger')
+    logger.error('health db probe failed', { code: error.code ?? null })
     return NextResponse.json(
       {
         ok: false,
         service: 'techstore',
         db: 'unreachable',
-        code: error.code ?? null,
-        message: error.message,
         latencyMs,
         timestamp: new Date().toISOString(),
       },

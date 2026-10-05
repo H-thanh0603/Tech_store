@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
   // hydrates, and every interaction test fails for the wrong reason.
   // Dev-only setting: it has no effect on `next start`.
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  // Q98: never serve full browser source maps from production — Sentry still
+  // gets its (hidden) maps via withSentryConfig upload for de-minified traces.
+  productionBrowserSourceMaps: false,
   images: {
     // Seed demos use placehold.co SVG placeholders.
     dangerouslyAllowSVG: true,

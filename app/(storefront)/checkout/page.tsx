@@ -11,13 +11,21 @@ export default async function CheckoutPage() {
   if (cart.items.length === 0) {
     redirect('/cart')
   }
+  // Misconfigured gateway (e.g. sandbox URL in prod throws) hides the VNPay
+  // option instead of 500-ing checkout; the IPN route still fails loud.
+  let vnpayEnabled = false
+  try {
+    vnpayEnabled = getVnpayConfig() !== null
+  } catch {
+    vnpayEnabled = false
+  }
   return (
     <div className="container-store py-8 sm:py-10">
       <CheckoutStepper current={2} />
       <CheckoutForm
         cart={cart}
         initialState={{ ok: true }}
-        vnpayEnabled={getVnpayConfig() !== null}
+        vnpayEnabled={vnpayEnabled}
         pickupStores={pickupStores}
       />
     </div>

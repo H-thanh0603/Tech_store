@@ -1,30 +1,29 @@
 name: Backup
 
-# Weekly production database backup with an automated restore proof.
-#
-# This is its own workflow — previously the backup job lived in monitor.yml
-# gated on `github.event.schedule == '0 3 * * 1'` while monitor.yml's only
-# schedule was `*/15 * * * *`, so the condition was never true and the backup
-# never fired automatically (RPO was unbounded). A dedicated cron removes the
-# cross-workflow schedule coupling.
+# Daily production database backup with an automated restore proof (Q145:
+# RPO 1 day; was weekly). Dumps holding PII are AES-256 encrypted before
+# upload when BACKUP_PASSPHRASE is set (Q66) — the restore proof decrypts
+# with the same secret, and the runbook documents offline restore.
 #
 # Required secrets:
 #   SUPABASE_DB_URL            - postgres connection string (dump + restore proof)
 #   SUPABASE_SERVICE_ROLE_KEY  - service key for the Storage backup copy (optional;
 #                                storage steps skip gracefully when unset)
+#   BACKUP_PASSPHRASE          - encrypts backup.sql.gz at rest (optional but
+#                                expected on prod; job warns when unset)
 #
 # Until SUPABASE_DB_URL is set (pre-deploy), the job skips green instead of
 # failing red every Monday — see BACKLOG.md §A.
 
 on:
   schedule:
-    # Mondays 03:00 UTC.
-    - cron: '0 3 * * 1'
+    # Daily 03:00 UTC (RPO 1 day).
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
   backup:
-    name: Weekly backup + restore proof
+    name: Daily backup + restore proof
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +67,25 @@ jobs:
           supabase db dump --db-url "$SUPABASE_DB_URL" > backup.sql
           gzip backup.sql
           test -s roles.sql && test -s backup.sql.gz
+
+      # Q66: encrypt the PII-bearing dump at rest (AES-256-CBC + PBKDF2).
+      # Without BACKUP_PASSPHRASE the job still runs but warns loudly so the
+      # gap is visible instead of silent.
+      - name: Encrypt backup
+        if: steps.guard.outputs.skipped != 'true'
+        shell: bash
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BACKUP_PASSPHRASE" ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -pass env:BACKUP_PASSPHRASE \
+              -in backup.sql.gz -out backup.sql.gz.enc
+            rm backup.sql.gz
+            echo 'backup encrypted (backup.sql.gz.enc)'
+          else
+            echo '::warning::BACKUP_PASSPHRASE not set — dump will be stored unencrypted'
+          fi
 
       # Storage push (artifact is the fast copy, Supabase Storage is the
       # durable one). The `backups` bucket is created on first use via the
@@ -115,14 +133,20 @@ jobs:
           [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo 'skip: no storage secret'; exit 0; }
           ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n -e 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p' -e 's#postgresql://postgres\.\([^.]*\):.*#\1#p' -e 's#postgres://postgres\.\([^.]*\):.*#\1#p')
           [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 1; }
+          # Encrypted (.enc) when BACKUP_PASSPHRASE was set, plain .gz otherwise.
+          file=backup.sql.gz.enc
+          [ -f "$file" ] || file=backup.sql.gz
+          name="db-$(date +%F).sql.gz"
+          [ "$file" = "backup.sql.gz.enc" ] && name="$name.enc"
           curl -sS -f --max-time 120 -X POST \
-            "https://${ref}.supabase.co/storage/v1/object/backups/db-$(date +%F).sql.gz" \
+            "https://${ref}.supabase.co/storage/v1/object/backups/$name" \
             -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "x-upsert: true" \
-            --data-binary @backup.sql.gz
-          echo "uploaded db-$(date +%F).sql.gz to storage"
+            --data-binary "@$file"
+          echo "uploaded $name to storage"
+          echo "backup_file=$file" >> "$GITHUB_ENV"
 
-      - name: Upload backup artifact (90-day retention)
+      - name: Upload backup artifact (30-day retention)
         if: steps.guard.outputs.skipped != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -130,17 +154,29 @@ jobs:
           path: |
             roles.sql
             backup.sql.gz
-          retention-days: 90
+            backup.sql.gz.enc
+          retention-days: 30
 
       - name: Restore into scratch Postgres (restore proof)
         if: steps.guard.outputs.skipped != 'true'
         shell: bash
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
           docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
             -p 54329:5432 postgres:15-alpine >/dev/null
           until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-          gunzip -c backup.sql.gz | docker exec -i pg-verify \
+          restore_stream() {
+            if [ "${backup_file:-backup.sql.gz}" = "backup.sql.gz.enc" ]; then
+              [ -n "$BACKUP_PASSPHRASE" ] || { echo 'encrypted backup but BACKUP_PASSPHRASE is unset'; exit 1; }
+              openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_PASSPHRASE \
+                -in backup.sql.gz.enc | gunzip -c
+            else
+              gunzip -c backup.sql.gz
+            fi
+          }
+          restore_stream | docker exec -i pg-verify \
             psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
           docker exec pg-verify psql -U postgres -tAc \
             "select count(*) from information_schema.tables where table_schema='public'" \
@@ -153,13 +189,21 @@ jobs:
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
           docker run -d --name pg-verify -e POSTGRES_PASSWORD=verify \
             -p 54329:5432 postgres:15-alpine >/dev/null
           until docker exec pg-verify pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-          gunzip -c backup.sql.gz | docker exec -i pg-verify \
-            psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
+          if [ "${backup_file:-backup.sql.gz}" = "backup.sql.gz.enc" ]; then
+            [ -n "$BACKUP_PASSPHRASE" ] || { echo 'encrypted backup but BACKUP_PASSPHRASE is unset'; exit 1; }
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_PASSPHRASE \
+              -in backup.sql.gz.enc | gunzip -c | docker exec -i pg-verify \
+              psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
+          else
+            gunzip -c backup.sql.gz | docker exec -i pg-verify \
+              psql -U postgres -v ON_ERROR_STOP=1 -f - >/dev/null
+          fi
 
           counts_sql=$(cat <<'SQL'
             select 'products',  count(*) from products
@@ -182,10 +226,10 @@ jobs:
           docker rm -f pg-verify >/dev/null
           echo 'row counts match production'
 
-      # Retention: artifacts expire on their own after 90 days, storage does
-      # not — this prunes the storage side to match. Non-critical by design:
-      # a prune failure never fails the backup job.
-      - name: Prune backups older than 90 days
+      # Retention: artifacts expire on their own after 30 days, storage does
+      # not — this prunes the storage side to match (daily backups x 30).
+      # Non-critical by design: a prune failure never fails the backup job.
+      - name: Prune backups older than 30 days
         continue-on-error: true
         if: steps.guard.outputs.skipped != 'true'
         shell: bash
@@ -198,7 +242,7 @@ jobs:
           ref=$(printf '%s' "$SUPABASE_DB_URL" | sed -n -e 's#.*@db\.\([^.]*\)\.supabase\.co.*#\1#p' -e 's#postgresql://postgres\.\([^.]*\):.*#\1#p' -e 's#postgres://postgres\.\([^.]*\):.*#\1#p')
           [ -n "$ref" ] || { echo 'could not parse project ref from SUPABASE_DB_URL'; exit 0; }
           base="https://${ref}.supabase.co"
-          cutoff=$(date -u -d '90 days ago' +%s)
+          cutoff=$(date -u -d '30 days ago' +%s)
           curl -sS -f --max-time 30 -X POST "$base/storage/v1/object/list/backups" \
             -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H 'content-type: application/json' \

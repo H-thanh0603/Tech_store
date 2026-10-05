@@ -19,7 +19,7 @@ export type AuthFormState = {
 // Limit is 5 attempts / 15 minutes per identity — enough for a forgetful
 // human, hostile to enumeration and single-IP credential stuffing.
 async function authRateLimited(
-  action: 'auth_magic' | 'auth_password' | 'auth_signup',
+  action: 'auth_magic' | 'auth_password' | 'auth_signup' | 'auth_reset',
   email: string,
 ): Promise<boolean> {
   try {
@@ -102,8 +102,8 @@ export async function signInWithPassword(
     .trim()
     .toLowerCase()
   const password = String(formData.get('password') ?? '')
-  if (!email || password.length < 6) {
-    return { ok: false, message: 'Email và mật khẩu (tối thiểu 6 ký tự) là bắt buộc', mode: 'password' }
+  if (!email || password.length < 8) {
+    return { ok: false, message: 'Email và mật khẩu (tối thiểu 8 ký tự) là bắt buộc', mode: 'password' }
   }
 
   if (await authRateLimited('auth_password', email)) {
@@ -132,8 +132,8 @@ export async function signUpWithPassword(
     .toLowerCase()
   const password = String(formData.get('password') ?? '')
   const fullName = String(formData.get('fullName') ?? '').trim()
-  if (!email || password.length < 6) {
-    return { ok: false, message: 'Email và mật khẩu (tối thiểu 6 ký tự) là bắt buộc', mode: 'signup' }
+  if (!email || password.length < 8) {
+    return { ok: false, message: 'Email và mật khẩu (tối thiểu 8 ký tự) là bắt buộc', mode: 'signup' }
   }
 
   if (await authRateLimited('auth_signup', email)) {
@@ -180,6 +180,69 @@ export async function signOutAction() {
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/account/login')
+}
+
+/**
+ * Q23 — Password reset, chống user-enumeration: luôn trả lời chung chung
+ * dù email có tồn tại hay không; token 1 lần theo Supabase recovery link.
+ */
+export async function requestPasswordReset(
+  _prev: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const email = String(formData.get('email') ?? '')
+    .trim()
+    .toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, message: 'Email không hợp lệ' }
+  }
+  if (await authRateLimited('auth_reset', email)) {
+    // Vẫn trả lời chung để không lộ email nào bị giới hạn.
+    return { ok: true, message: 'Nếu email tồn tại, link đặt lại đã được gửi. Kiểm tra hộp thư (và spam).' }
+  }
+  const supabase = await createSupabaseAuthClient()
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl()}/auth/reset`,
+  })
+  return { ok: true, message: 'Nếu email tồn tại, link đặt lại đã được gửi. Kiểm tra hộp thư (và spam).' }
+}
+
+/**
+ * Đặt mật khẩu mới sau khi vào từ recovery link. Xong thì thu hồi TOÀN BỘ
+ * session (Q26) rồi đá về login — kẻ trộm session cũ không dùng tiếp được.
+ */
+export async function updatePasswordAfterReset(
+  _prev: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const password = String(formData.get('password') ?? '')
+  const confirm = String(formData.get('confirm') ?? '')
+  if (password.length < 8) {
+    return { ok: false, message: 'Mật khẩu phải có tối thiểu 8 ký tự' }
+  }
+  if (password !== confirm) {
+    return { ok: false, message: 'Xác nhận mật khẩu chưa khớp' }
+  }
+  const supabase = await createSupabaseAuthClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session) {
+    return { ok: false, message: 'Link đã hết hạn hoặc không hợp lệ. Hãy gửi lại yêu cầu.' }
+  }
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) {
+    return { ok: false, message: friendlyAuthError(error.message) }
+  }
+  // Thu hồi mọi session khác (fail-open: đổi pass đã thành công).
+  try {
+    const service = getSupabaseServiceRoleClient()
+    await service.auth.admin.signOut(session.access_token, 'global')
+  } catch {
+    await supabase.auth.signOut()
+  }
+  revalidatePath('/', 'layout')
+  redirect('/account/login?reset=done')
 }
 
 export async function saveServerProfile(

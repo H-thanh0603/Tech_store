@@ -21,7 +21,7 @@ const optionalMoney = z.preprocess(
 
 export const adminAccountLoginSchema = z.object({
   email: z.string().trim().email('Email không hợp lệ.'),
-  password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),
+  password: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự.'),
 })
 
 export const adminMfaCodeSchema = z.string().trim().regex(/^\d{6}$/, 'Nhập mã 6 chữ số.')
