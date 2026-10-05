@@ -187,10 +187,66 @@ export async function decideReturn(
     }
   }
 
+  // Auto-refund for VNPay orders: try the live refund BEFORE approving, so a
+  // gateway rejection never leaves the order approved-but-unrefunded. Any
+  // failure returns the staff to the form with the VNPay message — they can
+  // still complete the manual dashboard flow.
+  let refundNote: string | null = null
+  if (decision === 'approve' && refundAmount !== null && refundAmount > 0) {
+    const db = getSupabaseAdminClient()
+    const { data: target } = await db
+      .from('orders')
+      .select('id, payment_method, payment_status, payment_ref, gateway_pay_date')
+      .eq('order_code', orderCode.toUpperCase())
+      .maybeSingle()
+    if (
+      target?.payment_method === 'vnpay' &&
+      target?.payment_status === 'paid' &&
+      target?.payment_ref
+    ) {
+      try {
+        const { sendVnpayRefund } = await import('@/lib/commerce/vnpay-refund')
+        const receipt = await sendVnpayRefund({
+          orderCode: orderCode.toUpperCase(),
+          transactionNo: target.payment_ref as string,
+          amountVnd: refundAmount,
+          payDate: (target.gateway_pay_date as string | null) ?? '',
+          createdBy: admin.actorLabel,
+        })
+        refundNote = receipt.isMock
+          ? 'Hoàn tay trên dashboard VNPay (chưa cấu hình refund live).'
+          : `VNPay live OK (${receipt.requestId}).`
+        await db.from('payment_refunds').insert({
+          order_id: target.id,
+          provider: receipt.isMock ? 'manual' : 'vnpay',
+          amount: refundAmount,
+          state: receipt.isMock ? 'mock_recorded' : 'succeeded',
+          provider_request_id: receipt.requestId,
+          provider_txn_no: receipt.isMock ? null : (target.payment_ref as string),
+          created_by_label: admin.actorLabel,
+        })
+      } catch (refundError) {
+        const message =
+          refundError instanceof Error ? refundError.message : 'Hoàn tiền VNPay thất bại.'
+        await getSupabaseAdminClient().from('payment_refunds').insert({
+          order_id: target.id,
+          provider: 'vnpay',
+          amount: refundAmount,
+          state: 'failed',
+          error: message.slice(0, 500),
+          created_by_label: admin.actorLabel,
+        })
+        return fail('INTERNAL_ERROR', {
+          refundAmount: [`${message} Đơn chưa duyệt — hoàn tay trên dashboard rồi thử lại.`],
+        })
+      }
+    }
+  }
+
   const { data, error } = await getSupabaseAdminClient().rpc('admin_decide_return', {
     p_return_id: returnId,
     p_approve: decision === 'approve',
-    p_admin_note: adminNote || null,
+    p_admin_note: [adminNote, refundNote].filter(Boolean).join(' | ') || null,
     p_refund_amount: refundAmount,
     p_actor_label: admin.actorLabel,
     p_restock: restockRaw !== 'false',

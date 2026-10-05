@@ -41,10 +41,14 @@ export async function handleVnpayCallback(
   }
 
   const amount = Number(searchParams.vnp_Amount ?? 0)
+  // vnp_PayDate feeds gateway_pay_date so the refund API can send
+  // vnp_TransactionDate without a human copying dates from the dashboard.
+  const payDate = searchParams.vnp_PayDate ?? ''
   const { data, error } = await getSupabaseAdminClient().rpc('order_mark_paid_by_gateway', {
     p_order_code: orderCode,
     p_vnp_transaction_no: searchParams.vnp_TransactionNo ?? '',
     p_vnp_amount: Number.isFinite(amount) ? amount : 0,
+    p_vnp_pay_date: /^[0-9]{14}$/.test(payDate) ? payDate : null,
   })
   if (error) {
     console.error('[vnpay] payment confirmation RPC failed', error.code)

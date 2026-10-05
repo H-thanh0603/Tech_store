@@ -71,12 +71,20 @@ export interface VnpayRefundReceipt {
   isMock: boolean
   requestId: string
   message: string
+  /** Raw response code from the VNPay refund API (live only). */
+  responseCode?: string
 }
 
-export async function sendVnpayRefund(request: VnpayRefundRequest): Promise<VnpayRefundReceipt> {
+export async function sendVnpayRefund(
+  request: VnpayRefundRequest,
+  fetchImpl: typeof fetch = fetch,
+): Promise<VnpayRefundReceipt> {
   const config = getVnpayRefundConfig()
   if (request.amountVnd <= 0) throw new Error('Số tiền hoàn phải > 0.')
   if (!request.transactionNo.trim()) throw new Error('Thiếu mã giao dịch VNPay gốc.')
+  if (!/^[0-9]{14}$/.test(request.payDate)) {
+    throw new Error('Thiếu ngày thanh toán gốc (vnp_PayDate) — đơn pay trước khi lưu pay date phải hoàn tay.')
+  }
   if (!config) {
     return {
       ok: true,
@@ -85,7 +93,40 @@ export async function sendVnpayRefund(request: VnpayRefundRequest): Promise<Vnpa
       message: 'Chưa cấu hình VNPAY_SECRET_REFUND — hoàn tiền tay trên dashboard rồi ghi nhận.',
     }
   }
-  // Live POST is wired when the shop provides refund credentials + IPN
-  // allowlist. Fail closed: never pretend a refund succeeded.
-  throw new Error('Hoàn tiền VNPay live chưa đấu nối — cấu hình VNPAY_REFUND_URL + IP allowlist trước.')
+  // Live POST to the VNPay merchant API. Fail closed: any transport error
+  // or non-00 code throws so the caller never records a phantom refund.
+  // NOTE: VNPay allowlists the caller IP for this API — run on the server
+  // IP registered at merchant.vnpayment.vn, else the API rejects the call.
+  const params = buildVnpayRefundParams(request, config)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20_000)
+  let raw: string
+  try {
+    const response = await fetchImpl(config.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    })
+    raw = await response.text()
+  } finally {
+    clearTimeout(timeout)
+  }
+  let parsed: { vnp_ResponseCode?: string; vnp_Message?: string } | null = null
+  try {
+    parsed = JSON.parse(raw) as { vnp_ResponseCode?: string; vnp_Message?: string }
+  } catch {
+    throw new Error('VNPay refund trả về không phải JSON — kiểm tra VNPAY_REFUND_URL.')
+  }
+  const code = parsed?.vnp_ResponseCode ?? ''
+  if (code !== '00') {
+    throw new Error(`VNPay từ chối hoàn tiền (${code || 'no-code'}): ${parsed?.vnp_Message ?? raw.slice(0, 200)}`)
+  }
+  return {
+    ok: true,
+    isMock: false,
+    requestId: params.vnp_RequestId,
+    message: 'VNPay đã chấp nhận hoàn tiền.',
+    responseCode: code,
+  }
 }
