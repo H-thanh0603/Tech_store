@@ -256,6 +256,30 @@ export function CheckoutForm({ cart, initialState, pickupStores = [], vnpayEnabl
                 <strong>Chuyển khoản</strong> — giữ hàng có thời hạn
               </span>
             </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+              <input type="radio" name="paymentMethod" value="bank_card" className="size-4" />
+              <span className="text-(length:--text-sm)">
+                <strong>Thẻ / QR ngân hàng</strong> — quét mã, shop đối soát
+              </span>
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+              <input type="radio" name="paymentMethod" value="momo" className="size-4" />
+              <span className="text-(length:--text-sm)">
+                <strong>Ví MoMo</strong> — shop xác nhận, giữ hàng 24h
+              </span>
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+              <input type="radio" name="paymentMethod" value="zalopay" className="size-4" />
+              <span className="text-(length:--text-sm)">
+                <strong>Ví ZaloPay</strong> — shop xác nhận, giữ hàng 24h
+              </span>
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+              <input type="radio" name="paymentMethod" value="installment" className="size-4" />
+              <span className="text-(length:--text-sm)">
+                <strong>Trả góp</strong> — nhân viên gọi duyệt hồ sơ
+              </span>
+            </label>
             {vnpayEnabled ? (
               <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-(--radius-md) border border-border px-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
                 <input type="radio" name="paymentMethod" value="vnpay" className="size-4" />

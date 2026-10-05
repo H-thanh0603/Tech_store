@@ -45,3 +45,4 @@ recovery-codes.txt
 # Playwright authenticated session (contains live cookies) — never commit
 admin-storage-state.json
 test-results/.admin-auth.json
+.vitest/

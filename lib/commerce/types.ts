@@ -1,4 +1,11 @@
-export type PaymentMethod = 'cod' | 'bank_transfer' | 'vnpay'
+export type PaymentMethod =
+  | 'cod'
+  | 'bank_transfer'
+  | 'vnpay'
+  | 'bank_card'
+  | 'momo'
+  | 'zalopay'
+  | 'installment'
 export type FulfillmentMethod = 'delivery' | 'pickup'
 
 export interface PickupStore {

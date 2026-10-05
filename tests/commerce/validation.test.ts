@@ -65,6 +65,13 @@ describe('checkoutSchema', () => {
     expect(checkoutSchema.safeParse(validCheckout).success).toBe(true)
   })
 
+  it.each([['bank_card'], ['momo'], ['zalopay'], ['installment']] as const)(
+    'accepts deferred payment method %s',
+    (paymentMethod) => {
+      expect(checkoutSchema.safeParse({ ...validCheckout, paymentMethod }).success).toBe(true)
+    },
+  )
+
   it('rejects empty name, malformed phone, and unknown payment method', () => {
     expect(
       checkoutSchema.safeParse({
