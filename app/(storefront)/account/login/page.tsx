@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default async function AccountLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; reset?: string }>
 }) {
   const supabase = await createSupabaseAuthClient()
   const {
@@ -27,6 +27,14 @@ export default async function AccountLoginPage({
       {params.error === 'auth' ? (
         <p className="mx-auto mb-4 max-w-md rounded-(--radius-md) bg-danger-subtle px-3 py-2 text-(length:--text-sm) text-danger">
           Không xác thực được magic link. Thử gửi lại.
+        </p>
+      ) : null}
+      {params.reset === 'done' ? (
+        <p
+          role="status"
+          className="mx-auto mb-4 max-w-md rounded-(--radius-md) bg-success-subtle px-3 py-2 text-(length:--text-sm) text-fg"
+        >
+          Đã đổi mật khẩu. Mọi phiên khác đã bị đăng xuất — hãy đăng nhập lại.
         </p>
       ) : null}
       <AccountLoginClient />

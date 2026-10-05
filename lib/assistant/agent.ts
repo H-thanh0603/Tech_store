@@ -12,16 +12,23 @@ import { agentCall, type AgentCallObserver } from './activity'
 import { assistantConfig, wantsOrderGrounding, wantsPolicyGrounding } from './config'
 import { hasHumanCartConfirm } from './cart-confirm'
 import { buildDynamicContext, buildStaticSystem } from './prompt'
-import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from './providers'
+import { createProviderClient, isModelOverloadError, isUnsupportedReasonerModel, modelFallbackChain, REASONER_GUARD_REPLY, resolveProvider } from './providers'
+import { resolveModelTier, selectRoutedModel, type ModelTier } from './jev'
 import { streamTurn, type StreamEvent } from './stream'
 import {
-  createDispatchContext,
   buildAnthropicTools,
+  createDispatchContext,
   dispatchTool,
   TOOL_PRESENT_SUGGESTIONS,
   TOOL_SEARCH_POLICIES,
   type DispatchContext,
 } from './tools'
+import {
+  fullShoppingSummary,
+  resolveShoppingTools,
+  shoppingFilterSummary,
+  type ToolFilterSummary,
+} from './tool-filter'
 import type { CartRpcClient } from './cart'
 import { getChatCart } from './cart'
 import type { CardSummary, CompareResult, FulfillmentOptions, OrderStatusSummary, PlanDraft } from './backend'
@@ -50,6 +57,13 @@ export interface TurnResult {
   budget_vnd?: number | null
   /** True when the assistant is not configured (missing API key). */
   disabled?: boolean
+  /** Model tier JEV chọn cho turn này (simple → model rẻ, hard → model khỏe). */
+  modelTier?: { tier: ModelTier; source: string }
+  /**
+   * Tool-filter measurement: which buckets the turn sent, from where
+   * (keyword/history/jev/full) and how many schemas went to the model.
+   */
+  toolFilter?: ToolFilterSummary
 }
 
 interface MinimalTextBlock {
@@ -129,12 +143,30 @@ function lastUserText(history: ChatMessage[]): string {
   return ''
 }
 
+/** Previous user messages (oldest first) for filter history inheritance. */
+function prevUserTexts(history: ChatMessage[]): string[] {
+  const texts = history.filter((m) => m.role === 'user').map((m) => m.content)
+  return texts.slice(0, -1)
+}
+
 function createRealClient(): MessagesClient | null {
   return createProviderClient()
 }
 
 const DISABLED_REPLY =
   'Trợ lý AI hiện chưa được cấu hình trên môi trường này. Bạn vẫn có thể dùng ô tìm kiếm, bộ lọc catalog hoặc trang theo dõi đơn hàng — hoặc quay lại sau.'
+
+/** Weak models sometimes end the turn with tool calls and no text; summarize
+ *  the cards the tools already produced instead of claiming we didn't understand. */
+function fallbackReply(ctx: { cards: { name: string; price: number }[] }): string {
+  if (ctx.cards.length === 0)
+    return 'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.'
+  const top = ctx.cards
+    .slice(0, 3)
+    .map((c) => `${c.name} (${c.price.toLocaleString('vi-VN')}đ)`)
+    .join(', ')
+  return `Mình tìm được vài món trong kho: ${top}. Bạn muốn xem chi tiết món nào không?`
+}
 
 export async function runAssistantTurn(
   history: ChatMessage[],
@@ -150,12 +182,12 @@ export async function runAssistantTurn(
 ): Promise<TurnResult> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
-    return { reply: DISABLED_REPLY, cards: [], suggestions: [], disabled: true }
+    return { reply: DISABLED_REPLY, cards: [], suggestions: [], disabled: true, toolFilter: fullShoppingSummary() }
   }
 
   const config = assistantConfig
   if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
-    return { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [] }
+    return { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [], toolFilter: fullShoppingSummary() }
   }
   const ctx: DispatchContext = createDispatchContext({
     cartTokenHash: deps?.cartTokenHash ?? null,
@@ -167,13 +199,30 @@ export async function runAssistantTurn(
     orderHint: config.enableOrders && wantsOrderGrounding(userText),
     memory: deps?.memory,
   })}`
-  const tools = buildAnthropicTools()
   const messages = toAnthropicHistory(history)
 
   // Grounding gate (port of commerce-agents GROUNDING_RULES, pilot subset):
   // a policy question forces one policy read on the first iteration.
   const forcedTool =
     config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null
+  // Tool-filter layer: shrink the schema the model sees to the buckets the
+  // message needs (fail-open full set). Gray follow-ups inherit the
+  // previous turn's buckets without a JEV call. The forced gate tool must
+  // be present. Model tier resolves in parallel so routing adds no serial
+  // latency on top of the tool-filter Jev call.
+  const prevTexts = prevUserTexts(history)
+  const [filter, tierVerdict] = await Promise.all([
+    resolveShoppingTools(userText, { prevTexts }),
+    resolveModelTier(userText),
+  ])
+  const turnModel = selectRoutedModel(config.model, tierVerdict.tier)
+  const modelTier = { tier: tierVerdict.tier, source: tierVerdict.source }
+  let tools = filter.tools
+  if (forcedTool && !tools.some((t) => t.name === forcedTool)) {
+    const def = buildAnthropicTools().find((t) => t.name === forcedTool)
+    tools = def ? [...tools, def] : buildAnthropicTools()
+  }
+  const toolFilter = shoppingFilterSummary({ ...filter, tools })
 
   const replyParts: string[] = []
 
@@ -187,26 +236,39 @@ export async function runAssistantTurn(
           : { type: 'auto' }
 
     let response: MinimalMessage
-    try {
-      response = await client.messages.create({
-        model: config.model,
-        max_tokens: config.maxTokens,
-        system,
-        tools,
-        tool_choice,
-        messages,
-      })
-    } catch {
-      return {
-        reply: 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.',
-        cards: ctx.cards,
-        suggestions: [],
-        comparison: ctx.comparison,
-        plan: ctx.plan,
-        tracking: ctx.tracking,
-        fulfillment: ctx.fulfillment,
-        cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
-        budget_vnd: deps?.memory?.budget_vnd ?? null,
+    // Model fallback: round 0 failure on quota/overload retries once per
+    // ASSISTANT_MODEL_FALLBACK model instead of failing the whole turn.
+    const models = modelFallbackChain(turnModel)
+    let modelIndex = 0
+    for (;;) {
+      try {
+        response = await client.messages.create({
+          model: models[modelIndex] ?? turnModel,
+          max_tokens: config.maxTokens,
+          system,
+          tools,
+          tool_choice,
+          messages,
+        })
+        break
+      } catch (error) {
+        const next = round === 0 && isModelOverloadError(error) ? modelIndex + 1 : -1
+        if (next <= 0 || next >= models.length) {
+          return {
+            reply: 'Xin lỗi, trợ lý đang bận. Bạn thử lại sau ít phút nhé.',
+            cards: ctx.cards,
+            suggestions: [],
+            comparison: ctx.comparison,
+            plan: ctx.plan,
+            tracking: ctx.tracking,
+            fulfillment: ctx.fulfillment,
+            cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
+            budget_vnd: deps?.memory?.budget_vnd ?? null,
+            toolFilter,
+            modelTier,
+          }
+        }
+        modelIndex = next
       }
     }
 
@@ -245,7 +307,7 @@ export async function runAssistantTurn(
 
   const reply = replyParts.join('\n\n').trim()
   return {
-    reply: reply || 'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
+    reply: reply || fallbackReply(ctx),
     cards: ctx.cards.slice(0, 6),
     suggestions: ctx.suggestions,
     comparison: ctx.comparison,
@@ -254,6 +316,8 @@ export async function runAssistantTurn(
     fulfillment: ctx.fulfillment,
     cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
     budget_vnd: deps?.memory?.budget_vnd ?? null,
+    toolFilter,
+    modelTier,
   }
 }
 
@@ -278,11 +342,15 @@ export async function* streamAssistantTurn(
 ): AsyncGenerator<ShoppingStreamEvent> {
   const client = deps?.client ?? createRealClient()
   if (!client) {
-    yield { type: 'result', result: { reply: DISABLED_REPLY, cards: [], suggestions: [], disabled: true } }
+    yield { type: 'result', result: { reply: DISABLED_REPLY, cards: [], suggestions: [], disabled: true, toolFilter: fullShoppingSummary() } }
     return
   }
 
   const config = assistantConfig
+  if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
+    yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, cards: [], suggestions: [], toolFilter: fullShoppingSummary() } }
+    return
+  }
   const ctx: DispatchContext = createDispatchContext({
     cartTokenHash: deps?.cartTokenHash ?? null,
     cartRpc: deps?.cartRpc,
@@ -294,20 +362,33 @@ export async function* streamAssistantTurn(
     memory: deps?.memory,
   })}`
 
+  const forcedToolName =
+    config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null
+  const [streamFilter, streamTier] = await Promise.all([
+    resolveShoppingTools(userText, { prevTexts: prevUserTexts(history) }),
+    resolveModelTier(userText),
+  ])
+  const streamModel = selectRoutedModel(config.model, streamTier.tier)
+  const streamTierInfo = { tier: streamTier.tier, source: streamTier.source }
+  let streamTools = streamFilter.tools
+  if (forcedToolName && !streamTools.some((t) => t.name === forcedToolName)) {
+    const def = buildAnthropicTools().find((t) => t.name === forcedToolName)
+    streamTools = def ? [...streamTools, def] : buildAnthropicTools()
+  }
+  const streamFilterSummary = shoppingFilterSummary({ ...streamFilter, tools: streamTools })
+
   yield* streamTurn<TurnResult>(client, {
-    model: config.model,
+    model: streamModel,
     maxTokens: config.maxTokens,
     maxIterations: config.maxToolIterations,
     system,
-    tools: buildAnthropicTools(),
+    tools: streamTools,
     messages: toAnthropicHistory(history),
-    forcedTool:
-      config.enablePolicies && wantsPolicyGrounding(userText) ? TOOL_SEARCH_POLICIES : null,
+    forcedTool: forcedToolName,
     dispatch: (name, input) => dispatchTool(ctx, name, input),
     onActivity: deps?.activity,
     shouldEnd: () => ctx.endTurn,
-    fallbackReply:
-      'Mình chưa hiểu ý bạn. Bạn mô tả nhu cầu (máy gì, ngân sách bao nhiêu) để mình gợi ý nhé.',
+    fallbackReply: () => fallbackReply(ctx),
     finish: async (reply) => ({
       reply,
       cards: ctx.cards.slice(0, 6),
@@ -318,6 +399,8 @@ export async function* streamAssistantTurn(
       fulfillment: ctx.fulfillment,
       cart: await cartSnapshot(ctx.cartTokenHash, ctx.cartRpc),
       budget_vnd: deps?.memory?.budget_vnd ?? null,
+      toolFilter: streamFilterSummary,
+      modelTier: streamTierInfo,
     }),
   })
 }

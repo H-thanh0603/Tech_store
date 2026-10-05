@@ -213,7 +213,7 @@ export async function updateMemoryWithModel(
 ): Promise<MemoryFacts> {
   try {
     const base = await loadMemoryFacts(sessionKey, db)
-    const clean = userTexts.filter((t) => !containsPhoneLike(t)).slice(-6).join('\n').slice(0, 4000)
+    const clean = userTexts.filter((t) => !containsSensitivePii(t)).slice(-6).join('\n').slice(0, 4000)
     if (!clean.trim()) return base
     const response = await client.messages.create({
       model,

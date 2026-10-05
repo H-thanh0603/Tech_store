@@ -28,8 +28,8 @@ interface StreamDriver<R> {
   onActivity?: (call: AgentCall) => void
   /** Return true when the turn should stop after this round (e.g. suggestions). */
   shouldEnd: () => boolean
-  /** Fallback reply when the model produced no text. */
-  fallbackReply: string
+  /** Fallback reply when the model produced no text (lazy: sees final tool state). */
+  fallbackReply: string | (() => string)
   finish: (reply: string) => R | Promise<R>
 }
 
@@ -119,13 +119,20 @@ export async function* streamTurn<R>(
       // Real-time Agent Activity UI: mỗi tool call được đẩy ra SSE để UI vẽ
       // checklist từng bước agent đang làm (nhãn chuẩn hóa, đã redact).
       yield { type: 'activity', call }
-      const text = await driver.dispatch(use.name, use.input)
+      // A throwing dispatch must not kill the whole turn (one bad tool ≠
+      // 500): fence it as an error result so the model can recover.
+      let text: string
+      try {
+        text = await driver.dispatch(use.name, use.input)
+      } catch (error) {
+        text = `Tool tạm thời không khả dụng (${error instanceof Error ? error.message : 'unknown'}).`
+      }
       results.push({ type: 'tool_result', tool_use_id: use.id, content: text })
     }
     messages.push({ role: 'user', content: results })
     if (driver.shouldEnd()) break
   }
 
-  const reply = replyParts.join('').trim() || driver.fallbackReply
+  const reply = replyParts.join('').trim() || (typeof driver.fallbackReply === 'function' ? driver.fallbackReply() : driver.fallbackReply)
   yield { type: 'result', result: await driver.finish(reply) }
 }

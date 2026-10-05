@@ -15,6 +15,17 @@ interface OutboxRow {
 
 const MAX_RETRIES = 5
 
+// Q88 mini circuit-breaker (process-local): after N consecutive Resend
+// failures the drain stops early for this invocation instead of hammering a
+// dead provider on every row. Resets on first success. Cron retries next run.
+const BREAKER_TRIP_AFTER = 5
+let consecutiveFailures = 0
+
+/** Test helper: reset the breaker state. */
+export function _resetNotifyBreakerForTests(): void {
+  consecutiveFailures = 0
+}
+
 function formatVnd(value: unknown): string {
   const n = Number(value)
   return Number.isFinite(n) ? n.toLocaleString('vi-VN') + '₫' : ''
@@ -113,6 +124,10 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
   if (claimError) throw claimError
 
   for (const row of (rows ?? []) as unknown as OutboxRow[]) {
+    // Q88: stop hammering a dead provider — the rest stay pending/processing
+    // for the next cron run (Q86: `failed` rows are the dead-letter set,
+    // retained 30d by purge_expired_logs for manual inspection).
+    if (consecutiveFailures >= BREAKER_TRIP_AFTER) break
     const email = emailFor(row.type, row.payload)
     const to = String(row.payload.email ?? '')
     if (!email || !to) {
@@ -146,6 +161,7 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
       if (!response.ok) {
         throw new Error(`Resend ${response.status}: ${await response.text()}`)
       }
+      consecutiveFailures = 0
       const { error: updateError } = await admin
         .from('notification_outbox')
         .update({
@@ -160,6 +176,7 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
       if (updateError) throw updateError
       result.sent += 1
     } catch (error) {
+      consecutiveFailures += 1
       const retries = row.retry_count + 1
       const exhausted = retries >= MAX_RETRIES
       // Exponential backoff: 1m, 2m, 4m, 8m, 16m.

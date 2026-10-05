@@ -8,6 +8,7 @@ import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/ab
 import { cartSetCookie, ensureCartToken, parseCartToken, getChatCart } from '@/lib/assistant/cart'
 import { assistantConfig } from '@/lib/assistant/config'
 import { detectJailbreak, JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
+import { JEV_SPAM_REFUSAL, jevThreshold, resolvePreTurn, resolveShoppingScope, resolveSpamRisk, resolveUrgency, shouldUseModelMemory } from '@/lib/assistant/jev'
 import { loadMemoryFacts, sessionKeyHash, updateMemory, updateMemoryWithModel } from '@/lib/assistant/memory'
 import { createProviderClient } from '@/lib/assistant/providers'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
@@ -68,8 +69,9 @@ export async function POST(request: Request) {
         reply: 'Bạn nhắn hơi nhanh — nghỉ ít phút rồi hỏi tiếp nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 15 * 60,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(15 * 60) } },
     )
   }
   if (await isChatDailyLimited('assistant_chat', ip)) {
@@ -80,8 +82,9 @@ export async function POST(request: Request) {
         reply: 'Bạn đã dùng hết lượt hỏi hôm nay — quay lại ngày mai nhé.',
         cards: [],
         suggestions: [],
+        retry_after_seconds: 24 * 3600,
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': String(24 * 3600) } },
     )
   }
 
@@ -124,6 +127,56 @@ export async function POST(request: Request) {
       disabled: false,
     })
   }
+  // Pre-turn batch (evaluate path): spam + scope trong 1 request thay vì
+  // 2 call tuần tự. Chat path / batch fail → rớt về call lẻ (fail-open).
+  const preTurn = await resolvePreTurn({
+    text: lastText,
+    needSpam: true,
+    // Scope luôn trong batch — cùng 1 request, Jev bắt cả false-negative
+    // keyword (keyword trả in-scope nhưng thật ra off-topic).
+    needScope: true,
+  }).catch(() => null)
+
+  // Jev spam (fail-open): spam rõ → từ chối ngay, không đốt LLM.
+  // Không ghi security_events để tránh spam DB — chỉ chặn tốn 1 call rẻ.
+  try {
+    const spam = preTurn?.spam
+      ? { spam: preTurn.spam.choice === 'spam' && preTurn.spam.confidence >= jevThreshold() }
+      : await resolveSpamRisk(lastText)
+    if (spam.spam) {
+      return NextResponse.json({
+        code: 'SPAM',
+        reply: JEV_SPAM_REFUSAL,
+        cards: [],
+        suggestions: SHOPPING_SCOPE_SUGGESTIONS,
+        disabled: false,
+      })
+    }
+  } catch {
+    // Fail-open.
+  }
+  // Jev semantic triage (fail-open): keyword gate above stays the fast
+  // path; gray/off-topic messages get a second opinion from Jev before
+  // burning the main-model budget. Only a confident Jev off-topic blocks.
+  try {
+    const scoped = preTurn?.scope
+      ? {
+          verdict: preTurn.scope.choice as 'in-scope' | 'gray' | 'off-topic',
+          source: preTurn.scope.confidence >= jevThreshold() ? ('keyword+jev' as const) : ('keyword' as const),
+        }
+      : await resolveShoppingScope(lastText)
+    if (scoped.verdict === 'off-topic' && scoped.source === 'keyword+jev') {
+      return NextResponse.json({
+        code: 'OFF_SCOPE',
+        reply: SHOPPING_SCOPE_REFUSAL,
+        cards: [],
+        suggestions: SHOPPING_SCOPE_SUGGESTIONS,
+        disabled: false,
+      })
+    }
+  } catch {
+    // Fail-open: continue to the normal turn.
+  }
 
   // The widget shares the storefront guest cart: reuse the browser's cart
   // cookie when present, otherwise mint one and set it on the response so
@@ -152,14 +205,25 @@ export async function POST(request: Request) {
 
   const persistMemory = () => {
     if (!sessionKey) return
-    if (assistantConfig.enableMemoryExtraction) {
-      const client = createProviderClient()
-      if (client) {
-        void updateMemoryWithModel(sessionKey, userTexts, client, assistantConfig.model).catch(() => {})
-        return
+    void (async () => {
+      try {
+        if (assistantConfig.enableMemoryExtraction) {
+          // Memory gate: chỉ tốn +1 model call khi JEV thấy có sở thích
+          // lâu dài đáng lưu; còn lại rớt về rule-based miễn phí.
+          const gate = await shouldUseModelMemory(userTexts)
+          if (gate.useModel) {
+            const client = createProviderClient()
+            if (client) {
+              await updateMemoryWithModel(sessionKey, userTexts, client, assistantConfig.model).catch(() => {})
+              return
+            }
+          }
+        }
+        await updateMemory(sessionKey, userTexts).catch(() => {})
+      } catch {
+        // Fail-closed: chat vẫn chạy.
       }
-    }
-    void updateMemory(sessionKey, userTexts).catch(() => {})
+    })()
   }
 
   if (parsed.data.stream) {
@@ -169,7 +233,11 @@ export async function POST(request: Request) {
     return streamResponse
   }
 
-  const result = await runAssistantTurn(history, { cartTokenHash, memory, activity })
+  // Urgency Score chạy song song với turn chính nên không cộng dồn latency.
+  const [result, urgency] = await Promise.all([
+    runAssistantTurn(history, { cartTokenHash, memory, activity }),
+    resolveUrgency(lastText).catch(() => null),
+  ])
   persistMemory()
   // Header chips prefer the post-turn snapshot from the agent (cart may have
   // changed mid-turn); fall back to a fresh fetch when the turn errored early.
@@ -185,6 +253,9 @@ export async function POST(request: Request) {
     cart: cart ?? null,
     budget_vnd: result.budget_vnd ?? memory?.budget_vnd ?? null,
     disabled: result.disabled ?? false,
+    tool_filter: result.toolFilter ?? null,
+    model_tier: result.modelTier ?? null,
+    urgency: urgency ?? null,
   })
   if (isNewCart) response.headers.set('set-cookie', cartSetCookie(cartToken))
   return response

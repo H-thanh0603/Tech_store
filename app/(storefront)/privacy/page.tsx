@@ -115,9 +115,10 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-(length:--text-lg) font-semibold text-fg">8. Yêu cầu xóa dữ liệu</h2>
             <p className="mt-2">
-              Bạn có thể yêu cầu shop xóa dữ liệu cá nhân bất cứ lúc nào bằng cách liên hệ hỗ trợ.
-              Shop sẽ xóa trong phạm vi pháp luật cho phép — một số dữ liệu giao dịch có thể phải
-              giữ lại theo quy định kế toán/thuế.
+              Bạn có thể tự xóa dữ liệu cá nhân bất cứ lúc nào tại trang Tài khoản (mục “Dữ
+              liệu của bạn”) mà không cần liên hệ hỗ trợ. Hồ sơ và yêu cầu nhận tin hết hàng
+              bị xóa hẳn; đơn hàng và đánh giá được giữ ẩn danh cho mục đích bảo hành/thuế.
+              Tài khoản email (đăng nhập) bị đăng xuất ngay sau khi xóa.
             </p>
           </section>
 

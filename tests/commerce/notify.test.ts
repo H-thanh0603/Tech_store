@@ -31,7 +31,7 @@ vi.mock('@/lib/admin/supabase', () => ({
 }))
 vi.mock('@/lib/site', () => ({ getSiteUrl: () => 'https://techstore.test' }))
 
-import { processPendingNotifications } from '@/lib/commerce/notify'
+import { processPendingNotifications, _resetNotifyBreakerForTests } from '@/lib/commerce/notify'
 
 describe('processPendingNotifications', () => {
   beforeEach(() => {
@@ -77,5 +77,23 @@ describe('processPendingNotifications', () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as { html: string }
     expect(body.html).not.toContain('<img')
     expect(body.html).toContain('&lt;img')
+  })
+
+  it('trips the circuit breaker after consecutive provider failures (Q88)', async () => {
+    _resetNotifyBreakerForTests()
+    vi.mocked(fetch).mockResolvedValue({ ok: false, text: async () => 'down' } as Response)
+
+    const rows = Array.from({ length: 7 }, (_, i) => ({
+      ...row,
+      id: `d1000000-0000-0000-0000-00000000000${i}`,
+    }))
+    rpc.mockResolvedValueOnce({ data: rows, error: null })
+
+    const result = await processPendingNotifications(20)
+
+    // 5 rows attempted (breaker trips), the rest stay pending for next run.
+    expect(result).toEqual({ sent: 0, failed: 5, skipped: 0 })
+    expect(fetch).toHaveBeenCalledTimes(5)
+    _resetNotifyBreakerForTests()
   })
 })

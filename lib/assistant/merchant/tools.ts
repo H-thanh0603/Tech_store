@@ -303,11 +303,11 @@ export async function dispatchMerchantTool(
           typeof input.quantity === 'number' && Number.isInteger(input.quantity) && input.quantity >= 0
             ? input.quantity
             : null
-        if (name === TOOL_STAGE_PRICE && (priceMode === null || priceValue === null)) {
+        if (name === TOOL_STAGE_PRICE && (priceMode === null || (priceMode !== 'set_sale_off' && priceValue === null))) {
           return {
             text: fencePayload({
               result: 'invalid_args',
-              hint: 'mode phải một trong percent_up/percent_down/set_sale_off và value phải là số.',
+              hint: 'mode phải một trong percent_up/percent_down/set_sale_off; value là số bắt buộc trừ khi mode=set_sale_off.',
             }),
           }
         }

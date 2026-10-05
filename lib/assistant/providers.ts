@@ -46,7 +46,6 @@ export function defaultMaxTokensFor(provider: AssistantProvider): number {
     const n = Number(process.env.ASSISTANT_MAX_TOKENS)
     if (Number.isInteger(n) && n >= 256 && n <= 32000) return n
   }
-  if (provider === 'tokenrouter') return 4096
   return 1024
 }
 
@@ -258,6 +257,11 @@ export function toDeepSeekRequest(params: {
     messages: dsMessages,
     tools,
     tool_choice,
+    // Free-tier reasoning models (e.g. nex-n2.5-pro via 9router) burn ~30s
+    // on hidden chain-of-thought before the first chunk, with zero benefit
+    // for tool-calling turns. ASSISTANT_REASONING=0 skips it (1-2s first
+    // chunk, tool calls verified intact).
+    ...(process.env.ASSISTANT_REASONING === '0' ? { reasoning: { enabled: false } } : {}),
   }
 }
 
@@ -413,12 +417,30 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Honor provider Retry-After (seconds or HTTP date); else exponential backoff. */
+function retryDelayMs(res: Response, attempt: number): number {
+  const raw = res.headers?.get?.('retry-after')
+  if (raw) {
+    const secs = Number(raw)
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 30_000)
+    const date = Date.parse(raw)
+    if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), 30_000)
+  }
+  return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
+}
+
 export async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
   let lastError: unknown = null
+  // A caller-supplied AbortSignal fires once: reusing it across attempts
+  // would abort retries instantly. Strip it; each attempt gets its own.
+  const { signal: _callerSignal, ...baseInit } = init
+  void _callerSignal
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const res = await fetch(url, init)
+      const res = await fetch(url, { ...baseInit, signal: AbortSignal.timeout(60_000) })
       if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === attempts - 1) return res
+      await sleep(retryDelayMs(res, attempt))
+      continue
     } catch (error) {
       lastError = error
       if (attempt === attempts - 1) throw error
@@ -572,6 +594,55 @@ async function* streamOpenAICompatible(
   yield { type: 'message', content, stop_reason: finish === 'tool_calls' || hasToolUse ? 'tool_use' : 'end_turn' }
 }
 
+export function parseOpenAICompatibleBody(text: string): Parameters<typeof fromDeepSeekResponse>[0] {
+  return parseJsonPrefix(text) as Parameters<typeof fromDeepSeekResponse>[0]
+}
+
+/**
+ * Parse the first complete top-level JSON value out of a body that may have
+ * SSE `data: [DONE]` trailers appended (9router and similar gateways glue
+ * them straight onto `}` with no newline).
+ */
+export function parseJsonPrefix(text: string): unknown {
+  const sseAt = text.search(/\s*data:/)
+  const head = (sseAt === -1 ? text : text.slice(0, sseAt)).trim()
+  try {
+    return JSON.parse(head)
+  } catch {
+    const end = scanJsonEnd(head)
+    if (end !== -1) return JSON.parse(head.slice(0, end))
+    throw new Error('bad JSON')
+  }
+}
+
+/** Index just past the first complete top-level JSON value, or -1. */
+function scanJsonEnd(s: string): number {
+  let depth = 0
+  let inStr = false
+  let esc = false
+  let started = false
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{' || ch === '[') {
+      depth += 1
+      started = true
+    } else if (ch === '}' || ch === ']') {
+      depth -= 1
+      if (started && depth === 0) return i + 1
+    }
+  }
+  return -1
+}
+
+export type OpenAICompatibleMessage = ReturnType<typeof fromDeepSeekResponse>
+
 function createOpenAICompatibleClient(
   url: string,
   apiKey: string,
@@ -589,7 +660,13 @@ function createOpenAICompatibleClient(
           signal: AbortSignal.timeout(60_000),
         })
         if (!res.ok) throw new Error(`OpenAI-compatible HTTP ${res.status}`)
-        const parsed = fromDeepSeekResponse((await res.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+        const text = await res.text()
+        let parsed: OpenAICompatibleMessage
+        try {
+          parsed = fromDeepSeekResponse(parseOpenAICompatibleBody(text))
+        } catch {
+          throw new Error(`OpenAI-compatible bad JSON (first 120 chars): ${text.slice(0, 120)}`)
+        }
         // Free-tier gateways occasionally return HTTP 200 with zero content
         // (no text, no tool calls). That response is useless to the turn loop,
         // so retry once before handing it back.
@@ -602,7 +679,12 @@ function createOpenAICompatibleClient(
             signal: AbortSignal.timeout(60_000),
           })
           if (!retry.ok) throw new Error(`OpenAI-compatible HTTP ${retry.status}`)
-          return fromDeepSeekResponse((await retry.json()) as Parameters<typeof fromDeepSeekResponse>[0])
+          const retryText = await retry.text()
+          try {
+            return fromDeepSeekResponse(parseOpenAICompatibleBody(retryText))
+          } catch {
+            throw new Error(`OpenAI-compatible bad JSON (first 120 chars): ${retryText.slice(0, 120)}`)
+          }
         }
         return parsed
       },
@@ -663,4 +745,23 @@ export function createProviderClient(): MessagesClient | null {
   }
   const apiKey = process.env.ANTHROPIC_API_KEY
   return apiKey ? createAnthropicClient(apiKey) : null
+}
+
+/**
+ * Fallback model chain: `ASSISTANT_MODEL_FALLBACK="model-a,model-b"`.
+ * The turn loop tries the primary model first; on quota/overload errors
+ * it retries round 0 once per fallback model instead of failing the turn.
+ */
+export function modelFallbackChain(primary: string): string[] {
+  const extra = (process.env.ASSISTANT_MODEL_FALLBACK ?? '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter((m) => m && m !== primary)
+  return [primary, ...extra].slice(0, 3)
+}
+
+/** True when the error looks like quota/overload (worth a model retry). */
+export function isModelOverloadError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return /503|502|429|overloaded|quota|rate limit|temporarily/i.test(msg)
 }

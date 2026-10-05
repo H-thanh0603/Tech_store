@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState } from 'react'
 
 import { adminLogin } from '@/lib/admin/auth-actions'
@@ -39,6 +40,11 @@ export function AdminLoginForm() {
       <Button type="submit" disabled={pending}>
         {pending ? 'Đang đăng nhập…' : 'Đăng nhập'}
       </Button>
+      <p className="text-right text-(length:--text-sm)">
+        <Link href="/account/forgot" className="font-semibold text-accent">
+          Quên mật khẩu?
+        </Link>
+      </p>
     </form>
   )
 }

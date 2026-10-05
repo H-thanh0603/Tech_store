@@ -112,7 +112,7 @@ export function AccountLoginClient() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               className="field-input"
               autoComplete="current-password"
             />
@@ -124,6 +124,11 @@ export function AccountLoginClient() {
           >
             {passPending ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
+          <p className="text-right text-(length:--text-sm)">
+            <Link href="/account/forgot" className="font-semibold text-brand">
+              Quên mật khẩu?
+            </Link>
+          </p>
         </form>
       ) : null}
 
@@ -141,7 +146,7 @@ export function AccountLoginClient() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               className="field-input"
               autoComplete="new-password"
             />

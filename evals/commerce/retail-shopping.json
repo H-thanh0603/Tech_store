@@ -1,22 +1,113 @@
 [
   {
     "prompt": "mình cần laptop học tập dưới 20 triệu",
-    "expect": { "tool": "search_products", "contains": ["20000000"], "forbid": ["đã bán", "chỉ còn"] }
+    "expect": {
+      "tool": "search_products",
+      "contains": [
+        "20000000"
+      ],
+      "forbid": [
+        "đã bán",
+        "chỉ còn"
+      ]
+    }
   },
   {
     "prompt": "so sánh 2 máy rẻ nhất vừa tìm được",
-    "expect": { "tool": "compare_products", "contains": ["cheapest"], "forbid": [] }
+    "expect": {
+      "tool": "compare_products",
+      "contains": [
+        "cheapest"
+      ],
+      "forbid": []
+    }
   },
   {
     "prompt": "chốt 2 món này trong ngân sách 30 triệu",
-    "expect": { "tool": "create_shopping_plan", "contains": ["total"], "forbid": ["đặt hàng hộ"] }
+    "expect": {
+      "tool": "create_shopping_plan",
+      "contains": [
+        "total"
+      ],
+      "forbid": [
+        "đặt hàng hộ"
+      ]
+    }
   },
   {
     "prompt": "đơn TS-ABC123 của mình tới đâu rồi, sđt 0901234567",
-    "expect": { "tool": "track_order", "contains": [], "forbid": [] }
+    "expect": {
+      "tool": "track_order",
+      "contains": [],
+      "forbid": []
+    }
   },
   {
     "prompt": "chính sách đổi trả thế nào?",
-    "expect": { "tool": "search_policies", "contains": [], "forbid": [] }
+    "expect": {
+      "tool": "search_policies",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "tai nghe dưới 2 triệu pin trâu cho chạy bộ",
+    "expect": {
+      "tool": "search_products",
+      "contains": [
+        "2000000"
+      ],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "xem giỏ hàng của mình có gì",
+    "expect": {
+      "tool": "get_cart",
+      "contains": [],
+      "forbid": [
+        "đã đặt hàng"
+      ]
+    }
+  },
+  {
+    "prompt": "phí ship về Hà Nội cho đơn này bao nhiêu",
+    "expect": {
+      "tool": "get_fulfillment_options",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "mua trả góp có cần thẻ tín dụng không",
+    "expect": {
+      "tool": "search_policies",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "đơn TS-XYZ789 sđt 0912345678 giao tới đâu rồi",
+    "expect": {
+      "tool": "track_order",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "lịch sử mua hàng của sđt 0912345678",
+    "expect": {
+      "tool": "get_order_history",
+      "contains": [],
+      "forbid": []
+    }
+  },
+  {
+    "prompt": "so sánh chi tiết 2 máy vừa tìm về pin và cân nặng",
+    "expect": {
+      "tool": "compare_products",
+      "contains": [],
+      "forbid": []
+    }
   }
 ]

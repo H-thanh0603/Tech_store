@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/lib/assistant/agent'
 import { ABUSE_BAN_MESSAGE, isBanned, recordViolation } from '@/lib/assistant/abuse'
 import { runMerchantTurn, streamMerchantTurn } from '@/lib/assistant/merchant/agent'
 import { detectJailbreak, MERCHANT_JAILBREAK_REFUSAL, scanTranscript } from '@/lib/assistant/jailbreak'
+import { MERCHANT_QUESTION, MERCHANT_SPAM_REFUSAL, jevThreshold, resolveMerchantScope, resolvePreTurn, resolveSpamRisk } from '@/lib/assistant/jev'
 import { clientIp, isChatDailyLimited, isChatRateLimited } from '@/lib/assistant/rate-limit'
 import {
   checkMerchantScope,
@@ -120,6 +121,49 @@ export async function POST(request: Request) {
       suggestions: MERCHANT_SCOPE_SUGGESTIONS,
     })
   }
+  // Pre-turn batch (evaluate path): spam + scope trong 1 request.
+  const preTurn = await resolvePreTurn({
+    text: lastText,
+    needSpam: true,
+    needScope: true,
+    scopeQuestion: MERCHANT_QUESTION,
+  }).catch(() => null)
+
+  // Jev spam (fail-open): chặn spam trước khi đốt model vận hành.
+  try {
+    const spam = preTurn?.spam
+      ? { spam: preTurn.spam.choice === 'spam' && preTurn.spam.confidence >= jevThreshold() }
+      : await resolveSpamRisk(lastText)
+    if (spam.spam) {
+      return NextResponse.json({
+        code: 'SPAM',
+        reply: MERCHANT_SPAM_REFUSAL,
+        staged: [],
+        suggestions: MERCHANT_SCOPE_SUGGESTIONS,
+      })
+    }
+  } catch {
+    // Fail-open.
+  }
+  // Jev semantic triage (fail-open): same pattern as the shopping endpoint.
+  try {
+    const scoped = preTurn?.scope
+      ? {
+          verdict: preTurn.scope.choice as 'in-scope' | 'gray' | 'off-topic',
+          source: preTurn.scope.confidence >= jevThreshold() ? ('keyword+jev' as const) : ('keyword' as const),
+        }
+      : await resolveMerchantScope(lastText)
+    if (scoped.verdict === 'off-topic' && scoped.source === 'keyword+jev') {
+      return NextResponse.json({
+        code: 'OFF_SCOPE',
+        reply: MERCHANT_SCOPE_REFUSAL,
+        staged: [],
+        suggestions: MERCHANT_SCOPE_SUGGESTIONS,
+      })
+    }
+  } catch {
+    // Fail-open.
+  }
 
   if (parsed.data.stream) {
     return streamToSSE(
@@ -143,5 +187,7 @@ export async function POST(request: Request) {
     staged: result.staged,
     suggestions: result.suggestions,
     disabled: result.disabled ?? false,
+    tool_filter: result.toolFilter ?? null,
+    model_tier: result.modelTier ?? null,
   })
 }

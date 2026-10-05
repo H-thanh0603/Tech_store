@@ -36,6 +36,14 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - run: npm ci
+      # Q55 CVE gate: production deps must have 0 high/critical (this is the
+      # shipped surface). Dev-only highs (e.g. @lhci/cli chain) are reported
+      # but non-blocking — CI runners are ephemeral and untrusted-input-free.
+      - name: Audit dependencies — production (CVE gate)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit dependencies — dev (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run type-check
       - run: npm test -- --run

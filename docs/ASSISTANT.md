@@ -7,31 +7,80 @@ TypeScript-native port of the shopping agent from
 
 ## Scope
 
-| ON | OFF |
-|---|---|
-| `search_products` — catalog search (từ khóa, category, brand, trần giá) | Streaming token-level (SSE text deltas đã có), input ảnh (`enableImageInput`, mặc định OFF) |
-| `get_product_details` — biến thể, thông số, ảnh | Order history theo account (guest chỉ tra cứu theo SĐT của chính mình) |
-| `compare_products` — so sánh 2–4 món cạnh nhau | Xem thêm: skills (`skills/*`), plugin (`plugins/commerce-builder/`), docs (`docs/commerce-agents/`) |
-| `create_shopping_plan` — chốt danh sách + tổng tiền theo ngân sách | |
-| Cart (`get_cart`, `add/update/remove`, `start_checkout`) — chung giỏ guest với website, gates provenance + số lượng 1–10, checkout chỉ trả link /checkout cho host hoàn tất | |
-| `get_fulfillment_options` — phí ship live + cửa hàng pickup | Streaming token-level, input ảnh (`enableImageInput`, mặc định OFF) |
-| `track_order` — mã đơn + SĐT, read-only, không mint token | |
-| `get_order_history` — 5 đơn gần nhất theo SĐT (không chi tiết thanh toán) | |
-| `search_policies` — passages tĩnh từ trang pháp lý | |
-| Memory — sở thích (ngân sách, nhu cầu, thương hiệu) theo session; rule-based mặc định, model-driven (`update_memory` sau lượt) khi `ASSISTANT_MEMORY=model`; không lưu SĐT | |
-| `present_suggestions` — chips kết thúc lượt | |
-| Runtimes — Messages API (web), SDK consoles (`scripts/commerce-sdk/`), MCP servers (`scripts/mcp/`) + manifests (`managed-agents/`, deploy qua `npm run agent:deploy`) | |
+| ON                                                                                                                                                                          | OFF                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `search_products` — catalog search (từ khóa, category, brand, trần giá)                                                                                                     | Streaming token-level (SSE text deltas đã có), input ảnh (`enableImageInput`, mặc định OFF)         |
+| `get_product_details` — biến thể, thông số, ảnh                                                                                                                             | Order history theo account (guest chỉ tra cứu theo SĐT của chính mình)                              |
+| `compare_products` — so sánh 2–4 món cạnh nhau                                                                                                                              | Xem thêm: skills (`skills/*`), plugin (`plugins/commerce-builder/`), docs (`docs/commerce-agents/`) |
+| `create_shopping_plan` — chốt danh sách + tổng tiền theo ngân sách                                                                                                          |                                                                                                     |
+| Cart (`get_cart`, `add/update/remove`, `start_checkout`) — chung giỏ guest với website, gates provenance + số lượng 1–10, checkout chỉ trả link /checkout cho host hoàn tất |                                                                                                     |
+| `get_fulfillment_options` — phí ship live + cửa hàng pickup                                                                                                                 | Streaming token-level, input ảnh (`enableImageInput`, mặc định OFF)                                 |
+| `track_order` — mã đơn + SĐT, read-only, không mint token                                                                                                                   |                                                                                                     |
+| `get_order_history` — 5 đơn gần nhất theo SĐT (không chi tiết thanh toán)                                                                                                   |                                                                                                     |
+| `search_policies` — passages tĩnh từ trang pháp lý                                                                                                                          |                                                                                                     |
+| Memory — sở thích (ngân sách, nhu cầu, thương hiệu) theo session; rule-based mặc định, model-driven (`update_memory` sau lượt) khi `ASSISTANT_MEMORY=model`; không lưu SĐT  |                                                                                                     |
+| `present_suggestions` — chips kết thúc lượt                                                                                                                                 |                                                                                                     |
+| Runtimes — Messages API (web), SDK consoles (`scripts/commerce-sdk/`), MCP servers (`scripts/mcp/`) + manifests (`managed-agents/`, deploy qua `npm run agent:deploy`)      |                                                                                                     |
 
 ## Setup
 
-1. Chọn provider: `ASSISTANT_PROVIDER=anthropic` (mặc định), `deepseek`, `openrouter`, hoặc `tokenrouter`.
-2. Thêm key tương ứng vào `.env.local` (server-only, không bao giờ `NEXT_PUBLIC_*`):
+ 1. Chọn provider: `ASSISTANT_PROVIDER=anthropic` (mặc định), `deepseek`, `openrouter`, hoặc `tokenrouter`.
+  - `tokenrouter` là slot gateway OpenAI-compatible chung: trỏ `TOKENROUTER_BASE_URL` về gateway bất kỳ (9router local, LiteLLM, Ollama…).
+  - Tốc độ: model reasoning free (nex-n2.5-pro…) đốt ~30s chain-of-thought trước chunk đầu — đo thật first-chunk 30s → 1.6s khi tắt. `ASSISTANT_REASONING=0` tắt reasoning ẩn (tool-call giữ nguyên); `ASSISTANT_MAX_TOKENS` giữ 1024, tăng trần không làm nhanh hơn.
+2. Chọn provider rồi copy template credentials riêng sang `.env.assistant` (file này
+   được git-ignore, không bao giờ commit key thật):
+   `cp .env.assistant.example .env.assistant`, rồi điền key + model. `.env.local`
+   chỉ giữ hạ tầng (Supabase, VNPay, Resend…); `.env.assistant` quyết
+   định mọi thứ LLM + Jev.
    - Anthropic: `ANTHROPIC_API_KEY=...` (https://console.anthropic.com → API Keys)
    - DeepSeek: `DEEPSEEK_API_KEY=...` (https://platform.deepseek.com → API Keys)
    - OpenRouter: `OPENROUTER_API_KEY=...` (https://openrouter.ai → Keys) + `ASSISTANT_MODEL=...` (ví dụ `anthropic/claude-haiku-4-5`; model reasoning/R1 bị chặn vì tool-calling không ổn định)
    - TokenRouter: `TOKENROUTER_API_KEY=...` (https://www.tokenrouter.io → Keys) + `ASSISTANT_MODEL=...` (ví dụ `z-ai/glm-5.3-free`; GLM đôi khi trả tool-call dạng pseudo-XML trong text — translator tự bóc tách, không leak markup ra UI)
-3. Restart dev server. Chưa có key → widget vẫn hiện nhưng trả lời "chưa được cấu hình" (xem `DISABLED_REPLY`).
-4. Optional: `ASSISTANT_MODEL=` (mặc định `claude-haiku-4-5` / `deepseek-chat` / `anthropic/claude-haiku-4-5` trên OpenRouter / `z-ai/glm-5.3-free` trên TokenRouter), `ASSISTANT_MAX_TOKENS=` (mặc định 1024, 4096 trên TokenRouter; 256–32000).
+    - Jev decision layer (typed scope triage + product re-rank, **fail-open**): `lib/assistant/jev.ts`.
+      - Key: `JEV_API_KEY` (Vercel AI Gateway → API Keys), hoặc tái dùng `OPENROUTER_API_KEY` / `TOKENROUTER_API_KEY`.
+      - 2 transport, cùng contract `{choice, confidence}`:
+        - Vercel AI Gateway: `JEV_BASE_URL=https://ai-gateway.vercel.sh/v1` + `JEV_MODEL=typesafe-ai/jev` — model Jev thật qua native Evaluation API (`/v1/evaluate`: choice/score, không scrape JSON).
+        - Chat gateway bất kỳ (`JEV_API=chat` hoặc model không phải `typesafe-ai/`): OpenRouter cloud (`typesafe/jev-latest`) hoặc gateway local (9router + model tool-capable, prompt ép JSON-only).
+      - Tự chọn theo `JEV_MODEL`/`JEV_BASE_URL`; `JEV_API=chat|evaluate` ép tay.
+      - Không key / gateway chết / JSON hỏng → rớt về scope keyword + thứ tự DB, chat không gãy. Tinh chỉnh: `JEV_THRESHOLD` (0.7), `JEV_TIMEOUT_MS` (3500), `JEV_MAX_TOKENS` (512 — chỉ áp dụng chat path), `JEV_ENABLED=0` để tắt.
+      - Verify live: `JEV_LIVE_PROBE=1 JEV_API_KEY=... JEV_BASE_URL=... npx vitest run tests/assistant/jev-live.test.ts`
+    - Tool-filter layer (shopping + merchant, **fail-open**): `lib/assistant/tool-filter.ts`.
+      - Mỗi turn chỉ nạp bucket tool cần thiết (shopping: catalog/cart/order/policy/fulfillment; merchant: metrics/inventory/listing/campaign) thay vì full schema.
+      - Thứ tự: keyword rõ → subset cứng (miễn phí) → follow-up gray kế thừa bucket turn trước (miễn phí) → Jev chọn bucket → full toolset khi thiếu tự tin / lỗi.
+      - Jev chỉ chọn *nhóm tool*, giá/đơn/chính sách vẫn từ tool (grounding giữ nguyên). Rollback: `JEV_TOOL_FILTER=0`.
+      - Đo lường: mỗi `TurnResult` có `toolFilter` (`source`, `buckets`, `sent`, `full`); route trả về field `tool_filter`.
+3. Restart dev server. Trong log khởi động sẽ thấy dòng
+   `- Assistant env: .env.assistant (N keys)` — nghĩa là loader (`next.config.ts`
+   → `lib/env/assistant-env.ts`) đã nạp file và **thắng** `.env.local`. Chưa có key
+   → widget vẫn hiện nhưng trả lời \"chưa được cấu hình\" (xem `DISABLED_REPLY`).
+4. Optional: `ASSISTANT_MODEL=`, `ASSISTANT_MAX_TOKENS=`.
+
+### File credentials riêng (`.env.assistant`) — loader + precedence
+
+Nguồn dữ liệu credential của LLM + Jev nằm trong `.env.assistant` (template
+`.env.assistant.example`, đã nằm trong `.gitignore`). Loader nhẹ
+`lib/env/assistant-env.ts` (`loadAssistantEnv()`) **parse dotenv thủ công**
+(không phụ thuộc `dotenv`, không ép throw) và được gọi ở 3 chỗ:
+
+- `next.config.ts` — trước khi build config, nên cả dev/server runtime thừa nhận
+  process.env (và Turbopack child `next-server` thừa nhận env từ parent).
+- `lib/assistant/config.ts` — bất kỳ server entry point nào khác (scripts tương
+  lai).
+- `tests/setup.ts` — để vitest (không tự động load dotenv nào) thấy file.
+
+**Thứ tự ưu tiên mặc định: file thắng.** Một key trong `.env.assistant` thay thế
+giá trị từ `.env` / `.env.local` / shell — sửa một file là đủ. Để chuyển sang
+nuyền "process thắng" trên CI/Vercel (nơi file thường vắng): dùng biến
+`ASSISTANT_ENV_PRECEDENCE=process`. Chuyển provider: comment block hiện tại trong
+`.env.assistant`, mở block provider mới. Trống `JEV_API_KEY` → Jev tự rút
+`OPENROUTER_API_KEY` rồi `TOKENROUTER_API_KEY`.
+
+**Fail-open:** thiếu file / đọc lỗi / giá trị rỗng → loader bỏ qua, app dùng mặc
+định và widget vẫn trả lời \"chưa được cấu hình\" thay vì crash.
+
+**Test:** `npx vitest run tests/lib/assistant-env.test.ts` (loader + parser);
+`JEV_LIVE_PROBE=1 npx vitest run tests/assistant/jev-live.test.ts` gọi thật gateway
+được cấu hình (2 test xanh khi gateway chạy).
 
 DeepSeek, OpenRouter và TokenRouter chạy qua endpoint OpenAI-compatible (`/chat/completions`), được dịch
 hai chiều trong `lib/assistant/providers.ts` nên vòng lặp turn không đổi —
@@ -68,15 +117,15 @@ digest). Staff-only, MFA-verified, trong `/admin/assistant` (module
 
 ## Scope
 
-| ON | OFF |
-|---|---|
-| `get_business_snapshot` — doanh thu/đơn 7 ngày, chờ xử lý, sắp hết, nháp | SQL tự do — chỉ template allowlist (`snapshot`, `low_stock`, `open_orders`, `revenue_by_payment`, `category_mix`) |
-| `get_inventory_alerts`, `get_order_issues` | Áp dụng campaign tự động — brief duyệt xong người thực hiện tay |
-| `search_listings`, `get_listing`, `get_pricing_context` | Memory extraction merchant (shopping đã có `update_memory`; merchant stateless theo ca trực) |
-| `stage_*` — publish/draft/archive, giá %/tắt sale, đặt tồn | apply/discard cho model (không có tool) |
-| `draft_campaign_brief` / `list_campaign_briefs` — brief khuyến mãi chờ duyệt ở `/api/v1/assistant/merchant/campaigns` | |
-| `run_analysis` — delegate phân tích theo template | |
-| `get_latest_digest` — bản tin sáng (cron `/api/cron/merchant-digest`, gộp trong health route) | |
+| ON                                                                                                                    | OFF                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `get_business_snapshot` — doanh thu/đơn 7 ngày, chờ xử lý, sắp hết, nháp                                              | SQL tự do — chỉ template allowlist (`snapshot`, `low_stock`, `open_orders`, `revenue_by_payment`, `category_mix`) |
+| `get_inventory_alerts`, `get_order_issues`                                                                            | Áp dụng campaign tự động — brief duyệt xong người thực hiện tay                                                   |
+| `search_listings`, `get_listing`, `get_pricing_context`                                                               | Memory extraction merchant (shopping đã có `update_memory`; merchant stateless theo ca trực)                      |
+| `stage_*` — publish/draft/archive, giá %/tắt sale, đặt tồn                                                            | apply/discard cho model (không có tool)                                                                           |
+| `draft_campaign_brief` / `list_campaign_briefs` — brief khuyến mãi chờ duyệt ở `/api/v1/assistant/merchant/campaigns` |                                                                                                                   |
+| `run_analysis` — delegate phân tích theo template                                                                     |                                                                                                                   |
+| `get_latest_digest` — bản tin sáng (cron `/api/cron/merchant-digest`, gộp trong health route)                         |                                                                                                                   |
 
 ## Staged-write contract
 
@@ -101,8 +150,9 @@ digest). Staff-only, MFA-verified, trong `/admin/assistant` (module
 
 Cả 2 chat endpoint nhận `"stream": true` → SSE (`text` deltas + `result` cuối).
 Vòng lặp chung `lib/assistant/stream.ts` (Anthropic native stream, DeepSeek SSE
-+ ráp tool_calls); khi provider không có stream sẽ fallback 1 `create()` mỗi vòng.
-Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
+
+- ráp tool_calls); khi provider không có stream sẽ fallback 1 `create()` mỗi vòng.
+  Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
 
 ## Agent Activity UI + AI Activity Log (điểm 5-6)
 
@@ -125,15 +175,15 @@ Widgets đọc bằng `readChatStream` (`lib/assistant/sse.ts`).
 
 # Production checklist (trước khi mở assistant cho người thật)
 
-| # | Việc | Ở đâu |
-|---|---|---|
-| 1 | `ASSISTANT_PROVIDER` + key tương ứng (`ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY` / `TOKENROUTER_API_KEY`) vào Vercel env (Production), **không** commit | Vercel → Settings → Environment Variables |
-| 2 | `ASSISTANT_STAGING_SECRET` random ≥ 32 ký tự vào Vercel env; thiếu → staging từ chối ở production | Vercel env |
-| 3 | Áp migrations lên DB production (`supabase db push`) + chạy pgTAP: `assistant_staged_changes.sql`, `assistant_full_scope.sql` (memory, briefs, digests), `agent_activity_log.sql` (AI Activity Log), `rate_limit.sql` (daily buckets) | Supabase |
-| 4 | Đặt trần chi tiêu + cảnh báo trên dashboard nhà cung cấp model (Anthropic Console / DeepSeek Platform / OpenRouter / TokenRouter) — endpoint công khai đã rate-limit 20 turns/15'/IP + daily quota nhưng trần billing là chốt cuối | Provider dashboard |
-| 5 | Xoay key ngay nếu từng paste vào chat/log; key cũ revoke trên dashboard | Provider dashboard |
-| 6 | Kiểm tra CSP: chat chỉ gọi `same-origin` (`/api/v1/assistant/*`) — đã nằm trong `connect-src 'self'`, không cần sửa | `proxy.ts` |
-| 7 | Smoke test production: chat thử 1 câu catalog + merchant stage 1 change lên staging (chưa Duyệt), rồi discard | Browser |
+| #   | Việc                                                                                                                                                                                                                                  | Ở đâu                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1   | `ASSISTANT_PROVIDER` + key tương ứng (`ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY` / `TOKENROUTER_API_KEY`) vào Vercel env (Production), **không** commit                                                          | Vercel → Settings → Environment Variables |
+| 2   | `ASSISTANT_STAGING_SECRET` random ≥ 32 ký tự vào Vercel env; thiếu → staging từ chối ở production                                                                                                                                     | Vercel env                                |
+| 3   | Áp migrations lên DB production (`supabase db push`) + chạy pgTAP: `assistant_staged_changes.sql`, `assistant_full_scope.sql` (memory, briefs, digests), `agent_activity_log.sql` (AI Activity Log), `rate_limit.sql` (daily buckets) | Supabase                                  |
+| 4   | Đặt trần chi tiêu + cảnh báo trên dashboard nhà cung cấp model (Anthropic Console / DeepSeek Platform / OpenRouter / TokenRouter) — endpoint công khai đã rate-limit 20 turns/15'/IP + daily quota nhưng trần billing là chốt cuối    | Provider dashboard                        |
+| 5   | Xoay key ngay nếu từng paste vào chat/log; key cũ revoke trên dashboard                                                                                                                                                               | Provider dashboard                        |
+| 6   | Kiểm tra CSP: chat chỉ gọi `same-origin` (`/api/v1/assistant/*`) — đã nằm trong `connect-src 'self'`, không cần sửa                                                                                                                   | `proxy.ts`                                |
+| 7   | Smoke test production: chat thử 1 câu catalog + merchant stage 1 change lên staging (chưa Duyệt), rồi discard                                                                                                                         | Browser                                   |
 
 ## Mở rộng
 

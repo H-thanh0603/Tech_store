@@ -1,6 +1,14 @@
 import type { NextConfig } from 'next'
 import { withSentryConfig } from '@sentry/nextjs'
 
+import { loadAssistantEnv } from './lib/env/assistant-env'
+
+// Assistant credentials live in their own file (.env.assistant) so the
+// LLM/Jev block can be swapped without touching .env.local. Loaded before
+// the config is built so any process.env read below (Sentry org, …) and in
+// the server runtime sees the same values.
+loadAssistantEnv()
+
 // Pin the workspace root to this project. A stray lockfile higher up the drive
 // (D:\pnpm-lock.yaml) otherwise makes Next infer the wrong root and mis-trace files.
 const nextConfig: NextConfig = {
@@ -12,6 +20,9 @@ const nextConfig: NextConfig = {
   // hydrates, and every interaction test fails for the wrong reason.
   // Dev-only setting: it has no effect on `next start`.
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  // Q98: never serve full browser source maps from production — Sentry still
+  // gets its (hidden) maps via withSentryConfig upload for de-minified traces.
+  productionBrowserSourceMaps: false,
   images: {
     // Seed demos use placehold.co SVG placeholders.
     dangerouslyAllowSVG: true,

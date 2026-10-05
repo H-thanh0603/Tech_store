@@ -85,4 +85,19 @@ describe('get_order_history tool', () => {
     const text = await dispatchTool(createDispatchContext(), TOOL_ORDER_HISTORY, { phone: '??' })
     expect(text).toContain('held')
   })
+
+  it('stays in the schema when disabled so the model reports honestly', async () => {
+    const { buildAnthropicTools } = await import('@/lib/assistant/tools')
+    const { assistantConfig } = await import('@/lib/assistant/config')
+    const saved = assistantConfig.enableOrderHistory
+    assistantConfig.enableOrderHistory = false
+    try {
+      expect(buildAnthropicTools().some((t) => t.name === TOOL_ORDER_HISTORY)).toBe(true)
+      const text = await dispatchTool(createDispatchContext(), TOOL_ORDER_HISTORY, { phone: '0901234567' })
+      expect(text).toContain('held')
+      expect(text).toContain('đang tắt')
+    } finally {
+      assistantConfig.enableOrderHistory = saved
+    }
+  })
 })

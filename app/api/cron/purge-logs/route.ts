@@ -27,5 +27,13 @@ export async function GET(request: Request) {
   } catch {
     // C3 migration not yet applied (staging) — sweep still succeeds.
   }
-  return NextResponse.json({ ok: true, ...(data as object), hotTables })
+  // Q63: stale chat memories (180d untouched). Best-effort, same rationale.
+  let memories: unknown = null
+  try {
+    const { data: mem } = await getSupabaseAdminClient().rpc('purge_stale_memories')
+    memories = mem
+  } catch {
+    // Migration not yet applied — sweep still succeeds.
+  }
+  return NextResponse.json({ ok: true, ...(data as object), hotTables, memories })
 }
