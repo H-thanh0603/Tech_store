@@ -141,6 +141,7 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
     customerEmail: formData.get('customerEmail'),
+    emailReminders: formData.get('emailReminders') === 'on' ? 'on' : 'off',
     province: formData.get('province') ?? '',
     district: formData.get('district') ?? '',
     ward: formData.get('ward') ?? '',
@@ -157,9 +158,10 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
 
   const rawAccessToken = createOpaqueToken()
   // Persist the optional email on the open cart before place_order converts
-  // it — this is what lets the abandoned-cart reminder reach customers who
+  // it — only with explicit opt-in (checkbox), so no surprise marketing mail.
+  // This is what lets the abandoned-cart reminder reach customers who
   // dropped off mid-checkout.
-  if (parsed.data.customerEmail) {
+  if (parsed.data.customerEmail && parsed.data.emailReminders === 'on') {
     await getSupabaseServerClient().rpc('cart_capture_email', {
       p_cart_token_hash: await getCartTokenHash(),
       p_email: parsed.data.customerEmail,

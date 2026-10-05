@@ -233,6 +233,13 @@ export function CheckoutForm({ cart, initialState, pickupStores = [], vnpayEnabl
             )
           })}
 
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-(--radius-md) border border-border bg-bg-primary px-3 py-2.5">
+            <input type="checkbox" name="emailReminders" value="on" className="mt-1 size-4" />
+            <span className="text-(length:--text-sm) text-fg-muted">
+              Gửi email nhắc khi tôi bỏ quên giỏ hàng (tối đa 2 lần). Không gửi quảng cáo.
+            </span>
+          </label>
+
           <fieldset className="grid gap-3 border-t border-border pt-4">
             <legend className="text-(length:--text-sm) font-semibold text-fg">
               Phương thức thanh toán

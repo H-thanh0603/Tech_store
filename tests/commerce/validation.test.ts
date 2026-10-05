@@ -99,6 +99,15 @@ describe('checkoutSchema', () => {
     expect(checkoutSchema.safeParse({ ...validCheckout, idempotencyKey: 'x' }).success).toBe(false)
   })
 
+  it('defaults email reminders to off (explicit opt-in only)', () => {
+    const parsed = checkoutSchema.safeParse(validCheckout)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.emailReminders).toBe('off')
+    expect(
+      checkoutSchema.safeParse({ ...validCheckout, emailReminders: 'on' }).success,
+    ).toBe(true)
+  })
+
   it('allows pickup without a delivery address but requires a store', () => {
     const pickup = {
       ...validCheckout,

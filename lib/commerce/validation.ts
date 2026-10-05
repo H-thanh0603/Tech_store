@@ -25,6 +25,7 @@ export const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
   customerPhone: vietnameseMobileSchema,
   customerEmail: z.string().trim().email().max(254).optional().or(z.literal('')),
+  emailReminders: z.enum(['on', 'off']).optional().default('off'),
   province: z.string().trim().max(100).optional().or(z.literal('')),
   district: z.string().trim().max(100).optional().or(z.literal('')),
   ward: z.string().trim().max(100).optional().or(z.literal('')),

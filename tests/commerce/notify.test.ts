@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const row = {
+const row: { id: string; type: string; payload: Record<string, unknown>; retry_count: number } = {
   id: 'd1000000-0000-0000-0000-000000000001',
   type: 'order_confirmation',
   payload: {
@@ -77,6 +77,26 @@ describe('processPendingNotifications', () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as { html: string }
     expect(body.html).not.toContain('<img')
     expect(body.html).toContain('&lt;img')
+  })
+
+  it('sends a distinct urgent subject for the second abandoned-cart touch', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{
+        ...row,
+        type: 'abandoned_cart',
+        payload: { ...row.payload, email: 'forget@example.com', itemCount: 3, reminder: 2 },
+      }],
+      error: null,
+    })
+
+    const result = await processPendingNotifications(1)
+
+    expect(result).toEqual({ sent: 1, failed: 0, skipped: 0 })
+    const fetchMock = vi.mocked(fetch)
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as { subject: string; html: string }
+    expect(body.subject).toContain('Sắp hết hàng')
+    expect(body.html).toContain('số lượng có hạn')
+    _resetNotifyBreakerForTests()
   })
 
   it('trips the circuit breaker after consecutive provider failures (Q88)', async () => {
