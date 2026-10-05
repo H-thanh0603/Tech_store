@@ -16,6 +16,7 @@ const USER_MESSAGES: Record<CommerceErrorCode, string> = {
   ORDER_NOT_FOUND: 'Không tìm thấy đơn hàng với thông tin đã cung cấp.',
   RATE_LIMITED: 'Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.',
   NOT_RETURNABLE: 'Đơn hàng ở trạng thái hiện tại không thể yêu cầu trả hàng.',
+  NOT_CANCELLABLE: 'Đơn hàng ở trạng thái hiện tại không thể hủy. Đơn đã thanh toán vui lòng liên hệ shop để được hoàn tiền.',
   RETURN_ALREADY_REQUESTED: 'Đơn hàng này đã có yêu cầu trả hàng.',
   CONFIGURATION_ERROR: 'Hệ thống thanh toán chưa được cấu hình.',
   INTERNAL_ERROR: 'Có lỗi xảy ra. Vui lòng thử lại.',
