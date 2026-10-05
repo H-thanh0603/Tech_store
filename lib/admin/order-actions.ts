@@ -7,7 +7,7 @@ import { adminUserMessage } from '@/lib/admin/errors'
 import { canMarkPaymentPaid, canTransitionOrderStatus } from '@/lib/admin/status-rules'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
-import { orderNoteSchema, orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
+import { invoiceIssueSchema, orderNoteSchema, orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
 import type { OrderStatus, PaymentStatus } from '@/lib/commerce/types'
 
 function fail(
@@ -18,7 +18,12 @@ function fail(
 }
 
 async function assertAdmin(
-  permission:     'orders.update' | 'orders.mark_paid' | 'orders.note' | 'orders.return',
+  permission:
+    | 'orders.update'
+    | 'orders.mark_paid'
+    | 'orders.note'
+    | 'orders.return'
+    | 'orders.invoice',
 ): Promise<AdminSession | AdminActionState> {
   try {
     return await requireAdminPermission(permission)
@@ -262,4 +267,45 @@ export async function decideReturn(
     ok: true,
     message: decision === 'approve' ? 'Đã duyệt trả hàng và hoàn tồn kho.' : 'Đã từ chối yêu cầu trả hàng.',
   }
+}
+
+export async function issueInvoice(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const admin = await assertAdmin('orders.invoice')
+  if (!('actorLabel' in admin)) return admin
+
+  const parsed = invoiceIssueSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    taxCode: formData.get('taxCode') ?? '',
+    companyName: formData.get('companyName') ?? '',
+  })
+  if (!parsed.success) {
+    return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+  }
+
+  const db = getSupabaseAdminClient()
+  const { data: order, error: readError } = await db
+    .from('orders')
+    .select('id, order_code')
+    .eq('order_code', parsed.data.orderCode.toUpperCase())
+    .maybeSingle()
+  if (readError || !order) return fail('NOT_FOUND')
+
+  const { data, error } = await db.rpc('issue_invoice', {
+    p_order_id: order.id,
+    p_tax_code: parsed.data.taxCode || null,
+    p_company_name: parsed.data.companyName || null,
+    p_actor_label: admin.actorLabel,
+  })
+  if (error) return fail('INTERNAL_ERROR')
+  const result = data as { code?: string; invoiceNumber?: string } | null
+  if (result?.code === 'ALREADY_ISSUED') {
+    return { ok: true, message: `Đơn đã có hóa đơn ${result.invoiceNumber ?? ''}.` }
+  }
+  if (result?.code !== 'OK') return fail(result?.code ?? 'INTERNAL_ERROR')
+
+  revalidateOrders(order.order_code)
+  return { ok: true, message: `Đã xuất hóa đơn ${result.invoiceNumber}.` }
 }

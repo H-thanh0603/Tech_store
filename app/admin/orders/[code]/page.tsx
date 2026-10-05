@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { InvoiceForm } from '@/components/admin/invoice-form'
 import { OrderActionsForm } from '@/components/admin/order-actions-form'
 import { OrderNotesPanel } from '@/components/admin/order-notes-form'
 import { PageHeader } from '@/components/admin/ui/page-header'
@@ -79,11 +80,14 @@ export default async function AdminOrderDetailPage({
           </dl>
         </div>
 
-        <OrderActionsForm
-          orderCode={order.orderCode}
-          orderStatus={order.orderStatus}
-          paymentStatus={order.paymentStatus}
-        />
+        <div className="space-y-3">
+          <OrderActionsForm
+            orderCode={order.orderCode}
+            orderStatus={order.orderStatus}
+            paymentStatus={order.paymentStatus}
+          />
+          <InvoiceForm orderCode={order.orderCode} />
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm)">

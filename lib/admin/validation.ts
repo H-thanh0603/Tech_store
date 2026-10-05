@@ -167,6 +167,12 @@ export const orderNoteSchema = z.object({
   body: z.string().trim().min(1).max(2000),
 })
 
+export const invoiceIssueSchema = z.object({
+  orderCode: z.string().trim().min(1).max(64),
+  taxCode: z.string().trim().max(14).optional().or(z.literal('')),
+  companyName: z.string().trim().max(200).optional().or(z.literal('')),
+})
+
 export const couponUpsertSchema = z
   .object({
     id: z
