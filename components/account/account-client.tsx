@@ -12,6 +12,7 @@ import {
   type AuthFormState,
 } from '@/lib/customer/auth-actions'
 import { formatPrice } from '@/lib/format'
+import { orderStatusLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { useOptionalToast } from '@/components/ui/toast'
 
 const INITIAL: AuthFormState = { ok: true }
@@ -313,7 +314,7 @@ export function AccountDashboardClient({
                   <p className="font-semibold tabular-nums">{o.orderCode}</p>
                   <p className="text-(length:--text-xs) text-fg-muted">
                     {new Date(o.createdAt).toLocaleString('vi-VN')} · {o.itemCount} SP ·{' '}
-                    {o.orderStatus} / {o.paymentStatus}
+                    {orderStatusLabel(o.orderStatus)} / {paymentStatusLabel(o.paymentStatus)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

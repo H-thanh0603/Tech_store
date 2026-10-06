@@ -10,6 +10,7 @@ import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { listAdminOrders } from '@/lib/admin/queries'
 import type { AdminOrderListItem } from '@/lib/admin/types'
 import type { OrderStatus, PaymentMethod, PaymentStatus } from '@/lib/commerce/types'
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 
 const ORDER_STATUSES: Array<OrderStatus | 'all'> = [
@@ -118,7 +119,7 @@ export default async function AdminOrdersPage({
     {
       id: 'status',
       header: 'Trạng thái',
-      cell: (o) => <StatusBadge status={o.orderStatus} />,
+      cell: (o) => <StatusBadge status={o.orderStatus} label={orderStatusLabel(o.orderStatus)} />,
     },
     {
       id: 'payment',
@@ -126,8 +127,8 @@ export default async function AdminOrdersPage({
       hideOnMobile: true,
       cell: (o) => (
         <div>
-          <StatusBadge status={o.paymentStatus} />
-          <div className="text-(length:--text-xs) text-fg-subtle">{o.paymentMethod}</div>
+          <StatusBadge status={o.paymentStatus} label={paymentStatusLabel(o.paymentStatus)} />
+          <div className="text-(length:--text-xs) text-fg-subtle">{paymentMethodLabel(o.paymentMethod)}</div>
         </div>
       ),
     },

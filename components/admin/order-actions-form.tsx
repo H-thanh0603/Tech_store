@@ -7,22 +7,10 @@ import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { markOrderPaid, updateOrderStatus } from '@/lib/admin/order-actions'
 import { allowedNextOrderStatuses, canMarkPaymentPaid } from '@/lib/admin/status-rules'
 import type { AdminActionState } from '@/lib/admin/types'
+import { ORDER_STATUS_LABEL as STATUS_LABEL, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import type { OrderStatus, PaymentStatus } from '@/lib/commerce/types'
 
 const initial: AdminActionState = { ok: true }
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: 'Chờ xử lý',
-  awaiting_payment: 'Chờ thanh toán',
-  confirmed: 'Đã xác nhận',
-  packing: 'Đang đóng gói',
-  shipping: 'Đang giao',
-  completed: 'Hoàn tất',
-  cancelled: 'Đã hủy',
-  expired: 'Hết hạn',
-  return_requested: 'Yêu cầu trả hàng',
-  returned: 'Đã trả hàng',
-}
 
 export function OrderActionsForm({
   orderCode,
@@ -43,7 +31,7 @@ export function OrderActionsForm({
     <div className="flex flex-col gap-4 rounded-(--radius-lg) border border-border bg-surface-raised p-4 shadow-(--shadow-sm)">
       <div className="flex flex-wrap gap-2">
         <StatusBadge status={orderStatus} label={STATUS_LABEL[orderStatus]} />
-        <StatusBadge status={paymentStatus} label={`TT: ${paymentStatus}`} />
+        <StatusBadge status={paymentStatus} label={`TT: ${paymentStatusLabel(paymentStatus)}`} />
       </div>
 
       {next.length > 0 ? (

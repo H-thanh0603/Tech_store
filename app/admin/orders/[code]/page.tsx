@@ -9,6 +9,7 @@ import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-s
 import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { getAdminOrder } from '@/lib/admin/queries'
 import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 
 export default async function AdminOrderDetailPage({
@@ -73,9 +74,9 @@ export default async function AdminOrderDetailPage({
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2 pt-2">
-              <StatusBadge status={order.orderStatus} />
-              <StatusBadge status={order.paymentStatus} />
-              <StatusBadge status="draft" label={order.paymentMethod} />
+              <StatusBadge status={order.orderStatus} label={orderStatusLabel(order.orderStatus)} />
+              <StatusBadge status={order.paymentStatus} label={paymentStatusLabel(order.paymentStatus)} />
+              <StatusBadge status="draft" label={paymentMethodLabel(order.paymentMethod)} />
             </div>
           </dl>
         </div>

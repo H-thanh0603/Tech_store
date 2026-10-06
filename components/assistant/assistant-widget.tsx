@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRef, useState } from 'react'
 
 import { formatPrice } from '@/lib/format'
+import { ORDER_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/lib/commerce/status-labels'
 import type { AgentCall } from '@/lib/assistant/activity'
 import { readChatStream } from '@/lib/assistant/sse'
 
@@ -407,23 +408,8 @@ function ShoppingPlanView({ plan, onSend }: { plan: ShoppingPlan; onSend: (text:
  * Order tracking inline view (4): timeline + next action.
  */
 function OrderTrackingView({ tracking }: { tracking: OrderTracking }) {
-  const statusLabels: Record<string, string> = {
-    pending: 'Chờ xử lý',
-    confirmed: 'Đã xác nhận',
-    packing: 'Đang đóng gói',
-    shipping: 'Đang giao',
-    completed: 'Hoàn tất',
-    cancelled: 'Đã hủy',
-    expired: 'Hết hạn',
-    return_requested: 'Yêu cầu trả hàng',
-    returned: 'Đã trả hàng',
-  }
-  const paymentLabels: Record<string, string> = {
-    pending: 'Chờ thanh toán',
-    paid: 'Đã thanh toán',
-    expired: 'Hết hạn',
-    refunded: 'Đã hoàn tiền',
-  }
+  const statusLabels = ORDER_STATUS_LABEL as Record<string, string>
+  const paymentLabels = { ...PAYMENT_STATUS_LABEL, refunded: 'Đã hoàn tiền' } as Record<string, string>
   return (
     <div className="mt-2 max-w-72 rounded-(--radius-md) border border-border bg-bg-elevated p-3">
       <p className="text-(length:--text-xs) font-semibold text-fg">Đơn {tracking.orderCode}</p>
