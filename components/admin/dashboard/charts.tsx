@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts'
 
+import { orderStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 import type {
   FunnelStageRow,
@@ -134,19 +135,47 @@ export function RevenueTrendChart({ data }: { data: RevenueDayRow[] }) {
   )
 }
 
+const STATUS_SEVERITY: Record<string, number> = {
+  pending: 0,
+  awaiting_payment: 1,
+  return_requested: 2,
+  confirmed: 3,
+  packing: 4,
+  shipping: 5,
+  completed: 6,
+  cancelled: 7,
+  expired: 8,
+  returned: 9,
+}
+
 export function OrdersStatusChart({ data }: { data: OrdersByStatusRow[] }) {
   const total = data.reduce((sum, row) => sum + row.count, 0)
-  const summary = data.map((row) => `${row.status}: ${row.count}`).join('. ')
+  // Attention first (needs action on top), not count-desc: a spike of
+  // completed orders must not bury 3 pending ones.
+  const chartData = [...data]
+    .map((row) => ({ ...row, label: orderStatusLabel(row.status) }))
+    .sort(
+      (a, b) =>
+        (STATUS_SEVERITY[a.status] ?? 99) - (STATUS_SEVERITY[b.status] ?? 99),
+    )
+  const summary = chartData.map((row) => `${row.label}: ${row.count}`).join('. ')
 
   return (
-    <ChartShell title="Đơn theo trạng thái" summary={`Tổng ${total} đơn. ${summary}`}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-        <XAxis dataKey="status" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
-        <Tooltip />
-        <Bar dataKey="count" name="Số đơn" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-          {data.map((row) => (
+    <ChartShell
+      title="Đơn theo trạng thái"
+      summary={`Tổng ${total} đơn. ${summary}`}
+      height={Math.max(220, chartData.length * 36)}
+    >
+      <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+        <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11 }} />
+        <Tooltip
+          labelFormatter={(label) => `${label}`}
+          formatter={(value) => [Number(value ?? 0), 'Số đơn']}
+        />
+        <Bar dataKey="count" name="Số đơn" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+          {chartData.map((row) => (
             <Cell key={row.status} fill={STATUS_COLORS[row.status] ?? FALLBACK} />
           ))}
         </Bar>
