@@ -3,6 +3,10 @@
 begin;
 select plan(4);
 
+-- Shared staging (not a fresh local reset) may hold pending outbox rows
+-- from other suites — clear them so the claim counts are deterministic.
+delete from notification_outbox;
+
 insert into notification_outbox (id, type, payload, queued_at) values
   ('d1000000-0000-0000-0000-000000000001', 'order_confirmation', '{"email":"one@example.com"}', now() - interval '3 minutes'),
   ('d1000000-0000-0000-0000-000000000002', 'order_confirmation', '{"email":"two@example.com"}', now() - interval '2 minutes'),

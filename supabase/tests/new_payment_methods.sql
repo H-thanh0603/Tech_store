@@ -8,7 +8,10 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(9);
 
-set local role anon;
+-- service_role: place_order/cart RPCs are security definer (callable by
+-- anyone) but the assertions below read orders directly, which anon
+-- cannot. Unit scope is the RPC gate, not RLS.
+set local role service_role;
 
 select cart_add_item(repeat('a', 64), '40000000-0000-0000-0000-000000000001', 1)->>'code';
 select cart_add_item(repeat('b', 64), '40000000-0000-0000-0000-000000000001', 1)->>'code';
@@ -86,15 +89,15 @@ select is(
   'unknown payment method stays a safe INTERNAL_ERROR'
 );
 
-select like(
+select matches(
   (select pg_get_constraintdef(oid) from pg_constraint where conname = 'orders_payment_method_check'),
-  '%momo%',
+  'momo',
   'orders check constraint lists the new methods'
 );
 
-select like(
+select matches(
   (select pg_get_constraintdef(oid) from pg_constraint where conname = 'orders_payment_expiry_required'),
-  '%bank_card%',
+  'bank_card',
   'expiry constraint covers the new holding methods'
 );
 

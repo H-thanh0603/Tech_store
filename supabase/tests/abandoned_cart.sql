@@ -4,7 +4,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(10);
 
 -- Fixture: open cart with an item and an email, idle past the threshold.
 insert into carts (id, token_hash, email, updated_at)
@@ -48,10 +48,14 @@ select is(
 );
 
 -- 4b) After 23h idle the second touch fires once with reminder=2.
+-- carts_set_updated_at trigger would clobber updated_at to now(), so
+-- disable it for this time-travel update only.
+alter table carts disable trigger carts_set_updated_at;
 update carts
 set reminded_at = now() - interval '23 hours',
     updated_at = now() - interval '23 hours'
 where id = '94000000-0000-4000-8000-000000000001';
+alter table carts enable trigger carts_set_updated_at;
 
 select is(
   queue_abandoned_cart_emails(120, 100)->>'queued',
@@ -63,7 +67,7 @@ select is(
   (select (payload->>'reminder')::integer from notification_outbox
    where type = 'abandoned_cart'
      and payload->>'cartToken' = repeat('4', 64)
-   order by created_at desc limit 1),
+   order by queued_at desc, id desc limit 1),
   2,
   'second touch carries reminder=2 payload'
 );

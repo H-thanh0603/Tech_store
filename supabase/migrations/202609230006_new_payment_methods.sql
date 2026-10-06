@@ -496,7 +496,15 @@ $$;
 
 revoke all on function place_order(text, uuid, text, jsonb, text, text, text) from public;
 grant execute on function place_order(text, uuid, text, jsonb, text, text, text) to anon, authenticated;
-revoke all on function place_order(text, uuid, text, jsonb, text, text) from public;
-grant execute on function place_order(text, uuid, text, jsonb, text, text) to anon, authenticated;
+-- The 6-arg compat overload only exists on DBs that ran the 20260901
+-- hardening migration; fresh staging skips it, so guard the revoke.
+do $$ begin
+  revoke all on function place_order(text, uuid, text, jsonb, text, text) from public;
+exception when undefined_function then null;
+end $$;
+do $$ begin
+  grant execute on function place_order(text, uuid, text, jsonb, text, text) to anon, authenticated;
+exception when undefined_function then null;
+end $$;
 revoke all on function place_order_internal(text, uuid, text, jsonb, text, text, uuid) from public;
 grant execute on function place_order_internal(text, uuid, text, jsonb, text, text, uuid) to service_role;

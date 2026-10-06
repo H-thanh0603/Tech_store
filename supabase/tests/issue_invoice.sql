@@ -35,9 +35,9 @@ select matches(
   'unknown order returns NOT_FOUND'
 );
 
-select like(
+select matches(
   (select invoice_number from invoices where order_id = 'f0000000-0000-0000-0000-000000000001'),
-  'INV-%',
+  '^INV-',
   'invoice number has INV- prefix'
 );
 
