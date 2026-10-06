@@ -148,7 +148,8 @@ export default async function AdminOrderDetailPage({
 
         <div className="rounded-(--radius-lg) border border-border bg-surface-raised p-4 shadow-(--shadow-sm)">
           <h2 className="mb-3 font-semibold">Timeline trạng thái</h2>
-          {(order.statusEvents?.length ?? 0) === 0 ? (
+          {(order.statusEvents?.length ?? 0) === 0 &&
+          (order.auditEntries?.length ?? 0) === 0 ? (
             <p className="text-(length:--text-sm) text-fg-muted">
               Chưa có event (các thay đổi sau migration sẽ được ghi).
             </p>
@@ -165,6 +166,17 @@ export default async function AdminOrderDetailPage({
                   ) : null}
                   <p className="text-(length:--text-xs) text-fg-subtle">
                     {event.actorLabel} · {new Date(event.createdAt).toLocaleString('vi-VN')}
+                  </p>
+                </li>
+              ))}
+              {order.auditEntries?.map((entry) => (
+                <li key={entry.id} className="border-l-2 border-border pl-3 text-(length:--text-sm)">
+                  <div className="font-medium">{entry.label}</div>
+                  {entry.detail ? (
+                    <p className="text-fg-muted">{entry.detail}</p>
+                  ) : null}
+                  <p className="text-(length:--text-xs) text-fg-subtle">
+                    {entry.actorLabel} · {new Date(entry.createdAt).toLocaleString('vi-VN')}
                   </p>
                 </li>
               ))}

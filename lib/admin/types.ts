@@ -291,6 +291,14 @@ export interface OrderInternalNote {
   createdAt: string
 }
 
+export interface OrderAuditEntry {
+  id: string
+  label: string
+  detail: string | null
+  actorLabel: string
+  createdAt: string
+}
+
 export interface AdminOrderDetail extends AdminOrderListItem {
   fulfillmentMethod: FulfillmentMethod
   pickupStore: PickupStore | null
@@ -317,6 +325,7 @@ export interface AdminOrderDetail extends AdminOrderListItem {
   }>
   statusEvents?: OrderStatusEvent[]
   internalNotes?: OrderInternalNote[]
+  auditEntries?: OrderAuditEntry[]
 }
 
 export interface AdminCustomerRow {

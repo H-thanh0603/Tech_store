@@ -91,7 +91,7 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
   })
 
   const orderId = String(data.id)
-  const [eventsRes, notesRes, storeRes] = await Promise.all([
+  const [eventsRes, notesRes, auditRes, storeRes] = await Promise.all([
     db
       .from('order_status_events')
       .select('id, from_status, to_status, event_type, reason, actor_label, created_at')
@@ -102,6 +102,14 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
       .select('id, body, actor_label, created_at')
       .eq('order_id', orderId)
       .order('created_at', { ascending: false }),
+    // Audit-only actions (invoice, refund, return decision, customer cancel)
+    // have no status_events row — pull them so the timeline shows everything.
+    db
+      .from('admin_audit_logs')
+      .select('id, action, payload, actor_label, created_at')
+      .eq('entity_type', 'order')
+      .eq('entity_id', data.order_code)
+      .order('created_at', { ascending: true }),
     data.pickup_store_id
       ? db
           .from('stores')
@@ -133,6 +141,44 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     actorLabel: String(row.actor_label),
     createdAt: String(row.created_at),
   }))
+
+  // Audit-only entries: skip actions already covered by status_events
+  // (mark_paid, status_change, cancel_order) and the noteId pointer row.
+  const AUDIT_COVERED = new Set([
+    'mark_paid',
+    'status_change',
+    'cancel_order',
+    'internal_note',
+  ])
+  const AUDIT_LABEL: Record<string, string> = {
+    issue_invoice: 'Xuất hóa đơn',
+    return_approve: 'Duyệt trả hàng',
+    return_reject: 'Từ chối trả hàng',
+    customer_cancel: 'Khách tự hủy đơn',
+    refund: 'Hoàn tiền',
+    order_note: 'Ghi chú đơn',
+  }
+  const auditEntries = ((auditRes.data ?? []) as Array<Record<string, unknown>>)
+    .filter((row) => !AUDIT_COVERED.has(String(row.action)))
+    .map((row) => {
+      const payload =
+        row.payload && typeof row.payload === 'object'
+          ? (row.payload as Record<string, unknown>)
+          : {}
+      const detail = [
+        payload.invoiceNumber,
+        payload.amount,
+        payload.reason,
+      ].filter((v) => v != null && v !== '')
+      return {
+        id: `audit-${String(row.id)}`,
+        label:
+          AUDIT_LABEL[String(row.action)] ?? String(row.action),
+        detail: detail.map(String).join(' · ') || null,
+        actorLabel: String(row.actor_label),
+        createdAt: String(row.created_at),
+      }
+    })
 
   return {
     orderCode: String(data.order_code),
@@ -173,5 +219,6 @@ export async function getAdminOrder(orderCode: string): Promise<AdminOrderDetail
     items,
     statusEvents,
     internalNotes,
+    auditEntries,
   }
 }
