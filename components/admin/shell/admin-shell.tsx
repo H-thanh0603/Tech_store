@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 
+import { AdminCommandPalette } from '@/components/admin/shell/admin-command-palette'
 import { AdminSidebar } from '@/components/admin/shell/admin-sidebar'
 import { AdminTopbar } from '@/components/admin/shell/admin-topbar'
 import { MobileNavDrawer } from '@/components/admin/shell/mobile-nav-drawer'
@@ -70,6 +71,7 @@ export function AdminShell({ role, children }: AdminShellProps) {
         </div>
 
         <MobileNavDrawer open={mobileOpen} onClose={closeMobileNav} items={items} />
+        <AdminCommandPalette items={items} />
       </div>
     </ToastProvider>
   )

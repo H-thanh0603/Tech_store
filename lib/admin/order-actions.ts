@@ -7,7 +7,7 @@ import { adminUserMessage } from '@/lib/admin/errors'
 import { canMarkPaymentPaid, canTransitionOrderStatus } from '@/lib/admin/status-rules'
 import { getSupabaseAdminClient } from '@/lib/admin/supabase'
 import type { AdminActionState } from '@/lib/admin/types'
-import { orderNoteSchema, orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
+import { invoiceIssueSchema, orderNoteSchema, orderPaymentSchema, orderStatusSchema } from '@/lib/admin/validation'
 import type { OrderStatus, PaymentStatus } from '@/lib/commerce/types'
 
 function fail(
@@ -18,7 +18,12 @@ function fail(
 }
 
 async function assertAdmin(
-  permission:     'orders.update' | 'orders.mark_paid' | 'orders.note' | 'orders.return',
+  permission:
+    | 'orders.update'
+    | 'orders.mark_paid'
+    | 'orders.note'
+    | 'orders.return'
+    | 'orders.invoice',
 ): Promise<AdminSession | AdminActionState> {
   try {
     return await requireAdminPermission(permission)
@@ -187,10 +192,66 @@ export async function decideReturn(
     }
   }
 
+  // Auto-refund for VNPay orders: try the live refund BEFORE approving, so a
+  // gateway rejection never leaves the order approved-but-unrefunded. Any
+  // failure returns the staff to the form with the VNPay message — they can
+  // still complete the manual dashboard flow.
+  let refundNote: string | null = null
+  if (decision === 'approve' && refundAmount !== null && refundAmount > 0) {
+    const db = getSupabaseAdminClient()
+    const { data: target } = await db
+      .from('orders')
+      .select('id, payment_method, payment_status, payment_ref, gateway_pay_date')
+      .eq('order_code', orderCode.toUpperCase())
+      .maybeSingle()
+    if (
+      target?.payment_method === 'vnpay' &&
+      target?.payment_status === 'paid' &&
+      target?.payment_ref
+    ) {
+      try {
+        const { sendVnpayRefund } = await import('@/lib/commerce/vnpay-refund')
+        const receipt = await sendVnpayRefund({
+          orderCode: orderCode.toUpperCase(),
+          transactionNo: target.payment_ref as string,
+          amountVnd: refundAmount,
+          payDate: (target.gateway_pay_date as string | null) ?? '',
+          createdBy: admin.actorLabel,
+        })
+        refundNote = receipt.isMock
+          ? 'Hoàn tay trên dashboard VNPay (chưa cấu hình refund live).'
+          : `VNPay live OK (${receipt.requestId}).`
+        await db.from('payment_refunds').insert({
+          order_id: target.id,
+          provider: receipt.isMock ? 'manual' : 'vnpay',
+          amount: refundAmount,
+          state: receipt.isMock ? 'mock_recorded' : 'succeeded',
+          provider_request_id: receipt.requestId,
+          provider_txn_no: receipt.isMock ? null : (target.payment_ref as string),
+          created_by_label: admin.actorLabel,
+        })
+      } catch (refundError) {
+        const message =
+          refundError instanceof Error ? refundError.message : 'Hoàn tiền VNPay thất bại.'
+        await getSupabaseAdminClient().from('payment_refunds').insert({
+          order_id: target.id,
+          provider: 'vnpay',
+          amount: refundAmount,
+          state: 'failed',
+          error: message.slice(0, 500),
+          created_by_label: admin.actorLabel,
+        })
+        return fail('INTERNAL_ERROR', {
+          refundAmount: [`${message} Đơn chưa duyệt — hoàn tay trên dashboard rồi thử lại.`],
+        })
+      }
+    }
+  }
+
   const { data, error } = await getSupabaseAdminClient().rpc('admin_decide_return', {
     p_return_id: returnId,
     p_approve: decision === 'approve',
-    p_admin_note: adminNote || null,
+    p_admin_note: [adminNote, refundNote].filter(Boolean).join(' | ') || null,
     p_refund_amount: refundAmount,
     p_actor_label: admin.actorLabel,
     p_restock: restockRaw !== 'false',
@@ -206,4 +267,45 @@ export async function decideReturn(
     ok: true,
     message: decision === 'approve' ? 'Đã duyệt trả hàng và hoàn tồn kho.' : 'Đã từ chối yêu cầu trả hàng.',
   }
+}
+
+export async function issueInvoice(
+  _prev: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const admin = await assertAdmin('orders.invoice')
+  if (!('actorLabel' in admin)) return admin
+
+  const parsed = invoiceIssueSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    taxCode: formData.get('taxCode') ?? '',
+    companyName: formData.get('companyName') ?? '',
+  })
+  if (!parsed.success) {
+    return fail('VALIDATION_ERROR', parsed.error.flatten().fieldErrors)
+  }
+
+  const db = getSupabaseAdminClient()
+  const { data: order, error: readError } = await db
+    .from('orders')
+    .select('id, order_code')
+    .eq('order_code', parsed.data.orderCode.toUpperCase())
+    .maybeSingle()
+  if (readError || !order) return fail('NOT_FOUND')
+
+  const { data, error } = await db.rpc('issue_invoice', {
+    p_order_id: order.id,
+    p_tax_code: parsed.data.taxCode || null,
+    p_company_name: parsed.data.companyName || null,
+    p_actor_label: admin.actorLabel,
+  })
+  if (error) return fail('INTERNAL_ERROR')
+  const result = data as { code?: string; invoiceNumber?: string } | null
+  if (result?.code === 'ALREADY_ISSUED') {
+    return { ok: true, message: `Đơn đã có hóa đơn ${result.invoiceNumber ?? ''}.` }
+  }
+  if (result?.code !== 'OK') return fail(result?.code ?? 'INTERNAL_ERROR')
+
+  revalidateOrders(order.order_code)
+  return { ok: true, message: `Đã xuất hóa đơn ${result.invoiceNumber}.` }
 }

@@ -12,6 +12,7 @@ import {
   type AuthFormState,
 } from '@/lib/customer/auth-actions'
 import { formatPrice } from '@/lib/format'
+import { orderStatusLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { useOptionalToast } from '@/components/ui/toast'
 
 const INITIAL: AuthFormState = { ok: true }
@@ -112,7 +113,7 @@ export function AccountLoginClient() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               className="field-input"
               autoComplete="current-password"
             />
@@ -124,6 +125,11 @@ export function AccountLoginClient() {
           >
             {passPending ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
+          <p className="text-right text-(length:--text-sm)">
+            <Link href="/account/forgot" className="font-semibold text-brand">
+              Quên mật khẩu?
+            </Link>
+          </p>
         </form>
       ) : null}
 
@@ -141,7 +147,7 @@ export function AccountLoginClient() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               className="field-input"
               autoComplete="new-password"
             />
@@ -308,7 +314,7 @@ export function AccountDashboardClient({
                   <p className="font-semibold tabular-nums">{o.orderCode}</p>
                   <p className="text-(length:--text-xs) text-fg-muted">
                     {new Date(o.createdAt).toLocaleString('vi-VN')} · {o.itemCount} SP ·{' '}
-                    {o.orderStatus} / {o.paymentStatus}
+                    {orderStatusLabel(o.orderStatus)} / {paymentStatusLabel(o.paymentStatus)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const row = {
+const row: { id: string; type: string; payload: Record<string, unknown>; retry_count: number } = {
   id: 'd1000000-0000-0000-0000-000000000001',
   type: 'order_confirmation',
   payload: {
@@ -31,7 +31,7 @@ vi.mock('@/lib/admin/supabase', () => ({
 }))
 vi.mock('@/lib/site', () => ({ getSiteUrl: () => 'https://techstore.test' }))
 
-import { processPendingNotifications } from '@/lib/commerce/notify'
+import { processPendingNotifications, _resetNotifyBreakerForTests } from '@/lib/commerce/notify'
 
 describe('processPendingNotifications', () => {
   beforeEach(() => {
@@ -77,5 +77,43 @@ describe('processPendingNotifications', () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as { html: string }
     expect(body.html).not.toContain('<img')
     expect(body.html).toContain('&lt;img')
+  })
+
+  it('sends a distinct urgent subject for the second abandoned-cart touch', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{
+        ...row,
+        type: 'abandoned_cart',
+        payload: { ...row.payload, email: 'forget@example.com', itemCount: 3, reminder: 2 },
+      }],
+      error: null,
+    })
+
+    const result = await processPendingNotifications(1)
+
+    expect(result).toEqual({ sent: 1, failed: 0, skipped: 0 })
+    const fetchMock = vi.mocked(fetch)
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as { subject: string; html: string }
+    expect(body.subject).toContain('Sắp hết hàng')
+    expect(body.html).toContain('số lượng có hạn')
+    _resetNotifyBreakerForTests()
+  })
+
+  it('trips the circuit breaker after consecutive provider failures (Q88)', async () => {
+    _resetNotifyBreakerForTests()
+    vi.mocked(fetch).mockResolvedValue({ ok: false, text: async () => 'down' } as Response)
+
+    const rows = Array.from({ length: 7 }, (_, i) => ({
+      ...row,
+      id: `d1000000-0000-0000-0000-00000000000${i}`,
+    }))
+    rpc.mockResolvedValueOnce({ data: rows, error: null })
+
+    const result = await processPendingNotifications(20)
+
+    // 5 rows attempted (breaker trips), the rest stay pending for next run.
+    expect(result).toEqual({ sent: 0, failed: 5, skipped: 0 })
+    expect(fetch).toHaveBeenCalledTimes(5)
+    _resetNotifyBreakerForTests()
   })
 })

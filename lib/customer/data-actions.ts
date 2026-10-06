@@ -5,8 +5,8 @@ import { redirect } from 'next/navigation'
 import { createSupabaseAuthClient } from '@/lib/supabase/auth-server'
 
 // GDPR erasure: unlink the user from orders/reviews, delete profile and
-// restock waitlist rows, then sign out. Financial rows stay for tax/warranty
-// records but carry no user reference.
+// restock waitlist rows, then delete the Auth user itself and sign out.
+// Financial rows stay for tax/warranty records but carry no user reference.
 export async function deleteMyDataAction(): Promise<never> {
   const supabase = await createSupabaseAuthClient()
   const {
@@ -20,6 +20,15 @@ export async function deleteMyDataAction(): Promise<never> {
   const result = data as { code?: string } | null
   if (error || result?.code !== 'OK') {
     throw new Error('Không xóa được dữ liệu. Vui lòng thử lại.')
+  }
+
+  // Delete the Auth identity too (fail-open: profile data is already gone;
+  // a leftover login row without profile is useless but must not block).
+  try {
+    const { getSupabaseServiceRoleClient } = await import('@/lib/supabase/service-role')
+    await getSupabaseServiceRoleClient().auth.admin.deleteUser(user.id)
+  } catch {
+    // Fall through to sign-out.
   }
 
   await supabase.auth.signOut()

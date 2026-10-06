@@ -34,6 +34,26 @@ export async function proxy(request: NextRequest) {
     )
   }
 
+  // Q45 CSRF: state-changing requests carrying a browser Origin/Referer must
+  // come from this host (or the configured site / localhost). Requests with
+  // NO origin (server-to-server: VNPay IPN, cron, scripts) always pass —
+  // only a *mismatched* origin is rejected, so nothing legitimate breaks.
+  const originBlock = csrfOriginBlock(request)
+  if (originBlock) return originBlock
+
+  // Q54 DoS: global request-body ceiling for API routes. Feature endpoints
+  // enforce tighter caps themselves (analytics 32KB, csp-report 8KB);
+  // image upload via server action tops out ~10MB, hence the 12MB ceiling.
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    const declared = Number(request.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > 12 * 1024 * 1024) {
+      return new Response(JSON.stringify({ code: 'PAYLOAD_TOO_LARGE', message: 'Body quá lớn.' }), {
+        status: 413,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      })
+    }
+  }
+
   const nonce = crypto.randomUUID()
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
   const development = process.env.NODE_ENV === 'development'
@@ -91,7 +111,46 @@ export async function proxy(request: NextRequest) {
   const response = await updateSession(request, requestHeaders)
   response.headers.set('Content-Security-Policy', csp)
   response.headers.set('x-request-id', requestId)
+  // Q137: preview deployments must never be indexed — belt and braces next
+  // to the preview write-block above.
+  if (process.env.VERCEL_ENV === 'preview') {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
   return response
+}
+
+/** Host allowlist for the CSRF origin check: self + configured site + local. */
+function allowedOriginHosts(requestHost: string): Set<string> {
+  const hosts = new Set<string>([requestHost.toLowerCase(), 'localhost', '127.0.0.1'])
+  for (const raw of [process.env.SITE_URL, process.env.NEXT_PUBLIC_SITE_URL]) {
+    if (!raw) continue
+    try {
+      hosts.add(new URL(raw).host.toLowerCase())
+    } catch {
+      // Ignore malformed SITE_URL here; site-url resolution fails loud elsewhere.
+    }
+  }
+  return hosts
+}
+
+function csrfOriginBlock(request: NextRequest): Response | null {
+  if (request.method === 'GET' || request.method === 'HEAD') return null
+  const raw = request.headers.get('origin') ?? request.headers.get('referer')
+  if (!raw) return null // non-browser caller (webhook, cron, script): allow
+  let originHost: string
+  try {
+    originHost = new URL(raw).host.toLowerCase()
+  } catch {
+    return new Response(JSON.stringify({ code: 'BAD_ORIGIN', message: 'Origin không hợp lệ.' }), {
+      status: 403,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    })
+  }
+  if (allowedOriginHosts(request.headers.get('host') ?? request.nextUrl.host).has(originHost)) return null
+  return new Response(
+    JSON.stringify({ code: 'CSRF_BLOCKED', message: 'Yêu cầu bị chặn vì origin lạ.' }),
+    { status: 403, headers: { 'content-type': 'application/json; charset=utf-8' } },
+  )
 }
 
 export const config = {

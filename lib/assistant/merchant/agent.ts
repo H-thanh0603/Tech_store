@@ -10,7 +10,14 @@ import { agentCall, type AgentCallObserver } from '../activity'
 import type { ChatMessage, MessagesClient } from '../agent'
 import { toAnthropicHistory } from '../agent'
 import { createProviderClient, isUnsupportedReasonerModel, REASONER_GUARD_REPLY, resolveProvider } from '../providers'
+import { resolveModelTier, selectRoutedModel, type ModelTier } from '../jev'
 import { streamTurn, type StreamEvent } from '../stream'
+import {
+  fullMerchantSummary,
+  merchantFilterSummary,
+  resolveMerchantTools,
+  type ToolFilterSummary,
+} from '../tool-filter'
 import { merchantConfig, wantsChangeHint, wantsMetricsGrounding } from './config'
 import type { SignedChange } from './guardrails'
 import { buildMerchantDynamicContext, buildMerchantStaticSystem } from './prompt'
@@ -28,6 +35,15 @@ export interface MerchantTurnResult {
   staged: SignedChange[]
   suggestions: string[]
   disabled?: boolean
+  /** Tool-filter measurement (same shape as shopping). */
+  toolFilter?: ToolFilterSummary
+  /** Model tier JEV chọn cho turn này. */
+  modelTier?: { tier: ModelTier; source: string }
+}
+
+function prevUserTexts(history: ChatMessage[]): string[] {
+  const texts = history.filter((m) => m.role === 'user').map((m) => m.content)
+  return texts.slice(0, -1)
 }
 
 function lastUserText(history: ChatMessage[]): string {
@@ -52,12 +68,12 @@ export async function runMerchantTurn(
 ): Promise<MerchantTurnResult> {
   const client = deps?.client ?? createProviderClient()
   if (!client) {
-    return { reply: DISABLED_REPLY, staged: [], suggestions: [], disabled: true }
+    return { reply: DISABLED_REPLY, staged: [], suggestions: [], disabled: true, toolFilter: fullMerchantSummary() }
   }
 
   const config = merchantConfig
   if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
-    return { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] }
+    return { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [], toolFilter: fullMerchantSummary() }
   }
 
   const ctx: MerchantDispatchContext = createMerchantContext(deps?.actorUserId ?? null)
@@ -68,11 +84,22 @@ export async function runMerchantTurn(
       metricsHint: wantsMetricsGrounding(userText),
       changeHint: wantsChangeHint(userText),
     })
-  const tools = buildMerchantTools()
-  const messages: Anthropic.MessageParam[] = toAnthropicHistory(history)
-
+  const prevTexts = prevUserTexts(history)
+  const [filter, tierVerdict] = await Promise.all([
+    resolveMerchantTools(userText, { prevTexts }),
+    resolveModelTier(userText),
+  ])
+  const turnModel = selectRoutedModel(config.model, tierVerdict.tier)
+  const modelTier = { tier: tierVerdict.tier, source: tierVerdict.source }
+  let tools = filter.tools
   // Metrics grounding gate: a performance question forces one snapshot read first.
   const forcedTool = wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null
+  if (forcedTool && !tools.some((t) => t.name === forcedTool)) {
+    const def = buildMerchantTools().find((t) => t.name === forcedTool)
+    tools = def ? [...tools, def] : buildMerchantTools()
+  }
+  const toolFilter = merchantFilterSummary({ ...filter, tools })
+  const messages: Anthropic.MessageParam[] = toAnthropicHistory(history)
   const staged: SignedChange[] = []
   const replyParts: string[] = []
 
@@ -88,7 +115,7 @@ export async function runMerchantTurn(
     let response
     try {
       response = await client.messages.create({
-        model: config.model,
+        model: turnModel,
         max_tokens: config.maxTokens,
         system,
         tools,
@@ -100,6 +127,7 @@ export async function runMerchantTurn(
         reply: 'Xin lỗi, trợ lý đang bận. Thử lại sau ít phút nhé.',
         staged,
         suggestions: ctx.suggestions,
+        toolFilter,
       }
     }
 
@@ -138,6 +166,8 @@ export async function runMerchantTurn(
     reply: reply || 'Mình chưa hiểu ý bạn. Bạn hỏi về doanh thu, tồn kho, đơn chờ xử lý, hay muốn stage thay đổi giá/xuất bản?',
     staged,
     suggestions: ctx.suggestions,
+    toolFilter,
+    modelTier,
   }
 }
 
@@ -155,13 +185,13 @@ export async function* streamMerchantTurn(
 ): AsyncGenerator<MerchantStreamEvent> {
   const client = deps?.client ?? createProviderClient()
   if (!client) {
-    yield { type: 'result', result: { reply: DISABLED_REPLY, staged: [], suggestions: [], disabled: true } }
+    yield { type: 'result', result: { reply: DISABLED_REPLY, staged: [], suggestions: [], disabled: true, toolFilter: fullMerchantSummary() } }
     return
   }
 
   const config = merchantConfig
   if (resolveProvider() !== 'anthropic' && isUnsupportedReasonerModel(config.model)) {
-    yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [] } }
+    yield { type: 'result', result: { reply: REASONER_GUARD_REPLY, staged: [], suggestions: [], toolFilter: fullMerchantSummary() } }
     return
   }
 
@@ -174,15 +204,28 @@ export async function* streamMerchantTurn(
       changeHint: wantsChangeHint(userText),
     })
   const staged: SignedChange[] = []
+  const [streamFilter, streamTier] = await Promise.all([
+    resolveMerchantTools(userText, { prevTexts: prevUserTexts(history) }),
+    resolveModelTier(userText),
+  ])
+  const streamModel = selectRoutedModel(config.model, streamTier.tier)
+  const streamTierInfo = { tier: streamTier.tier, source: streamTier.source }
+  let streamTools = streamFilter.tools
+  const streamForcedTool = wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null
+  if (streamForcedTool && !streamTools.some((t) => t.name === streamForcedTool)) {
+    const def = buildMerchantTools().find((t) => t.name === streamForcedTool)
+    streamTools = def ? [...streamTools, def] : buildMerchantTools()
+  }
+  const streamFilterSummary = merchantFilterSummary({ ...streamFilter, tools: streamTools })
 
   yield* streamTurn<MerchantTurnResult>(client, {
-    model: config.model,
+    model: streamModel,
     maxTokens: config.maxTokens,
     maxIterations: config.maxToolIterations,
     system,
-    tools: buildMerchantTools(),
+    tools: streamTools,
     messages: toAnthropicHistory(history),
-    forcedTool: wantsMetricsGrounding(userText) ? TOOL_SNAPSHOT : null,
+    forcedTool: streamForcedTool,
     dispatch: async (name, input) => {
       // No activity fire here: streamTurn already fires onActivity + yields
       // the SSE event. Firing here would duplicate UI steps + audit rows.
@@ -194,6 +237,6 @@ export async function* streamMerchantTurn(
     shouldEnd: () => ctx.endTurn,
     fallbackReply:
       'Mình chưa hiểu ý bạn. Bạn hỏi về doanh thu, tồn kho, đơn chờ xử lý, hay muốn stage thay đổi giá/xuất bản?',
-    finish: (reply) => ({ reply, staged, suggestions: ctx.suggestions }),
+    finish: (reply) => ({ reply, staged, suggestions: ctx.suggestions, toolFilter: streamFilterSummary, modelTier: streamTierInfo }),
   })
 }

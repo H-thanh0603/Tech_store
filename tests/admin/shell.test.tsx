@@ -11,6 +11,7 @@ import { navItemsForRole } from '@/lib/admin/nav-config'
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/products',
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
 vi.mock('@/lib/admin/auth-actions', () => ({

@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useState } from 'react'
 
+import { RestockAlertForm } from '@/components/commerce/restock-alert-form'
 import { StickyPurchaseBar } from '@/components/commerce/sticky-purchase-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -180,6 +181,10 @@ export function VariantSelector({
           </Button>
         </div>
       </form>
+
+      {!buyable ? (
+        <RestockAlertForm variantId={selected.id} />
+      ) : null}
 
       <p
         aria-live="polite"

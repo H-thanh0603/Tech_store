@@ -49,7 +49,7 @@ export interface OrderRiskInput {
   itemCount: number
   /** Đơn của khách không có account (guest checkout). */
   isGuest: boolean
-  /** Phương thức thanh toán: 'cod' | 'bank_transfer'. */
+  /** Phương thức thanh toán: 'cod' | 'bank_transfer' | 'vnpay' | 'bank_card' | 'momo' | 'zalopay' | 'installment'. */
   paymentMethod: string
   /** Số đơn hoàn/trả của cùng khách (theo SĐT) trong 90 ngày, nếu biết. */
   priorReturns?: number
@@ -119,7 +119,7 @@ export function assessOrderRisk(input: OrderRiskInput): RiskAssessment {
       weight: 30,
     })
   }
-  if (isGuest && input.paymentMethod === 'bank_transfer' && total >= 5_000_000) {
+  if (isGuest && (input.paymentMethod === 'bank_transfer' || input.paymentMethod === 'bank_card' || input.paymentMethod === 'momo' || input.paymentMethod === 'zalopay' || input.paymentMethod === 'installment') && total >= 5_000_000) {
     factors.push({
       code: 'guest_transfer',
       label: 'Khách vãng lai chuyển khoản số tiền lớn (khó truy về chủ thẻ)',

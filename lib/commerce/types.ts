@@ -1,4 +1,11 @@
-export type PaymentMethod = 'cod' | 'bank_transfer' | 'vnpay'
+export type PaymentMethod =
+  | 'cod'
+  | 'bank_transfer'
+  | 'vnpay'
+  | 'bank_card'
+  | 'momo'
+  | 'zalopay'
+  | 'installment'
 export type FulfillmentMethod = 'delivery' | 'pickup'
 
 export interface PickupStore {
@@ -45,6 +52,7 @@ export type CommerceErrorCode =
   | 'ORDER_NOT_FOUND'
   | 'RATE_LIMITED'
   | 'NOT_RETURNABLE'
+  | 'NOT_CANCELLABLE'
   | 'RETURN_ALREADY_REQUESTED'
   | 'CONFIGURATION_ERROR'
   | 'INTERNAL_ERROR'

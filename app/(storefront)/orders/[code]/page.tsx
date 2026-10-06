@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 
+import { CancelOrderForm } from '@/components/commerce/cancel-order-form'
 import { OrderStatus } from '@/components/commerce/order-status'
 import { PaymentSummary } from '@/components/commerce/payment-summary'
 import { ReturnRequestForm } from '@/components/commerce/return-request-form'
@@ -11,6 +12,11 @@ export default async function OrderPage({ params }: { params: Promise<{ code: st
   const order = await getOrderByAccess(code)
   if (!order) notFound()
   const canRequestReturn = order.orderStatus === 'shipping' || order.orderStatus === 'completed'
+  const canCancel =
+    (order.orderStatus === 'pending' ||
+      order.orderStatus === 'awaiting_payment' ||
+      order.orderStatus === 'confirmed') &&
+    order.paymentStatus !== 'paid'
   return (
     <div className="container-store grid max-w-3xl gap-6 py-8 sm:py-10">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -27,6 +33,12 @@ export default async function OrderPage({ params }: { params: Promise<{ code: st
         </div>
       </div>
       <OrderStatus status={order.orderStatus} paymentStatus={order.paymentStatus} />
+      {canCancel ? (
+        <section aria-label="Hủy đơn hàng">
+          <h2 className="sr-only">Hủy đơn hàng</h2>
+          <CancelOrderForm orderCode={order.orderCode} customerPhone={order.customerPhone} />
+        </section>
+      ) : null}
       {canRequestReturn ? (
         <section aria-label="Yêu cầu trả hàng">
           <h2 className="sr-only">Yêu cầu trả hàng</h2>

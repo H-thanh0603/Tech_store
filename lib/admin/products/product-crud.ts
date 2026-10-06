@@ -277,6 +277,21 @@ export async function bulkUpdateProducts(
       }
       return fail('INTERNAL_ERROR')
     }
+    const skipped = ids.length - eligible.length
+    await writeAudit(
+      'product_bulk_update',
+      null,
+      { action, count: eligible.length, skipped },
+      admin,
+    )
+    revalidateCatalog()
+    return {
+      ok: true,
+      message:
+        skipped > 0
+          ? `Đã xuất bản ${eligible.length} sản phẩm, bỏ qua ${skipped} (chưa có biến thể active).`
+          : `Đã xuất bản ${eligible.length} sản phẩm.`,
+    }
   }
 
   await writeAudit('product_bulk_update', null, { action, count: ids.length }, admin)
@@ -286,8 +301,6 @@ export async function bulkUpdateProducts(
     message:
       action === 'archive'
         ? `Đã lưu trữ ${ids.length} sản phẩm.`
-        : action === 'draft'
-          ? `Đã chuyển ${ids.length} sản phẩm sang nháp.`
-          : `Đã xuất bản các sản phẩm hợp lệ.`,
+        : `Đã chuyển ${ids.length} sản phẩm sang nháp.`,
   }
 }

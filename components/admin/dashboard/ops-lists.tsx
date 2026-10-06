@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { StatusBadge } from '@/components/admin/ui/status-badge'
+import { orderStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 import type { RecentOrderRow, StockAlertRow } from '@/lib/admin/types'
 
@@ -18,7 +19,7 @@ export function RecentOrdersList({ orders }: { orders: RecentOrderRow[] }) {
             </Link>
             <p className="truncate text-(length:--text-sm) text-fg-muted">{order.customerName}</p>
           </div>
-          <StatusBadge status={order.orderStatus} />
+          <StatusBadge status={order.orderStatus} label={orderStatusLabel(order.orderStatus)} />
           <span className="tabular-nums text-(length:--text-sm) font-medium">
             {formatPrice(order.total)}
           </span>

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { InvoiceForm } from '@/components/admin/invoice-form'
 import { OrderActionsForm } from '@/components/admin/order-actions-form'
 import { OrderNotesPanel } from '@/components/admin/order-notes-form'
 import { PageHeader } from '@/components/admin/ui/page-header'
@@ -8,6 +9,7 @@ import { PermissionDeniedState } from '@/components/admin/ui/permission-denied-s
 import { StatusBadge } from '@/components/admin/ui/status-badge'
 import { getAdminOrder } from '@/lib/admin/queries'
 import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 
 export default async function AdminOrderDetailPage({
@@ -72,18 +74,21 @@ export default async function AdminOrderDetailPage({
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2 pt-2">
-              <StatusBadge status={order.orderStatus} />
-              <StatusBadge status={order.paymentStatus} />
-              <StatusBadge status="draft" label={order.paymentMethod} />
+              <StatusBadge status={order.orderStatus} label={orderStatusLabel(order.orderStatus)} />
+              <StatusBadge status={order.paymentStatus} label={paymentStatusLabel(order.paymentStatus)} />
+              <StatusBadge status="draft" label={paymentMethodLabel(order.paymentMethod)} />
             </div>
           </dl>
         </div>
 
-        <OrderActionsForm
-          orderCode={order.orderCode}
-          orderStatus={order.orderStatus}
-          paymentStatus={order.paymentStatus}
-        />
+        <div className="space-y-3">
+          <OrderActionsForm
+            orderCode={order.orderCode}
+            orderStatus={order.orderStatus}
+            paymentStatus={order.paymentStatus}
+          />
+          <InvoiceForm orderCode={order.orderCode} />
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-(--radius-lg) border border-border bg-surface-raised shadow-(--shadow-sm)">
@@ -143,7 +148,8 @@ export default async function AdminOrderDetailPage({
 
         <div className="rounded-(--radius-lg) border border-border bg-surface-raised p-4 shadow-(--shadow-sm)">
           <h2 className="mb-3 font-semibold">Timeline trạng thái</h2>
-          {(order.statusEvents?.length ?? 0) === 0 ? (
+          {(order.statusEvents?.length ?? 0) === 0 &&
+          (order.auditEntries?.length ?? 0) === 0 ? (
             <p className="text-(length:--text-sm) text-fg-muted">
               Chưa có event (các thay đổi sau migration sẽ được ghi).
             </p>
@@ -160,6 +166,17 @@ export default async function AdminOrderDetailPage({
                   ) : null}
                   <p className="text-(length:--text-xs) text-fg-subtle">
                     {event.actorLabel} · {new Date(event.createdAt).toLocaleString('vi-VN')}
+                  </p>
+                </li>
+              ))}
+              {order.auditEntries?.map((entry) => (
+                <li key={entry.id} className="border-l-2 border-border pl-3 text-(length:--text-sm)">
+                  <div className="font-medium">{entry.label}</div>
+                  {entry.detail ? (
+                    <p className="text-fg-muted">{entry.detail}</p>
+                  ) : null}
+                  <p className="text-(length:--text-xs) text-fg-subtle">
+                    {entry.actorLabel} · {new Date(entry.createdAt).toLocaleString('vi-VN')}
                   </p>
                 </li>
               ))}

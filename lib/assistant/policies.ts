@@ -89,7 +89,7 @@ const PASSAGES: PolicyPassage[] = [
   {
     id: 'shipping-pointer',
     title: 'Giao hàng & thanh toán',
-    text: 'TechStore giao hàng toàn quốc, thanh toán COD, chuyển khoản/VietQR hoặc VNPay. Phí ship hiển thị ở bước thanh toán trước khi bạn đặt hàng.',
+    text: 'TechStore giao hàng toàn quốc, thanh toán COD, chuyển khoản/VietQR, thẻ/QR ngân hàng, ví MoMo/ZaloPay, trả góp hoặc VNPay. Phí ship hiển thị ở bước thanh toán trước khi bạn đặt hàng.',
     href: '/checkout',
     keywords: ['giao hàng', 'vận chuyển', 'ship', 'phí ship', 'thanh toán', 'payment'],
   },

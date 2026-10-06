@@ -10,6 +10,7 @@ import { isForbidden, requireAdminModule } from '@/lib/admin/require-admin'
 import { listAdminOrders } from '@/lib/admin/queries'
 import type { AdminOrderListItem } from '@/lib/admin/types'
 import type { OrderStatus, PaymentMethod, PaymentStatus } from '@/lib/commerce/types'
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel } from '@/lib/commerce/status-labels'
 import { formatPrice } from '@/lib/format'
 
 const ORDER_STATUSES: Array<OrderStatus | 'all'> = [
@@ -59,15 +60,17 @@ export default async function AdminOrdersPage({
       : 'all'
   ) as PaymentStatus | 'all'
   const paymentMethod = (
-    ['all', 'cod', 'bank_transfer', 'vnpay'].includes(get('paymentMethod'))
+    ['all', 'cod', 'bank_transfer', 'vnpay', 'bank_card', 'momo', 'zalopay', 'installment'].includes(get('paymentMethod'))
       ? get('paymentMethod')
       : 'all'
   ) as PaymentMethod | 'all'
   const dateFrom = get('dateFrom')
   const dateTo = get('dateTo')
   const sort = (
-    ['created_at', 'total', 'updated_at'].includes(get('sort')) ? get('sort') : 'created_at'
-  ) as 'created_at' | 'total' | 'updated_at'
+    ['attention', 'created_at', 'total', 'updated_at'].includes(get('sort'))
+      ? get('sort')
+      : 'attention'
+  ) as 'attention' | 'created_at' | 'total' | 'updated_at'
   const dir = get('dir') === 'asc' ? 'asc' : 'desc'
   const page = Math.max(1, Number.parseInt(get('page') || '1', 10) || 1)
 
@@ -118,7 +121,7 @@ export default async function AdminOrdersPage({
     {
       id: 'status',
       header: 'Trạng thái',
-      cell: (o) => <StatusBadge status={o.orderStatus} />,
+      cell: (o) => <StatusBadge status={o.orderStatus} label={orderStatusLabel(o.orderStatus)} />,
     },
     {
       id: 'payment',
@@ -126,8 +129,8 @@ export default async function AdminOrdersPage({
       hideOnMobile: true,
       cell: (o) => (
         <div>
-          <StatusBadge status={o.paymentStatus} />
-          <div className="text-(length:--text-xs) text-fg-subtle">{o.paymentMethod}</div>
+          <StatusBadge status={o.paymentStatus} label={paymentStatusLabel(o.paymentStatus)} />
+          <div className="text-(length:--text-xs) text-fg-subtle">{paymentMethodLabel(o.paymentMethod)}</div>
         </div>
       ),
     },
@@ -197,6 +200,10 @@ export default async function AdminOrdersPage({
             <option value="cod">COD</option>
             <option value="bank_transfer">Chuyển khoản</option>
             <option value="vnpay">VNPay</option>
+            <option value="bank_card">Thẻ / QR</option>
+            <option value="momo">MoMo</option>
+            <option value="zalopay">ZaloPay</option>
+            <option value="installment">Trả góp</option>
           </select>
           <input
             type="date"
@@ -218,6 +225,7 @@ export default async function AdminOrdersPage({
             className="min-h-(--size-touch) rounded-(--radius-md) border border-border bg-surface-raised px-3 text-(length:--text-sm)"
             aria-label="Sắp xếp"
           >
+            <option value="attention">Cần xử lý trước</option>
             <option value="created_at">Ngày đặt</option>
             <option value="updated_at">Cập nhật</option>
             <option value="total">Tổng tiền</option>
@@ -242,7 +250,7 @@ export default async function AdminOrdersPage({
             href={`/admin/orders${buildQs({ ...filters, status: value, page: 1 })}`}
             active={status === value}
           >
-            {value === 'all' ? 'Tất cả' : value}
+            {value === 'all' ? 'Tất cả' : orderStatusLabel(value)}
           </FilterChip>
         ))}
       </div>

@@ -141,6 +141,7 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
     customerName: formData.get('customerName'),
     customerPhone: formData.get('customerPhone'),
     customerEmail: formData.get('customerEmail'),
+    emailReminders: formData.get('emailReminders') === 'on' ? 'on' : 'off',
     province: formData.get('province') ?? '',
     district: formData.get('district') ?? '',
     ward: formData.get('ward') ?? '',
@@ -157,9 +158,10 @@ export async function checkoutAction(_: ActionState, formData: FormData): Promis
 
   const rawAccessToken = createOpaqueToken()
   // Persist the optional email on the open cart before place_order converts
-  // it — this is what lets the abandoned-cart reminder reach customers who
+  // it — only with explicit opt-in (checkbox), so no surprise marketing mail.
+  // This is what lets the abandoned-cart reminder reach customers who
   // dropped off mid-checkout.
-  if (parsed.data.customerEmail) {
+  if (parsed.data.customerEmail && parsed.data.emailReminders === 'on') {
     await getSupabaseServerClient().rpc('cart_capture_email', {
       p_cart_token_hash: await getCartTokenHash(),
       p_email: parsed.data.customerEmail,
@@ -307,4 +309,53 @@ export async function requestReturn(
   }
   revalidatePath(`/orders/${encodeURIComponent(parsed.data.orderCode)}`)
   return { ok: true, message: 'Yêu cầu trả hàng đã gửi. Shop sẽ liên hệ trong 24 giờ.' }
+}
+
+const cancelOrderSchema = z.object({
+  orderCode: z.string().trim().min(4).max(24),
+  phone: z.string().trim().min(8).max(20),
+  reason: z.string().trim().max(500).optional().default(''),
+})
+
+export async function cancelOrder(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = cancelOrderSchema.safeParse({
+    orderCode: formData.get('orderCode'),
+    phone: formData.get('phone'),
+    reason: formData.get('reason') ?? '',
+  })
+  if (!parsed.success) {
+    return validationError(parsed.error.flatten().fieldErrors)
+  }
+
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(ORDER_ACCESS_COOKIE)?.value
+  if (!accessToken) {
+    return { ok: false, code: 'ORDER_NOT_FOUND', message: toUserMessage('ORDER_NOT_FOUND') }
+  }
+
+  const { data, error } = await getSupabaseServerClient().rpc('customer_cancel_order', {
+    p_order_code: parsed.data.orderCode,
+    p_access_token_hash: await hashToken(accessToken),
+    p_phone: parsed.data.phone,
+    p_reason: parsed.data.reason || null,
+  })
+  const state = rpcState(data as RpcResult | null, error)
+  if (!state.ok) {
+    return {
+      ok: false,
+      code: state.code,
+      message: toUserMessage(
+        state.code === 'NOT_CANCELLABLE' ||
+          state.code === 'RATE_LIMITED' ||
+          state.code === 'ORDER_NOT_FOUND'
+          ? state.code
+          : 'INTERNAL_ERROR',
+      ),
+    }
+  }
+  revalidatePath(`/orders/${encodeURIComponent(parsed.data.orderCode)}`)
+  return { ok: true, message: 'Đã hủy đơn hàng. Mã giảm giá (nếu có) đã được hoàn lại.' }
 }

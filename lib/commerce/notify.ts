@@ -13,7 +13,30 @@ interface OutboxRow {
   retry_count: number
 }
 
+function isOutboxRow(value: unknown): value is OutboxRow {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.id === 'string' &&
+    typeof v.type === 'string' &&
+    typeof v.retry_count === 'number' &&
+    v.payload !== null &&
+    typeof v.payload === 'object'
+  )
+}
+
 const MAX_RETRIES = 5
+
+// Q88 mini circuit-breaker (process-local): after N consecutive Resend
+// failures the drain stops early for this invocation instead of hammering a
+// dead provider on every row. Resets on first success. Cron retries next run.
+const BREAKER_TRIP_AFTER = 5
+let consecutiveFailures = 0
+
+/** Test helper: reset the breaker state. */
+export function _resetNotifyBreakerForTests(): void {
+  consecutiveFailures = 0
+}
 
 function formatVnd(value: unknown): string {
   const n = Number(value)
@@ -68,11 +91,18 @@ function emailFor(type: string, payload: Record<string, unknown>): {
       }
     case 'abandoned_cart': {
       const count = escapeHtml(payload.itemCount ?? '')
+      const second = Number(payload.reminder ?? 1) >= 2
+      // First touch stays soft; the second (~24h) carries urgency because
+      // stock and flash-sale prices are not held for abandoned carts.
       return {
-        subject: 'Giỏ hàng của bạn vẫn đang chờ tại TechStore',
+        subject: second
+          ? 'Sắp hết hàng? Giỏ hàng của bạn tại TechStore'
+          : 'Giỏ hàng của bạn vẫn đang chờ tại TechStore',
         html:
           `<p>Chào ${name},</p>` +
-          `<p>Bạn còn <strong>${count}</strong> sản phẩm trong giỏ hàng chưa hoàn tất.</p>` +
+          `<p>Bạn còn <strong>${count}</strong> sản phẩm trong giỏ hàng chưa hoàn tất` +
+          (second ? ' — số lượng có hạn, đặt sớm để giữ giá.' : '.') +
+          `</p>` +
           `<p><a href="${site}/cart">Hoàn tất đơn hàng</a></p>` +
           `<p>Giỏ hàng sẽ được giữ sẵn khi bạn quay lại TechStore.</p>`,
       }
@@ -112,7 +142,12 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
   })
   if (claimError) throw claimError
 
-  for (const row of (rows ?? []) as unknown as OutboxRow[]) {
+  const claimedRows: OutboxRow[] = Array.isArray(rows) ? rows.filter(isOutboxRow) : []
+  for (const row of claimedRows) {
+    // Q88: stop hammering a dead provider — the rest stay pending/processing
+    // for the next cron run (Q86: `failed` rows are the dead-letter set,
+    // retained 30d by purge_expired_logs for manual inspection).
+    if (consecutiveFailures >= BREAKER_TRIP_AFTER) break
     const email = emailFor(row.type, row.payload)
     const to = String(row.payload.email ?? '')
     if (!email || !to) {
@@ -146,6 +181,7 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
       if (!response.ok) {
         throw new Error(`Resend ${response.status}: ${await response.text()}`)
       }
+      consecutiveFailures = 0
       const { error: updateError } = await admin
         .from('notification_outbox')
         .update({
@@ -160,6 +196,7 @@ export async function processPendingNotifications(batchSize = 20): Promise<{
       if (updateError) throw updateError
       result.sent += 1
     } catch (error) {
+      consecutiveFailures += 1
       const retries = row.retry_count + 1
       const exhausted = retries >= MAX_RETRIES
       // Exponential backoff: 1m, 2m, 4m, 8m, 16m.

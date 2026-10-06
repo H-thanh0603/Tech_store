@@ -21,7 +21,7 @@ const optionalMoney = z.preprocess(
 
 export const adminAccountLoginSchema = z.object({
   email: z.string().trim().email('Email không hợp lệ.'),
-  password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự.'),
+  password: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự.'),
 })
 
 export const adminMfaCodeSchema = z.string().trim().regex(/^\d{6}$/, 'Nhập mã 6 chữ số.')
@@ -165,6 +165,12 @@ export const orderPaymentSchema = z.object({
 export const orderNoteSchema = z.object({
   orderCode: z.string().trim().min(1).max(64),
   body: z.string().trim().min(1).max(2000),
+})
+
+export const invoiceIssueSchema = z.object({
+  orderCode: z.string().trim().min(1).max(64),
+  taxCode: z.string().trim().max(14).optional().or(z.literal('')),
+  companyName: z.string().trim().max(200).optional().or(z.literal('')),
 })
 
 export const couponUpsertSchema = z

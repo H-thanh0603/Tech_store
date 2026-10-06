@@ -21,7 +21,9 @@ export function PaymentSummary({ order }: PaymentSummaryProps) {
   if (order.paymentMethod === 'cod') {
     payment = <p className="rounded-lg border border-border p-5">Thanh toán khi nhận hàng (COD).</p>
   } else if (order.paymentStatus === 'expired' || order.orderStatus === 'expired') {
-    payment = <p className="rounded-lg border border-danger p-5 text-danger">Phiên chuyển khoản đã hết hạn.</p>
+    payment = <p className="rounded-lg border border-danger p-5 text-danger">Phiên giữ hàng đã hết hạn — đơn hết hiệu lực.</p>
+  } else if (order.paymentMethod === 'bank_card' || order.paymentMethod === 'momo' || order.paymentMethod === 'zalopay' || order.paymentMethod === 'installment') {
+    payment = <p className="rounded-lg border border-border p-5">Shop đang xác nhận thanh toán ({order.orderCode}) — giữ hàng đến hạn, nhân viên liên hệ nếu cần thêm thông tin.</p>
   } else {
     const input = { ...getVietQrConfig(), amount: order.total, description: order.orderCode }
     const details = getVietQrText(input)
