@@ -113,6 +113,7 @@ export function RevenueTrendChart({ data }: { data: RevenueDayRow[] }) {
         <YAxis
           tick={{ fontSize: 11 }}
           width={56}
+          domain={[0, 'auto']}
           tickFormatter={(v: number) =>
             v >= 1_000_000 ? `${Math.round(v / 1_000_000)}tr` : `${Math.round(v / 1000)}k`
           }
