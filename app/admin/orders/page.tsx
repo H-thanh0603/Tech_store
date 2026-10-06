@@ -67,8 +67,10 @@ export default async function AdminOrdersPage({
   const dateFrom = get('dateFrom')
   const dateTo = get('dateTo')
   const sort = (
-    ['created_at', 'total', 'updated_at'].includes(get('sort')) ? get('sort') : 'created_at'
-  ) as 'created_at' | 'total' | 'updated_at'
+    ['attention', 'created_at', 'total', 'updated_at'].includes(get('sort'))
+      ? get('sort')
+      : 'attention'
+  ) as 'attention' | 'created_at' | 'total' | 'updated_at'
   const dir = get('dir') === 'asc' ? 'asc' : 'desc'
   const page = Math.max(1, Number.parseInt(get('page') || '1', 10) || 1)
 
@@ -223,6 +225,7 @@ export default async function AdminOrdersPage({
             className="min-h-(--size-touch) rounded-(--radius-md) border border-border bg-surface-raised px-3 text-(length:--text-sm)"
             aria-label="Sắp xếp"
           >
+            <option value="attention">Cần xử lý trước</option>
             <option value="created_at">Ngày đặt</option>
             <option value="updated_at">Cập nhật</option>
             <option value="total">Tổng tiền</option>
@@ -247,7 +250,7 @@ export default async function AdminOrdersPage({
             href={`/admin/orders${buildQs({ ...filters, status: value, page: 1 })}`}
             active={status === value}
           >
-            {value === 'all' ? 'Tất cả' : value}
+            {value === 'all' ? 'Tất cả' : orderStatusLabel(value)}
           </FilterChip>
         ))}
       </div>

@@ -10,7 +10,7 @@ export async function listAdminOrders(filter?: {
   paymentMethod?: PaymentMethod | 'all'
   dateFrom?: string
   dateTo?: string
-  sort?: 'created_at' | 'total' | 'updated_at'
+  sort?: 'attention' | 'created_at' | 'total' | 'updated_at'
   dir?: 'asc' | 'desc'
   page?: number
   pageSize?: number
