@@ -35,7 +35,7 @@
     "@sentry/nextjs": "^10.72.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.110.8",
-    "next": "^16.3.4",
+    "next": "^16.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "recharts": "^3.10.0",
